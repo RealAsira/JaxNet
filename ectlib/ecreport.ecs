@@ -1,0 +1,63 @@
+@share
+
+<ec:param obj_barcodeResponder asReference/>
+<ec:var recordID=@svr[param/recordID].nullifblank GLOBAL/>
+<ec:var pageTitle='Report'/>
+
+@if(@nv(@user.userID)|@var(returnto|/console?ltid=105&xid=@XID&recordID=@recordID) @var(returnto|@returnto.urlencode) @logError(Unauthorized|must be signed in to access console reports|76) @redirect(/login?returnto=@returnto))
+@if(@nv(@user.employeeID)|@logError(Unauthorized|must be an employee to access console reports|76) @redirect(/home))
+
+
+<ec:var accessLevel=@user.accessLevel.alt(0) global rem="get user access right level"/>
+<ec:var accessLevel=7 global rem="access right system hasn't been configured for reports" DISABLE/>
+@if(@accessLevel.isLessThan(1)|@throw(Access Denied|Access Denied|Employee has not been granted access to this report. Please contact a system administrator if you believe this is in error.|401|44))
+
+
+
+@comment(yes, these need to be included here)
+<ec:module lib_dataFunctions/>
+<ec:module lib_pageElements/>
+<ec:module lib_pageFunctions/>
+<ec:module lib_console/>
+<ec:module lib_consoleRelated/>
+
+
+
+
+<ec:case>
+    <ec:module ecreport_index if=@XID.is(11|@null|)/>
+    
+    <ec:module ecreport_accessRightsGranted if=@XID.is(7) rem="all rights granted to a userGroup, user, or employee"/>
+    <ec:module ecreport_accessRightsTo if=@XID.is(8) rem="userGroups, users, employees with access right to x entity"/>
+
+    <ec:module ecreport_accountRisk if=@XID.is(19)/>
+    <ec:module ecreport_actionLog if=@XID.is(1)/>
+    <ec:module ecreport_alertLog if=@XID.is(2)/>
+    <ec:module ecreport_errorLog if=@XID.is(3)/>
+    <ec:module ecreport_riskLog if=@XID.is(4)/>
+    <ec:module ecreport_blacklistedIPs if=@XID.is(5)/>
+    <ec:module ecreport_sessions if=@XID.is(6)/>
+    <ec:module ecreport_timeEntries if=@XID.is(21)/>
+    
+    <ec:module ecreport_entityInUserGroups if=@XID.is(9)/>
+    <ec:module ecreport_entitySearch if=@XID.is(10)/>
+    <ec:module ecreport_seoProblems if=@XID.is(14)/>
+    <ec:module ecreport_reportedEntities if=@XID.is(15)/>
+
+    <ec:module ecreport_procurementPlans if=@XID.is(16)/>
+    
+    <ec:module ecreport_financialStatements if=@XID.is(17)/>
+
+    <ec:module ecreport_navMenus if=@XID.is(13)/>
+    <ec:module ecreport_settings if=@XID.is(12)/>
+    <ec:module ecreport_entityQueue if=@XID.is(20)/>
+</ec:case>
+
+
+
+<ec:webpage title=@pageTitle>
+    @comment(this section is automatically populated)
+    <ec:metaTag name="description" content="Work reports for employees only"/>
+    <ec:metaTag name="og:description" content="Work reports for employees only"/>
+    <ec:metaTag name="og:image" content="/imgs-default/console.png"/>
+</ec:webpage>

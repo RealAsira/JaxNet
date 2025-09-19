@@ -1,0 +1,34 @@
+<!-- rename to settings.xml -->
+<?xml version="1.0" encoding="utf-8"?>
+<Settings>
+  <Connections>
+
+    <Connection Name="local" Activate="False">
+      <ProviderName>SQL Server</ProviderName>
+      <Server>localhost</Server>
+      <Database>localdb</Database>
+      <Username>sa</Username>
+      <Password>PASSWORD</Password>
+    </Connection>
+
+  <GlobalVariables>
+    <sys>
+      <Logfiles>C:\inetpub\ecpages\logs</Logfiles>
+      <Uploads>C:\inetPub\ecpages\uploads</Uploads>
+      <SaltKey>someSaltingKey1999</SaltKey>
+      <TestServer>1</TestServer>
+    </sys>
+  </GlobalVariables>
+
+
+  <ECPages>
+    <ECLibrary>
+      <Path>Z:\ecsite\eclibrary</Path>
+      <DoCacheSource>False</DoCacheSource>
+    </ECLibrary>
+
+    <Debugger>
+      <AutoResourceScan>False</AutoResourceScan>
+    </Debugger>
+  </ECPages>
+</Settings>

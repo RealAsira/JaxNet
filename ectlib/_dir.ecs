@@ -1,0 +1,211 @@
+<ec:exception rem="this exception is a catch all">
+    @response_contentType(text/html)
+    @logError(error||48)
+    
+    <head>
+        <title>Error on Page</title>
+        <style>
+            * {box-sizing:border-box; -webkit-box-sizing: border-box;}
+            body{
+                background-color:#181818;
+                color:#ffffff;
+                text-wrap:wrap;
+                overflow-wrap:break-word;
+            }
+            @media (prefers-color-scheme:light){
+                body{
+                    background-color:white;
+                    color:#333;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div style="display:block; width:100%; min-height:108px; font-size:1.3rem; text-align:center; color:white; font-weight:bold; background-color:rgb(0, 66, 110);">
+            <br/><span>An Error Has Occurred</span><br/><br/>
+            <span style="font-weight:normal; font-size:1.2rem;">
+                An error has occurred on the page and a website technician has been notified.&nbsp;
+                If you typed the link (URL) into your browser directly, please check it for accuracy.
+            </span>
+        </div>
+        
+        <h4>If you need immediate assistance, please contact us with the following information:</h4>
+        <strong>URL: </strong>@canonical
+        <br/><strong>Reference: </strong>@requestTimeStamp()
+    </body>
+
+    <ec:case if=@svr[response/statusCode].is(200|@null|) rem="assign a default status code on exception, if one is not already assigned">
+        @response_statusCode(500)
+    </ec:case>
+    @stop()
+</ec:exception>
+
+
+
+@comment(use exception to force an exception and return the catch all ec:exception but use throw to force and exception and return a custom error page)
+
+
+
+<ec:var throw = @xThrow.asReference global/>
+<ec:function xThrow rem="force an exception to be thrown and return an output to the client">
+    <ec:param title caption errMsg required/>
+    <ec:param statusCode=500 actionID=101/>
+    <ec:var logErrorCaption = "@caption.left(1).lower()@caption.right(@calc(@caption.length - 1)).replace(@char(32)|)"/>
+    @logError(@logErrorCaption|@errMsg.nullifblank|@actionID)
+
+    <ec:output>
+        <ec:exception>
+            <head>
+                <title>@title()</title>
+                <style>
+                    * {box-sizing:border-box; -webkit-box-sizing: border-box;}
+                    body{
+                        background-color:#181818;
+                        color:#ffffff;
+                        text-wrap:wrap;
+                        overflow-wrap:break-word;
+                    }
+                    @media (prefers-color-scheme:light){
+                        body{
+                            background-color:white;
+                            color:#333;
+                        }
+                    }
+                    </style>
+            </head>
+            <body>
+                <div style="display:block; width:100%; min-height:108px; font-size:1.3rem; text-align:center; color:white; font-weight:bold; background-color:rgb(0, 66, 110);">
+                    <br/><span>@caption()</span><br/><br/>
+                    <span style="font-weight:normal; font-size:1.2rem;">
+                        @errMsg.alt(An error has occurred on the page and a website technician has been notified. If you typed the link @chr(40)URL@chr(41) into your browser directly, please check it for accuracy.)
+                    </span>
+                </div>
+                
+                <h4>Please share the following with us if you need immediate assistance:</h4>
+                <strong>URL: </strong>@canonical()
+                <br/><strong>Reference: </strong>@requestTimeStamp()
+            </body>
+        </ec:exception>
+        
+        @response_statusCode(@statusCode)
+        @exception(@error - @errMsg)
+    </ec:output>
+    @stop()
+</ec:function>
+
+
+
+
+
+<ec:case if=@websiteID.is(0) rem="this occurs if the website is accessed via URL or a domain that is not allowed in the database">
+    @throw(Invald Domain or Host|Bad Host|You've reached a dead end because the domain or host name is invalid: @host|404)
+</ec:case>
+
+
+
+
+
+<ec:var pageFound=0/>
+<ec:module lib_user/>
+<ec:module lib_dataFunctions/>
+<ec:module lib_pageFunctions/>
+
+<ec:data dt_userSettings format="xml" rem="the user's settings ... stored in sessionData so only active users settings need to be queried once">
+    <ec:sessionStorage tag="settings">
+        <settings>
+            <ec:data dt_userSettingsRS connection=@connection>
+                SELECT settingID, settingTypeID, settingValueID, value, tag
+                FROM vw_settings
+                WHERE userID = @user.userID.asInt.alt(0)
+
+                UNION
+
+                SELECT NULL AS settingID, t1.settingTypeID, t2.settingValueID, t2.value, t1.description AS tag
+                FROM settingTypes t1
+                LEFT JOIN settingValues t2 ON t1.settingTypeID = t2.settingTypeID
+                WHERE t2.isDefault = 1 AND NOT EXISTS (SELECT 1 FROM vw_settings WHERE settingTypeID = t1.settingTypeID AND userID = @user.userID.asInt.alt(0))
+            </ec:data>
+            <ec:loop data=@dt_userSettingsRS>
+                <@rs[tag].replace(@chr(32)|) settingID="@rs[settingID]" settingTypeID="@rs[settingTypeID]" settingValueID="@rs[settingValueID]" date="@rs[date]">@rs[value]</@rs[tag].replace(@chr(32)|)>
+            </ec:loop>
+        </settings>
+    </ec:sessionStorage>
+</ec:data>
+<ec:var userSettings = @dt_userSettings[1].asReference global/>
+
+
+<ec:data dt_siteSettings connection=@connection>
+    SELECT websiteSettingID, websiteSettingTypeID, value, tag
+    FROM vw_websiteSettings
+    WHERE websiteID = @websiteID.alt(0)
+
+    UNION
+
+    SELECT NULL AS websiteSettingID, t1.websiteSettingTypeID, t1.websiteSettingDefaultValue AS value, t1.websiteSettingTypeDescription AS tag
+    FROM websiteSettingTypes t1
+    LEFT JOIN websiteSettings t2 ON t1.websiteSettingTypeID = t2.websiteSettingTypeID
+    WHERE NOT EXISTS (SELECT 1 FROM vw_websiteSettings WHERE websiteSettingTypeID = t1.websiteSettingTypeID AND websiteID = @websiteID.alt(0))
+</ec:data>
+
+<ec:data dt_siteSettingsRS format="xml" rem="global settings for the website ... stored as ECPages variables">
+    <ec:loop data=@dt_siteSettings>
+        <@rs[tag].replace(@chr(32)|)>@rs[value].nullifblank</@rs[tag].replace(@chr(32)|)>
+    </ec:loop>
+</ec:data>
+<ec:var siteSettings = @dt_siteSettingsRS[].asReference global/>
+
+<ec:module lib_pageElements/>
+<ec:module lib_pageTemplates/>
+
+
+
+
+
+<ec:case if=@svr[request/files].count.isGreaterThan(0)  rem="if the user uploaded files then the file(s) upload should be logged">
+    <ec:var filesList/>
+    <ec:loop data=@svr[request/files]>
+        <ec:var if=@rs.isfirst  filesList = "@rs[fileName]"/>
+        <ec:var if=@not(@rs.isfirst)  filesList = "@filesList, @rs[fileName]"/>
+    </ec:loop>
+
+    @logAction(33|||File(s): @filesList)
+</ec:case>
+
+
+
+
+
+<ec:case>
+    <ec:var filename=@svr[param/filename].nullifblank global/>
+    <ec:case if=@iv(@filename) rem="download resulting page instead of rendering it to browser ...">
+        <ec:var fileMIME = @MIMETYPE(@filename)/>
+        <ec:var fileExt = @filename.copy(@filename.charIndex(.).add(1)|@filename.length())/>
+
+        @comment(strip all special characters... re-append file extension (mime))
+        @response_customHeader(Content-Disposition|attachment; filename="@stripSpecialCharacters(@filename).replace(@fileExt|.@fileExt)")
+        @response_contentType(@fileMIME)
+    </ec:case>
+
+
+    <ec:module API if=@app.is(api)/>
+    <ec:module comp_downloader  filePath = @svr[param/filePath]  fileID = @svr[param/fileID]  folderID = @svr[param/folderID]  if=@app.is(dwn)/>
+    <ec:module index_css_dark if=@app.is(index-css-dark)/>
+    <ec:module index_css if=@app.is(index-css)/>
+    <ec:module index_js if=@app.is(index-js)/>
+
+    <ec:module console if=@app.is(console|console/)/>
+
+    <ec:module page_account if=@app.is(account|account/)/>
+    <ec:module page_beta if=@app.is(beta|beta/)/>
+    <ec:module page_comments if=@app.is(comments|comments/)/>
+    <ec:module page_documents if=@any(@app.is(doc)|@app.contains(doc/))/>
+    <ec:module page_login if=@app.is(login|login/)/>
+    <ec:module page_setup if=@app.is(setup|setup/) rem="less for setup and more for explaining how the system works"/>
+    <ec:module page_signup if=@app.is(signup|signup/)/>
+    <ec:module page_status if=@app.is(status|status/)/>
+
+    <ec:module page_store if=@all(@any(@app.is(home|home/|store|store/|@null|)|@all(@app.contains(store/)|@app.isnot(store/)))|@pageFound.is(0)) rem="default to home/store page"/>
+    <ec:module disable page_virtualPath if=@all(@app.isnot(home|home/)|@pageFound.is(0)) rem="try to lookup a virtual path if the page is not the homepage and hasn't been found yet"/>
+
+    <ec:module page_notFound if=@pageFound.is(0)/>
+</ec:case>

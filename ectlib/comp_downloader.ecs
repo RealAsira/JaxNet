@@ -1,0 +1,174 @@
+@share()
+<ec:param filePath = "@svr[param/filePath].urlDecode.replace(/|\).nullifblank"  fileID = @svr[param/fileID].nullifblank  fileFolderID = @svr[param/fileFolderID].nullifblank  key = @svr[param/key].nullifblank  mode = @svr[param/mode].nullifblank.alt(download)/>
+<ec:var key1 = @key.alt(@svr[param/key1])  key2 = @key2.alt(@svr[param/key2])/>
+<ec:var hash = @hash_hmac_SHA256(@filePath.alt(@fileID).alt(@fileFolderID)|@user.sessionID()@today()@saltKey())/>
+
+
+<ec:var paramCount = 0/>
+@if(@iv(@filePath())|@paramCount.inc())
+@if(@iv(@fileID())|@paramCount.inc())
+@if(@iv(@fileFolderID())|@paramCount.inc())
+
+<ec:case if=@paramCount.isnot(1) rem="no params or more than one param">
+  @throw(Error: @paramCount() Download Types|Too Many Or Few Download Types|Access denied. Only one download method can be processed at a time|409)
+</ec:case>
+
+
+<ec:case if=@nv(@key1|@key2) rem="a security key (hash) is required to validate downloads">
+  @throw(Error: No Download Key|No Download Key|Access denied. A security / download key was not provided for the download|403)
+</ec:case>
+
+
+<ec:case if=@all(@hash.isnot(@key1)|@hash.isnot(@key2)) rem="someone is attempting to access the file without the correct file key">
+  @throw(Error: Invalid Download Key|Invalid Download Key|Access denied. A bad security / download key was provided for the download|403)
+</ec:case>
+
+
+<ec:case if=@mode.isnot(download|view)>
+  @throw(Error: Bad Download Mode|Bad Download Mode|An invalid download mode was used when attempting a file or folder download|400)
+</ec:case>
+
+
+<ec:case if=@all(@iv(@filePath())|@nv(@user.employeeID())) rem="must be an employee to download using filePath">
+  @throw(Error: Download Method Restricted|restrictedDownloadMethod|Access denied. Only employees can directly download a file, folder, or file list|403)
+</ec:case>
+
+
+@comment(a validation process should occur here to confirm the user is allowed to download by fileID or folderID)
+@logError(Download Risk|A download was requested and minimum authentication information was processed. A validation process still needs to be coded into comp_downloader!|49)
+
+
+
+
+
+
+
+<ec:case if=@iv(@filePath) rem="download a single file using its actual directory">
+  <ec:set filePath = @filePath.right(@calc(@filePath.length() - 1))  if = @filePath.left(1).is(\)/>
+  <ec:set filePath = "@fileStore()\files\@filePath()"/>
+  <ec:var method="file"/>
+  <ec:set method="folder" if="@not(@filePath.contains(.))" rem="only a file has a ."/>
+
+  <ec:case if=@method.is(file)>
+    <ec:var fileName=@filePath.copy(@calc(@charIndexRight(@filePath()|\) + 1)|@filePath.length())/>
+    
+    <ec:case if=@mode.is(view)>
+    <ec:var extension = @fileName.copy(@fileName.charIndex(.)|@fileName.length())/>
+      <ec:case if=@extension.isnot(.dll|.exe|.zip|.7z) rem="certain file types cannot be shown inline the browswer">
+        @response_customHeader(Content-Disposition|inline)
+      </ec:case>
+    </ec:case>
+
+    @response_contentType(@MIMEType(@fileName).alt(application/pdf))
+    @sendFile(@filePath()|@fileName())
+
+    <ec:case if=@mode.is(download)>
+      <script>
+        window.location.replace("@svr[request/referer].urlDecode");
+      </script>
+    </ec:case>
+    @stop()
+  </ec:case>
+
+
+  <ec:case if=@method.is(folder)>
+    <ec:var folderName=@filePath.copy(@calc(@charIndexRight(@filePath()|\) + 1)|@filePath.length())/>
+    <ec:set filePath = "@filePath()\"  if = @filePath.right(1).isnot(\)/>
+
+    <ec:data dt_subdir_list format="xml"><files></files></ec:data>
+    <ec:var dt_files = @subdir_list(@filePath)/>
+    @sendZip(@folderName.alt(myFiles)@chr(46)zip|@dt_files[])
+    
+    <script>
+      window.location.replace("@svr[request/referer].urlDecode");
+    </script>
+    @stop()
+  </ec:case>
+</ec:case>
+
+
+
+<ec:case if=@iv(@fileID) rem="download a single file">
+  <ec:data dt_file connection=@connection>
+    SELECT CONCAT(dbo.fn_fileFolderPath_fromID(fileFolderID), fileName) AS filePath, fileName
+    FROM files
+    WHERE fileID = @fileID.asInt.alt(0)
+  </ec:data>
+  <ec:var filePath = @dt_file[1/filePath]/>
+  <ec:var fullPath = "@fileStore()\files@dt_file[1/filePath]"/>
+  <ec:var fileName = @dt_file[1/fileName]/>
+  
+  <ec:case if=@mode.is(view)>
+    <ec:var extension = @fileName.copy(@fileName.charIndex(.)|@fileName.length())/>
+    <ec:case if=@extension.isnot(.dll|.exe|.zip|.7z) rem="certain file types cannot be shown inline the browswer">
+      @response_customHeader(Content-Disposition|inline)
+    </ec:case>
+  </ec:case>
+  
+  @response_contentType(@MIMEType(@fileName).alt(application/pdf))
+  @sendFile(@fullPath()|@fileName())
+  
+  <ec:case if=@mode.is(download)>
+    <script>
+      window.location.replace("@svr[request/referer].urlDecode");
+      </script>
+  </ec:case>
+  @logAction(32|13|@fileID.alt(0)|)
+  @stop()
+</ec:case>
+
+
+
+<ec:case if=@iv(@fileFolderID) rem="download a file folder">
+  @logAction(31|12|@fileID.alt(0)|)
+  <ec:data dt_folder connection=@connection>
+    SELECT folderName, dbo.fn_fileFolderPath_fromID(@fileFolderID.asInt.alt(0)) AS folderPath FROM fileFolders WHERE fileFolderID = @fileFolderID.asInt.alt(0)
+  </ec:data>
+  <ec:var fullPath = "@fileStore()\files@dt_folder[1/folderPath]"/>
+  
+  <ec:data dt_subdir_list format="xml"><files></files></ec:data>
+  <ec:var dt_files = @subdir_list(@fullPath)/>
+  @sendZip(@dt_folder[1/folderName].alt(myFiles)@chr(46)zip|@dt_files[])
+
+  <script>
+    window.location.replace("@svr[request/referer].urlDecode");
+  </script>
+  @stop()
+</ec:case>
+
+
+
+
+
+
+
+<ec:function subdir_list>
+  <ec:param dirPath required/>
+  <ec:param rootPath/>
+
+  @comment(to use subdir_list, the dt_subdir_list structure needs to be created, with files record, before subdir_list is called)
+  
+  <ec:loop data = @fileList(@dirPath)>
+    <ec:case if = @rs[attributes].isblank() rem="is a file so add file to record">
+      @dt_subdir_list[1].addRecord(file)
+      <ec:var pos = @dt_subdir_list[1].count().atLeast(1)/>
+      @dt_subdir_list[1/@pos()/].store(path|@rs[fullPath])
+      @dt_subdir_list[1/@pos()/].store(alias|@rs[fullPath].replace(@rootPath.alt(@dirPath())|))
+    </ec:case>
+    <ec:case if = @rs[attributes].is(Directory) rem="is a sub-dir so rerun function to get sub-dirs files">
+      @subdir_list(@rs[path]|@rootPath.alt(@dirPath))
+    </ec:case>
+  </ec:loop>
+  
+  @return(@dt_subdir_list[1])
+</ec:function> 
+
+
+
+
+
+
+
+<ec:case rem="this point shouldn't ever be reached.">
+  @throw(Unknown Download Error|Unknown Download Error|An unknown error occurred when attempting the file download)
+</ec:case>

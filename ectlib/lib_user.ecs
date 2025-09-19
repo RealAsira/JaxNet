@@ -1,0 +1,183 @@
+@share
+
+<ec:type tUser>
+    <ec:var sessionID userID LEID employeeID/>
+    <ec:var firstName lastName displayName email persist loginMessage/>
+    
+    
+    
+    <ec:function initialize>
+        @establishSession()
+        @userData()
+    </ec:function>
+
+
+
+    <ec:function establishSession>
+        <ec:data xx procedure="pr_user_establishSession" connection=@connection>
+            <clientCookie>@clientCookie</clientCookie>
+            <websiteID>@websiteID.asInt</websiteID>
+            <ipv4>@ipv4</ipv4>
+            <ipv6>@ipv6</ipv6>
+            <browserString>@svr[request/userAgent]</browserString>
+        </ec:data>
+
+        <ec:cookie if=@iv(@xx[serverCookie]) domain=@host expires=@today.add(364) secure=1 HttpOnly=1 sameSite='strict' rem="SQL database handles expiration">
+            <@cookieTag>@xx[serverCookie]</@cookieTag>
+        </ec:cookie>
+
+        @sessionID.setValue(@xx[sessionID].nullifblank)
+    </ec:function>
+
+
+
+    <ec:function userData>
+        <ec:data xx connection=@connection>
+            SELECT userID, LEID, employeeID, firstName, lastName, displayName, email, persist
+            FROM dbo.tb_user_getData(@sessionID.asInt.replace('|'').nullifblank.trim)
+        </ec:data>
+
+        @userID.setValue(@xx[1/userID].nullifblank)
+        @LEID.setValue(@xx[1/LEID].nullifblank)
+        @employeeID.setValue(@xx[1/employeeID].nullifblank)
+        @firstName.setValue(@xx[1/firstName].nullifblank)
+        @lastName.setValue(@xx[1/lastName].nullifblank)
+        @displayName.setValue(@xx[1/displayName].nullifblank)
+        @email.setValue(@xx[1/email].nullifblank)
+        @persist.setValue(@xx[1/persist].alt(0))
+    </ec:function>
+    
+    
+    
+    <ec:function forceLogin>
+        <ec:param targetUserID targetSessionID required/>
+        <ec:param persist/>
+        
+        <ec:data xx procedure="pr_user_forceLogin" connection=@connection>
+            <targetUserID>@targetUserID.asInt</targetUserID>
+            <targetSessionID>@targetSessionID.asInt</targetSessionID>
+            <persist>@persist.alt(@self.persist).alt(0).asBool</persist>
+        </ec:data>
+
+        @sessionID.setValue(@xx[sessionID].nullifblank)
+        @userData()
+        
+        @logAction(38|1|@userID|Login was forced using userID and sessionID)
+        @return(@xx[userID].nullifblank)
+    </ec:function>
+
+
+
+    <ec:function login>
+        <ec:param email password required/>
+        <ec:param persist/>
+
+        @if(@nv(@sessionID)|@response_statusCode(440) @exception(sessionID is missing from login)|)
+
+        <ec:data xx procedure="pr_user_login" connection=@connection>
+            <email>@email</email>
+            <password>@password</password>
+            <persist>@persist.alt(0).asBool</persist>
+            <sessionID>@sessionID.asInt</sessionID>
+            <websiteID>@websiteID.asInt</websiteID>
+        </ec:data>
+        
+        @loginMessage.setValue(@xx[errorMessage].nullifblank)
+        @userData()
+        
+        <ec:case if=@loginMessage.contains(Too many login attempts)>@logError(Failed Login|User was denied login due to several failed login attempts - email: @svr[param/email], sessionID: @sessionID(), websiteID: @websiteID|47)</ec:case>
+        <ec:case if=@loginMessage.is(@null|) rem="no error; success">@logAction(38|1|@userID|@loginMessage.alt(Successful login))</ec:case>
+        @return(@xx[userID].nullifblank)
+    </ec:function>
+
+
+
+    <ec:function logout>
+        <ec:data xx procedure="pr_sessions_endSession" connection=@connection>
+            <sessionCookie>@clientCookie</sessionCookie>
+            <sessionID>@sessionID.asInt</sessionID>
+        </ec:data>
+
+        @logAction(39|1|@userID)
+        @redirect(@returnto.alt(/home))
+    </ec:function>
+
+
+
+    <ec:function endSession>
+        <ec:param targetSessionID targetUserID required/>
+        <ec:data xx procedure="pr_user_endSession" connection=@connection>
+            <sessionID>@targetSessionID.asInt</sessionID>
+            <userID>@targetUserID.asInt</userID>
+        </ec:data>
+
+        @logAction(39|1|@userID|This session ended for this user)
+        @return()
+    </ec:function>
+
+
+
+    <ec:function endAllUserSessions>
+        <ec:param targetUserID/>
+        <ec:data xx procedure="pr_user_endAllSessions" connection=@connection>
+            <targetUserID>@targetUserID.alt(@userID).asInt</targetUserID>
+        </ec:data>
+
+        @logAction(39|1|@userID|All user sessions ended for this user)
+        @return()
+    </ec:function>
+
+    
+
+    <ec:function resetPassword>
+        <ec:param targetUserID required/>
+        <ec:data xx procedure="pr_user_resetPassword" connection=@connection>
+            <userID>@targetUserID.asInt</userID>
+        </ec:data>
+
+        @logAction(3|1|@userID|Password updated)
+        @return()
+    </ec:function>
+
+
+    
+    <ec:function signup>
+        <ec:param firstName lastName email password required/>
+        <ec:param organizationID/>
+        
+        <ec:data xx procedure="pr_user_new" connection=@connection>
+            <firstName>@firstName</firstName>
+            <lastName>@lastName</lastName>
+            <email>@email</email>
+            <organizationID>@organizationID.asInt</organizationID>
+            <password>@password</password>
+            <websiteID>@websiteID.asInt</websiteID>
+        </ec:data>
+
+        @userData()
+        @return(@xx[])
+    </ec:function>
+
+
+
+    <ec:function accessLevel rem="0 no access, 1 view, 2 list, 3 create, 4 edit, 5 delete, 6 admin (assign rights up to 5), 7 super admin (modify rights of anyone)">
+        <ec:param accessLTID=@LTID accessXID=@XID/>
+        <ec:data xx connection=@connection>
+            SELECT dbo.fn_accessLevel(@userID.asInt.alt(NULL), @employeeID.asInt.alt(NULL), @accessLTID.asInt.alt(NULL), @accessXID.asInt.alt(NULL)) AS accessLevel
+        </ec:data>
+
+        <ec:var accessLevel = @xx[1/accessLevel].alt(0)/>
+        <ec:set accessLevel = @max(@accessLevel|1)  if=@all(@accessLTID.is(2)|@accessXID.is(@employeeID.alt(0)))  rem="employee should always be able to view their console employee page"/>
+        <ec:set accessLevel = @max(@accessLevel|1)  if=@all(@accessLTID.is(1)|@accessXID.is(@userID.alt(0)))  rem="employee should always be able to view their console user page"/>
+        
+        <ec:set accessLevel = @max(@accessLevel|2)  if=@accessLTID.is(253)  rem="all employees should be able to view and list tasks"/>
+
+        @return(@accessLevel)
+    </ec:function>
+</ec:type>
+
+
+
+
+
+<ec:object user if=@nv(@user) type="tUser" global/>

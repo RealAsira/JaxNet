@@ -1,0 +1,196 @@
+@share
+@pageFound.set(1)
+
+@if(@nv(@user.userID)|@var(returnto|/setup) @var(returnto|@returnto.urlencode) @logError(Unauthorized|must be signed in to access website setup|76) @redirect(/login?returnto=@returnto))
+@if(@nv(@user.employeeID)|@logError(Unauthorized|must be an employee to access website setup|76) @redirect(/home))
+@if(@nv(@ecid)|@logAction(1|||))
+
+<ec:var step=@svr[param/step].alt(0)/>
+
+
+
+
+
+<ec:function dataCard>
+    <ec:param title iconPath href/>
+    <ec:param content=@sender asReference/>
+
+    <a href="@href.alt(javascript:void(0))" rel="nofollow" class="whiteLink">
+        <div class="dataCard">
+            <div class="dataCard_icon"><img src="@iconPath" alt="@title.alt(unknown)" title="@title.alt(unknown image)"/></div>
+            <div class="dataCard_content">@sender.execute</div>
+        </div>
+    </a>
+</ec:function>
+
+
+
+
+
+<ec:function stepsNavigation>
+    <div id="stepsNavigation">
+        <a href="/setup?step=@step.add(-1)" rel="nofollow" class="btn btn-info shadowOnHover" style="color:white; height:24px; line-height:14px; margin-left:2.5vw; margin-left:2.5dvw;">Previous Step</a>
+        <a href="/setup?step=@step.add(1)" rel="nofollow" class="btn btn-info shadowOnHover" style="color:white; height:24px; line-height:14px;">Next Step</a>
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:function pageContent>
+    <ec:style>  
+        .instructionContent {min-height:calc(100vh - 110px); min-height:calc(100dvh - 213px); padding-bottom:13px;}
+        #stepsNavigation {display:block; width:100%; position:relative; bottom:-6px; left:-2.5vw; left: -2.5dvw;}
+    </ec:style>
+
+
+    <ec:case if=@step.is(0) rem="introduction screen">
+        <ec:style>
+            html body {background: lightslategrey; color:white;}
+
+            .invert {background:white; color:black;}
+
+            .sloped {
+                display:none;
+                flex-direction:column;
+                align-items:center;
+                justify-content:center;
+                position:absolute;
+                width:100%;
+                height:clamp(200px, 50vh, 400px);
+                transform:skewY(8deg);
+                transform-origin:100%;
+                z-index:-1;
+            }
+        
+            #desktopDivider {display:none;}
+        
+            @media screen and (min-width: 982px){
+                .sloped {display:flex;}
+                #desktopDivider {display:block; height:400px;}
+            }
+        
+            #primaryContent a:not(.whiteLink)       {color:orange;}
+            #primaryContent a:not(.whiteLink):hover {color:darkorange;}
+        
+            .dataCard {
+                display:flex;
+                flex-wrap:wrap;
+                margin:13px;
+                justify-content:space-between;
+                width:240px;
+                text-align:left;
+                padding:3px;
+            }
+
+            .dataCard_icon, .dataCard_icon img {width:78px; height:78px;}
+            .dataCard_content {width:150px;}
+        </ec:style>
+
+
+        <div style="width:100%;">
+            <div style="transform:translateY(-130px);">
+
+                <div style="background-color:lightslategrey; padding:9px 0px; height:110px;">
+                    &nbsp;
+                </div>
+            
+                <div class="invert sloped">
+                    <div style="transform:skewY(-8deg);">
+                        <div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center; transform:translateY(120px);">
+                            <img style="margin:33px; height:280px; filter:drop-shadow(3px 3px 3px rgba(0,0,0,.3));" src="/imgs-default/defaultECPagesLogo.png" alt="ECPAGES Logo" title="EC Pages Logo"/>
+                            <h1 style="margin:33px; font-size:4.95rem; font-family:arial; filter:drop-shadow(-3px 3px 0px rgba(256,256,256,1)); transform:translateY(4px)"><strong>POWERED BY<br/>ECPAGES</strong></h1>
+                        </div>
+                    </div>
+                </div>
+            
+                <div id="desktopDivider">&nbsp;</div>
+
+                <div id="primaryContent">
+                    Welcome to the jaxNet framework! If you've found this page, you are likely setting up the framework on your web-server.
+                    <br/><br mobile/>
+                    If you are a website visitor, please <a href="/home">click here</a> to return to the main website.
+                    <br/><br/>
+                    If you are the website owner, please click &nbsp;<a href="/login?returnto=%2Fsetup%3Fstep=1" rel="nofollow" class="btn btn-info shadowOnHover" style="color:white; height:24px; line-height:14px;">Get Started</a> to begin setting up the platform. You can also use the links below to access other website resources.
+                    <br/><br/>
+
+                    <div style="display:flex; flex-wrap:wrap; justify-content:space-evenly; background-color:lightslategrey; color:white; padding:9px 0px;">
+                        <ec:dataCard title="Login and Account" iconPath="/imgs-default/account.png" href="/login?returnto=%2Faccount">
+                            <br/>Navigate to your account page
+                        </ec:dataCard>
+                        <ec:case if=@iv(@user.employeeID)>
+                            <ec:dataCard title="Website Status Page" iconPath="/imgs-default/dynamic.png" href="/login?returnto=%2Fstatus">
+                                <br/>View website vital statistics and status
+                            </ec:dataCard>
+                            <ec:dataCard title="Access employee console" iconPath="/imgs-default/console.png" href="/login?returnto=%2Fconsole">
+                                <br/>Access the employee console
+                            </ec:dataCard>
+                        </ec:case>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ec:case>
+
+
+
+    <ec:case if=@step.is(1) rem="explanation of what the employee console is">
+        <div id="primaryContent" class="instructionContent">
+            Introduce the employee console step 1
+            <!-- how to navigate, including master search and left navigation -->
+            <!-- list/view records -->
+            <!-- options right menu, including shortcuts -->
+
+            @stepsNavigation()
+        </div>
+    </ec:case>
+
+
+
+    <ec:case if=@step.is(2) rem="explanation of what the employee console is">
+        <div id="primaryContent" class="instructionContent">
+            Introduce the employee console step 2
+            <!-- create, edit, delete records -->
+            
+            @stepsNavigation()
+        </div>
+    </ec:case>
+
+
+
+    <ec:case if=@step.is(3) rem="explanation of what the employee console is">
+        <div id="primaryContent" class="instructionContent">
+            Introduce the employee console step 3
+            <!-- ec reports overview -->
+            <!-- status page -->
+
+            @stepsNavigation()
+        </div>
+    </ec:case>
+
+
+
+    <ec:case if=@step.is(4) rem="explanation of what the employee console is">
+        <div id="primaryContent" class="instructionContent">
+            Introduce the employee console step 4
+            <!-- users, user groups, employees, organizations -->
+            <!-- access rights -->
+
+            @stepsNavigation()
+        </div>
+    </ec:case>
+</ec:function>
+
+
+
+
+
+<ec:webpage title="Setup">
+    <ec:metaTag name="description" content="Setup page. Start configuring the jaxNet framework."/>
+    <ec:metaTag name="og:description" content="Setup page. Start configuring the jaxNet framework."/>
+
+    @topbar()
+    @pageContent
+    @bottombar()
+</ec:webpage>

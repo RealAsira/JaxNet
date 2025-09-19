@@ -1,0 +1,191 @@
+@share
+<ec:case if=@iv(@XID)>
+    <ec:module comp_contactCards/>
+</ec:case>
+
+<ec:var fdescription = @svr[param/fdescription].nullifblank/>
+<ec:var fphoneNumber = @svr[param/fphoneNumber].nullifblank/>
+<ec:var fzipcode = @svr[param/fzipcode].nullifblank/>
+
+<ec:object dt_warehouses page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>warehouseID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT warehouses.warehouseID, warehouses.description, contactAddresses.city, contactAddresses.zipcode, territories.name AS territoryName, countries.countryCode, contactPhoneNumbers.phoneNumber, contactPhoneNumbers.phoneNumberExtension
+            FROM warehouses
+            LEFT JOIN linkedEntities LE ON toLTID = 16 AND toXID = warehouses.warehouseID
+            LEFT JOIN contacts ON contacts.ownerLEID = LE.linkedEntityID
+            LEFT JOIN contactAddresses ON contacts.primaryShipAddressID = contactAddresses.addressID
+            LEFT JOIN territories ON contactAddresses.territoryID = territories.territoryID
+            LEFT JOIN countries ON territories.countryID = countries.countryID
+            LEFT JOIN contactPhoneNumbers ON contacts.primaryPhoneNumberID = contactPhoneNumbers.phoneNumberID
+
+
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+
+            @if(@iv(@fdescription)|AND description LIKE @sqlstr(%@fdescription%))
+            @if(@iv(@fphoneNumber)|AND dbo.fn_stripNonNumeric(contactPhoneNumbers.phoneNumber) LIKE dbo.fn_stripNonNumeric(@sqlstr(%@fphoneNumber%)))
+            @if(@iv(@fzipcode)|AND contactAddresses.zipcode LIKE @sqlstr(@fzipcode%))
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT warehouses.description, linkedTables.iconURL, linkedTables.description AS iconDescription
+            FROM warehouses
+            LEFT JOIN linkedTables ON 16 = linkedTables.linkedTableID
+            LEFT JOIN linkedEntities LE ON toLTID = 16 AND toXID = warehouses.warehouseID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            AND warehouseID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">warehouses.description</sort>
+</ec:object>
+<ec:object obj_warehouses_pageNavigator dataObj=@dt_warehouses type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_warehouses dataObj=@dt_warehouses type="tComponent">
+    <ec:titlebox title="Warehouses" options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>Warehouse Description</th>
+                <th>Phone Number</th>
+                <th style="text-align: left;">Location</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=@LTID&xid=@rs[warehouseID]">
+                    <td>@rs[description]</td>
+                    <td>@rs[phoneNumber] @if(@iv(@rs[phoneNumberExtension])|ext. @rs[phoneNumberExtension])</td>
+                    <td style="text-align:left;">@if(@iv(@rs[city])|@rs[city],&nbsp;)@if(@iv(@rs[territoryName])|@rs[territoryName]&nbsp;)@if(@iv(@rs[zipcode])|@rs[zipcode],&nbsp;)@if(@iv(@rs[countryCode])|@rs[countryCode])</td>
+                </tr>
+            </ec:loop>
+            </tr>
+        </table>
+        @obj_warehouses_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_warehouse dataObj=@dt_warehouses type="tComponent">
+    <ec:var wrh=@dataObj.dataDef[data/1]/>
+    <ec:titlebox title="Warehouse" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@wrh[iconURL]" alt="@wrh[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID"/>
+                <ec:displayField title="Description" content="@wrh[description]"/>
+            </div>
+        </div>
+    </ec:titlebox>
+
+    @obj_contactCard()
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Warehouse" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@description)>
+            <ec:data xx procedure="pr_warehouse_new" connection=@connection>
+                <description>@description</description>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newWarehouseID = @xx[newWarehouseID].nullifblank/>
+                
+            <ec:case if=@iv(@newWarehouseID)>
+                @logAction(2|@LTID|@newWarehouseID)
+                @notification(Warehouse WRH-@newWarehouseID() created successfully||1)    
+                @redirect(/console?ltid=@LTID&xid=@newWarehouseID)
+                @close()
+            </ec:case>
+            <ec:case if=@nv(@newWarehouseID)>
+                <ec:set errMsg = "An error occurred. Pleaes contact a system administrator."/>
+                @logError(error|obj_newWarehouse_dialog unknown SQL error|101)
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A description is required to create a warehouse."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>      
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Warehouse Description" id="description" name="description" fieldValue=@description require/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Warehouse" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@description)>
+            <ec:data xx procedure="pr_warehouse_edit" connection=@connection>
+                <warehouseID>@XID.asInt</warehouseID>
+                <description>@description</description>
+            </ec:data>
+
+            @logAction(3|@LTID|@XID|Edited warehouse)
+            @dt_warehouses.refresh()
+            @obj_warehouse.refresh()
+            @close
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A description is required to edit a warehouse"/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_warehouse connection=@connection>
+            SELECT description FROM warehouses WHERE warehouseID = @XID
+        </ec:data>
+        <ec:var wrh = @dt_warehouse[1]/>
+        
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Warehouse Description" id="description" name="description" fieldValue=@wrh[description].alt(@description) require/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="Description" id="fdescription" name="fdescription" fieldValue=@fdescription placeholder=""/>
+            <ec:input_tel id="fphoneNumber" name="fphoneNumber" fieldValue=@fphoneNumber/>
+            <ec:input_text title="Zip Code" id="fzipcode" name="fzipcode" fieldValue=@fzipcode placeholder="84321"/>
+        </ec:consoleSearchBox>
+
+        @obj_warehouses
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>@obj_warehouse</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@nv(@XID)>
+        <a href="#" rel="nofollow">Bin Locations Here</a><br/>
+        <a href="#" rel="nofollow">Bins Here</a><br/>
+    </ec:case>
+</ec:function>

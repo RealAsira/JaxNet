@@ -1,0 +1,748 @@
+@share
+<ec:module lib_pageFunctions/>
+<ec:module comp_votes/>
+
+
+
+<ec:function renderComment>
+    <ec:param msgID msgLEID fromLTID fromXID displayName sendDate message pinned deleted level voteScore/>
+    <ec:var commentAccessLevel = @user.accessLevel(255|@msgID)  if=@iv(@user.employeeID)/>
+    <ec:var commentAccessLevel = 0                              if=@nv(@user.employeeID)/>
+    
+    <table class="@if(@level.is(0)|aComment|aReply)">
+        <tr class="spacerRow"><td colspan="3">&nbsp;</td></tr>
+        <tr>
+            <td colspan="3">
+                <span class="displayName"  id="displayName-@msgID">@displayName</span>
+                <span class="pinStatus"  id="pinStatus-@msgID"><ec:icon if=@pinned.alt(0) title="Pinned comment" icon="pushpin" size="sml" color="rgb(75, 75, 75)" direction="left" style="margin-left:3px;"/></span>
+                <span class="timePassed">@timePassed(@sendDate)</span>
+            </td>
+        </tr>
+        <tr>
+            <td class="message" colspan="3"><span id="message-@msgID-text">@message</span></td>
+        </tr>
+        <tr>
+            <td>
+                <span class="votes">@entityVotes(255|@msgID|@voteScore)</span>
+                <span class="options" id="options-@msgID">
+                    <a href="javascript:void(0)" rel="nofollow" onclick="appendReplyForm(@msgID);" id="replyTo-@msgID"><ec:icon title="Reply" icon="comment" size="sml" direction="left" style="margin-left:3px;"/></a>
+                    <a href="javascript:void(0)" rel="nofollow" onclick="copyMessageLink(@msgID);" id="shareMessage-@msgID"><ec:icon title="Copy link to this comment" icon="share" size="sml" direction="left" style="margin-left:3px;"/></a>
+                    
+                    <ec:case if=@not(@deleted.alt(0))>
+                        <ec:case if=@iv(@user.userID) rem="dropdown menu options">
+                            <div class="dropdown">
+                                <a href="javascript:void(0)" rel="nofollow" ><ec:icon title="" icon="option-horizontal" size="sml" direction="left" style="margin-left:3px;"/></a>
+                                <div class="dropdown-content message-dropdown">
+                                    <ul>
+                                        <ec:case if=@all(@iv(@user.employeeID)|@commentAccessLevel.isGreatAs(4))>
+                                            <ec:case if=@pinned.alt(0).is(0|false)><li id="pinAction-@msgID" class="ajaxClick" ecid="obj_commentHandler" loader="#message-@msgID" act="pin" msgID="@msgID"><ec:icon title="" icon="pushpin" size="sml" direction="left"/> Pin</li></ec:case>
+                                            <ec:case if=@pinned.alt(0).is(1|true)><li id="pinAction-@msgID" class="ajaxClick" ecid="obj_commentHandler" loader="#message-@msgID" act="unpin" msgID="@msgID"><ec:icon title="" icon="pushpin" size="sml" direction="left"/> Unpin</li></ec:case>
+                                        </ec:case>
+                                        
+                                        <ec:case disable rem="OLD ACCESS STUFF">
+                                            <ec:case if=@all(@any(@all(@fromLTID.is(1|@null|)|@any(@fromXID.is(@user.userID)|@iv(@user.employeeID)))|@all(@fromLTID.is(2)|@fromXID.is(@user.employeeID)))|@displayName.isnot([deleted])|@sendDate.isGreaterThan(@calc(@today.add(-28)))) rem="if OP (user or employee) or employee acting on user comment"><li id="edit-@msgID" onclick="appendEditForm('@msgID')"><ec:icon title="" icon="pencil" size="sml" direction="left"/> Edit</li></ec:case>
+                                            <li class="ajaxClick" ecid="obj_reportComment" msgID="@msgID" msgLEID="@msgLEID"><ec:icon title="" icon="exclamation-sign" size="sml" direction="left"/> Report</li>
+                                            <ec:case if=@all(@any(@all(@fromLTID.is(1|@null|)|@any(@fromXID.is(@user.userID)|@iv(@user.employeeID)))|@all(@fromLTID.is(2)|@fromXID.is(@user.employeeID)))|@displayName.isnot([unknown]|[deleted])) rem="if OP (user or employee) or employee acting on user comment"><li class="ajaxClick" id="dissociate-@msgID" ecid="obj_commentHandler" loader="#message-@msgID" act="dissociate" msgID="@msgID" confirm="Permanently remove any link between your account and this comment? You will not be able to edit your comment in the future."><ec:icon title="" icon="remove-sign" size="sml" direction="left"/> Dissociate</li></ec:case>
+                                            <ec:case if=@all(@any(@all(@fromLTID.is(1|@null|)|@any(@fromXID.is(@user.userID)|@iv(@user.employeeID)))|@all(@fromLTID.is(2)|@fromXID.is(@user.employeeID)))|@displayName.isnot([deleted])) rem="if OP (user or employee) or employee acting on user comment"><li class="ajaxClick" id="delete-@msgID" ecid="obj_commentHandler" loader="#message-@msgID" act="delete" msgID="@msgID" confirm="Permanently delete this comment? If you want your comment to still appear but without your name, you can dissociate it instead."><ec:icon title="" icon="remove" size="sml" direction="left"/> Delete</li></ec:case>
+                                        </ec:case>
+                                        
+                                        <ec:case rem="NEW ACCESS STUFF">
+                                            <ec:case if=@any(@all(@iv(@user.employeeID)|@commentAccessLevel.isGreatAs(4))|@all(@any(@all(@fromLTID.is(1|@null|)|@fromXID.is(@user.userID))|@all(@fromLTID.is(2)|@fromXID.is(@user.employeeID)))|@displayName.isnot([deleted])|@sendDate.isGreaterThan(@calc(@today.add(-28)))))  rem="if OP (user or employee) within 28 days or is employee with message access rights"><li id="edit-@msgID" onclick="appendEditForm('@msgID')"><ec:icon title="" icon="pencil" size="sml" direction="left"/> Edit</li></ec:case>
+                                            <li class="ajaxClick" ecid="obj_reportComment" msgID="@msgID" msgLEID="@msgLEID"><ec:icon title="" icon="exclamation-sign" size="sml" direction="left"/> Report</li>
+                                            <ec:case if=@all(@any(@all(@iv(@user.employeeID)|@commentAccessLevel.isGreatAs(5))|@any(@all(@fromLTID.is(1|@null|)|@fromXID.is(@user.userID))|@all(@fromLTID.is(2)|@fromXID.is(@user.employeeID))))|@displayName.isnot([unknown]|[deleted]))  rem="if OP (user or employee) or employee with message access rights"><li class="ajaxClick" id="dissociate-@msgID" ecid="obj_commentHandler" loader="#message-@msgID" act="dissociate" msgID="@msgID" confirm="Permanently remove any link between your account and this comment? You will not be able to edit your comment in the future."><ec:icon title="" icon="remove-sign" size="sml" direction="left"/> Dissociate</li></ec:case>
+                                            <ec:case if=@all(@any(@all(@iv(@user.employeeID)|@commentAccessLevel.isGreatAs(5))|@any(@all(@fromLTID.is(1|@null|)|@fromXID.is(@user.userID))|@all(@fromLTID.is(2)|@fromXID.is(@user.employeeID))))|@displayName.isnot([deleted]))  rem="if OP (user or employee) or employee with message access rights"><li class="ajaxClick" id="delete-@msgID" ecid="obj_commentHandler" loader="#message-@msgID" act="delete" msgID="@msgID" confirm="Permanently delete this comment? If you want your comment to still appear but without your name, you can dissociate it instead."><ec:icon title="" icon="remove" size="sml" direction="left"/> Delete</li></ec:case>
+                                        </ec:case>
+                                    </ul>
+                                </div>
+                            </div>
+                        </ec:case>
+                    </ec:case>
+                </span>
+            </td>
+        </tr>
+    </table>
+</ec:function>
+
+
+
+
+
+<ec:type tMessages type="tComponent">
+    <ec:var linkedEntityID toLTID toXID/>
+
+    <ec:function initialize>
+        @inherited.execute()
+
+        <ec:param linkedEntityID toLTID toXID/>
+        @self.linkedEntityID.setValue(@linkedEntityID)
+        @self.toLTID.setValue(@toLTID)
+        @self.toXID.setValue(@toXID)
+    </ec:function>
+
+
+    <ec:function render>
+        <ec:case if=@all(@iv(@linkedEntityID)|@any(@iv(@toLTID)|@iv(@toXID)))  rem="can't have both modes at the same time">
+            @logError(Too Many Message Modes|Both a linkedEntityID and a toLTID/toXID combination was provided to obj_messages|75)
+            @notification(The message board could not be loaded due to an error)
+        </ec:case>
+        
+        <ec:case if=@all(@nv(@linkedEntityID)|@any(@nv(@toLTID)|@nv(@toXID)))  rem="must have a mode">
+            @logError(No Message Mode|A linkedEntityID or a toLTID/toXID combination was not provided to obj_messages|75)
+            @notification(The message board could not be loaded due to an error)
+        </ec:case>
+        
+        
+        
+        <ec:case if=@all(@iv(@linkedEntityID)|@any(@nv(@toLTID)|@nv(@toXID)))  rem="comment board mode">         
+            <ec:forumStyles/>
+            <ec:forumScripts/>  
+            @forumComments(@linkedEntityID)
+        </ec:case>
+        
+
+
+        <ec:case if=@all(@all(@iv(@toLTID)|@iv(@toXID))|@nv(@linkedEntityID))  rem="direct messaging mode">
+            <!-- direct messaging is not yet implemented -->
+            <div id="messageBoard" style="width:100%; min-height:100px; border:1px solid red;">
+                messages go here! @toLTID @toXID
+            </div>
+        </ec:case>
+    </ec:function>
+
+
+    <ec:function forumStyles>
+        <style>
+            :root {--nest-border-color: #dcdcdc;}
+
+
+            /*  color and general styling  */
+            #forumComments {width:100%; min-height:82px; font-family:arial; font-size:.88rem; color:#444; padding:13px;}
+            .aComment, .aReply {background-color:#fafafa;}
+            .options a .icndiv {background-color:grey !important; &:hover {background-color:darkgrey !important;}}
+            .options a .icndiv.copiedLink {background-color:#215a21 !important; &:hover {background-color:#358f35 !important;}}
+
+
+            /*  structure  */
+            .forumComment {
+                padding-left:9px; padding-right:9px;
+                &.aComment {margin-top:15px;}
+                &.aReply {& td:first-child, & th:first-child {padding-left:9px;}}
+            }
+            .aComment {margin-top:9px; & .spacerRow {line-height:3px;}}
+            .aReply {& .spacerRow {line-height:11px;}}
+            .indent {margin-left:17px; border-left:2px solid var(--nest-border-color);}
+            :not(.indent):has(> .indent) > .indent:first-child {margin-left: 8px;} /*  the first indent is smaller  */
+            
+            .displayName, .pinStatus, .timePassed, .votes, .options {display:inline-block;}
+            .timePassed {color:grey; font-size: small; text-align:left; &:has(.icndiv) {text-align:center;}}
+            .message {padding:5px 0px;}
+
+
+            /* corner roudness and border outline  */
+            .forumComment.aComment {border-radius:7px; padding-bottom:3px; border:1px solid var(--nest-border-color);}
+            .forumComment.aComment:has(+ .aReply) {border-radius:7px 7px 0px 0px; padding-bottom:0px; border:none; border-left:1px solid var(--nest-border-color); border-top:1px solid var(--nest-border-color); border-right:1px solid var(--nest-border-color);}
+            .forumComment.aReply {border-left:1px solid var(--nest-border-color); border-right:1px solid var(--nest-border-color);}
+            .forumComment.aReply:has(+ .aComment), #forumComments > .aReply:last-child {border-radius:0px 0px 7px 7px; padding-bottom:9px; border-left:1px solid var(--nest-border-color); border-bottom:1px solid var(--nest-border-color); border-right:1px solid var(--nest-border-color);}
+
+            
+
+            /*  reply form  */
+            .aReplyForm {
+                padding-top:9px;
+            }
+
+            .aReplyText {
+                width:calc(100% - 21px);
+                border: 1px solid var(--box-border-color);
+                border-radius: 6px 6px 6px 6px;
+                margin:0px 0px 7px 15px;
+            }
+
+            .aReplyText .reply_textarea {
+                width:100%; height:30px;
+                word-wrap: break-word;
+                padding: 3px 7px; margin-bottom:-3px;
+                border: none;
+                border-radius:5px 5px 0px 0px;
+                resize:vertical;
+                transition: height .3s;
+            }
+
+            .aReplyText .replyFormOptions {
+                width:100%;
+                height:35px;
+                border:none;
+                border-radius:0px 0px 5px 5px;
+                background-color:white;
+            }
+
+            .aReplyText .replyFormOptions button {
+                float:right;
+                height:25px; line-height:20px; padding:0;
+            }
+
+            #commentForm .aReplyText {margin: 0px 0px 7px 0px; width:100%;}
+
+
+
+            .dropdown:has(.message-dropdown) {display:inline-block; &:hover .dropdown-content, .dropdown-content:hover {visibility:visible;}}
+            .message-dropdown {
+                display:block;
+                visibility: hidden;
+                min-height:28px;
+                width:max-content;
+                top:15px;
+                left:0px;
+                z-index:999;
+                
+                & ul li {padding:7px 9px 5px 9px; cursor:pointer;}
+            }
+
+
+            /*  dark mode  */
+            <ec:case if=@userSettings[theme].is(dark)>
+                :root {--nest-border-color: rgb(60,60,60);}
+                
+                #forumComments {color:#cfcfcf;}
+                .forumComment.aComment, .forumComment.aComment:has(+ .aReply), .forumComment.aReply, .forumComment.aReply:has(+ .aComment), #forumComments > .aReply:last-child {border-bottom:none;}
+                .aComment, .aReply {background-color:rgb(35,35,35);}
+                
+                .aReplyText {&, & .replyFormOptions{background-color: #45484a;}}
+            </ec:case>()
+        </style>
+    </ec:function>
+
+
+    <ec:function forumScripts>
+        <script>
+            function copyMessageLink(messageID) {
+                if (window.isSecureContext) {
+                    navigator.clipboard.writeText('https://@host/comments?commentID=' + messageID);
+                } else {alert('@protocol()@host()/comments?commentID=' + messageID);}
+                var shareButton = document.getElementById('shareMessage-' + messageID).firstChild.classList.add('copiedLink');
+            }
+
+
+            function appendReplyForm(parentMessageID) {
+                var parentMessage = document.getElementById('message-' + parentMessageID);
+                var parentLevel = parseInt(parentMessage.getAttribute('level'));
+
+                // create unique form
+                var exists = document.getElementById('replyForm-' + parentMessageID);
+                if (!exists) {
+                    var replyForm = document.createElement('form');
+                        replyForm.setAttribute('method', 'POST');
+                        replyForm.setAttribute('id', 'replyForm-' + parentMessageID);
+                        replyForm.classList.add('forumComment', 'aReply', 'aCommentForm');
+                        
+                        // form priamry content
+                        replyForm.innerHTML += `
+                        <div class="tComponent" id="obj_commentHandler">
+                            <input type="hidden" id="act" name="act" value="reply"/>
+                            <input type="hidden" id="parentMessageID" name="parentMessageID" value="${parentMessageID}"/>
+                            <div class="formfield text aReplyText" onclick="shiftReplyBoxFocus('textarea_myReply_${parentMessageID}');">
+                                <textarea class="reply_textarea" id="textarea_myReply_${parentMessageID}" name="myReply" placeholder="Reply to this comment" onclick="shiftReplyBoxFocus('textarea_myReply_${parentMessageID}');" maxlength="8192" required></textarea>
+                                <div class="replyFormOptions">
+                                    <button type="submit" loader="#replyForm-${parentMessageID}" id="submit_" class="submit-btn btn btn-info submitOnClick">Post</button>
+                                </div>
+                            </div>
+                        </div>
+                        `;
+
+                    // indent lines
+                    for (i=1; i <= parentLevel; i++){
+                        replyForm.innerHTML = `<div class="indent">${replyForm.innerHTML}</div>`;
+                    }
+                    
+                    // append and focus
+                    parentMessage.parentNode.insertBefore(replyForm, parentMessage.nextSibling);
+                } 
+                shiftReplyBoxFocus('textarea_myReply_' + parentMessageID);
+            }
+
+            function shiftReplyBoxFocus(textAreaID) {
+                var otherReplyBoxes = document.querySelectorAll('.reply_textarea');
+                otherReplyBoxes.forEach((el) => {
+                    el.style.height = '30px';
+                });
+                
+                var focusOn = document.getElementById(textAreaID);
+                focusOn.style.height = "160px";
+                focusOn.focus();
+            }
+
+
+            function appendEditForm(messageID) {
+                // create unique form
+                var message = document.getElementById('message-' + messageID);
+                var messageLevel = parseInt(message.getAttribute('level'));
+                var messageContent = document.getElementById('message-' + messageID + '-text').textContent;
+
+                var exists = document.getElementById('editForm-' + messageID);
+                if (!exists) {
+                    var editForm = document.createElement('form');
+                        editForm.setAttribute('method', 'POST');
+                        editForm.setAttribute('id', 'editForm-' + messageID);
+                        editForm.classList.add('forumComment', 'aReply', 'aCommentForm');
+                        
+                        // form priamry content
+                        editForm.innerHTML += `
+                        <div class="tComponent" id="obj_commentHandler">
+                            <input type="hidden" id="act" name="act" value="editComment"/>
+                            <input type="hidden" id="msgID" name="msgID" value="${messageID}"/>
+                            <div class="formfield text aReplyText" onclick="shiftReplyBoxFocus('textarea_myEdit_${messageID}');">
+                                <textarea class="reply_textarea" id="textarea_myEdit_${messageID}" name="myEdit" placeholder="Edit your comment" onclick="shiftReplyBoxFocus('textarea_myEdit_${messageID}');" maxlength="8192" required></textarea>
+                                <div class="replyFormOptions">
+                                    <button type="submit" loader="#editForm-${messageID}" id="submit_" class="submit-btn btn btn-info submitOnClick">Edit</button>
+                                    <button type="button" class="btn" onclick="document.getElementById('message-${messageID}').style.display = 'block'; document.getElementById('editForm-${messageID}').style.display = 'none';">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                        `;
+
+                    for (i=1; i <= messageLevel; i++){
+                        editForm.innerHTML = `<div class="indent">${editForm.innerHTML}</div>`;
+                    }
+
+                    // append and focus
+                    // message.replaceWith(editForm);
+                    message.parentNode.insertBefore(editForm, message);
+                } else {
+                    var editForm = document.getElementById('editForm-' + messageID);
+                }
+
+                message.style.display = 'none';
+                editForm.style.display = 'block';
+                shiftReplyBoxFocus('textarea_myEdit_' + messageID);
+                document.getElementById('textarea_myEdit_' + messageID).innerText = messageContent;
+            }
+        </script>
+    </ec:function>
+
+
+    <ec:function forumComments>
+        <ec:param linkedEntityID/>
+        <ec:data dt_comments connection=@connection>
+            SELECT messageID, msgLEID, level, dbo.fn_voteScore_quick(msgLEID) AS voteScore, displayName, fromLTID, fromXID, message, sendDate, deleted, pinned FROM (
+                SELECT messageID, dbo.fn_linkedEntity_getID(255, messageID) AS msgLEID, level, ISNULL(dbo.fn_entityName_public(fromLTID, fromXID), dbo.fn_entityName(fromLTID, fromXID)) AS displayName, fromLTID, fromXID, message, sendDate, deleted, pinned
+                FROM dbo.tb_messageThreads (@linkedEntityID.asInt)
+                LEFT JOIN linkedEntities LE ON LE.toLTID = 255 AND LE.toXID = messageID
+                WHERE LE.websiteID = @websiteID.asInt
+            ) t1
+        </ec:data>
+
+        <div id="forumComments">
+            <form method="POST" id="commentForm" class="forumComment aComment aReplyForm">
+                <div class="tComponent" id="obj_commentHandler">
+                    <input type="hidden" id="act" name="act" value="comment"/>
+                    <input type="hidden" id="linkedEntityID" name="linkedEntityID" value="@linkedEntityID"/>
+                    <div class="formfield text aReplyText" onclick="shiftReplyBoxFocus('textarea_myComment');">
+                        <textarea class="reply_textarea" id="textarea_myComment" name="myReply" placeholder="Share your thoughts!" onclick="shiftReplyBoxFocus('textarea_myComment');" maxlength="8192" required></textarea>
+                        <div class="replyFormOptions">
+                            <button type="submit" loader="#commentForm" id="submit_" class="submit-btn btn btn-info submitOnClick">Post</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            <ec:loop data=@dt_comments>
+                <div class="forumComment @if(@rs[level].is(0)|aComment|aReply)" id="message-@rs[messageID]" level="@rs[level]">
+                    <ec:loop if=@rs[level].isnot(0) count=@rs[level]>
+                        <div class="indent">
+                    </ec:loop>
+
+                    @renderComment(@rs[messageID]|@rs[msgLEID]|@rs[fromLTID]|@rs[fromXID]|@rs[displayName]|@rs[sendDate]|@rs[message]|@rs[pinned]|@rs[deleted]|@rs[level]|@rs[voteScore])
+
+                    <ec:loop if=@rs[level].isnot(0) count=@rs[level]>
+                        </div>
+                    </ec:loop>
+                </div>
+            </ec:loop>
+        </div>
+    </ec:function>
+</ec:type>
+
+
+
+
+
+<ec:object obj_commentHandler type="tComponent">
+    <ec:var userID = @svr[param/userID].alt(@user.userID).nullifblank  employeeID = @user.employeeID.nullifblank/>
+    <ec:var toLTID = @svr[param/toLTID].nullifblank  toXID = @svr[param/toXID].nullifblank/>
+    <ec:var linkedEntityID = @svr[param/linkedEntityID].nullifblank  parentMessageID = @svr[param/parentMessageID].nullifblank  msg = @svr[param/myReply].nullifblank/>
+
+    <ec:case if=@act.is(comment|reply) rem="commenting on entity, replying to comment, sending direct message">
+        <ec:case if=@all(@any(@all(@iv(@toLTID)|@iv(@toXID))|@iv(@linkedEntityID)|@iv(@parentMessageID))|@iv(@msg))>
+            <ec:data xx procedure="pr_message_new" connection=@connection>
+                <userID>@userID.asInt</userID>
+                <employeeID>@employeeID.asInt</employeeID>
+                <toLTID>@toLTID.asInt</toLTID>
+                <toXID>@toXID.asInt</toXID>
+                <linkedEntityID>@linkedEntityID.asInt</linkedEntityID>
+                <parentMessageID>@parentMessageID.asInt</parentMessageID>
+                <message>@msg</message>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var msgID = @xx[newMessageID].nullifblank  errMsg = @xx[errorMessage].nullifblank/>
+
+            <ec:case if=@nv(@errMsg)>
+                <ec:case if=@act.is(comment) rem="posting a root comment on an entity">
+                    <ec:data msg connection=@connection>
+                        SELECT msgLEID, dbo.fn_voteScore_quick(msgLEID) AS voteScore, displayName, fromLTID, fromXID, message, deleted, pinned FROM (
+                            SELECT dbo.fn_linkedEntity_getID(255, messageID) AS msgLEID, ISNULL(dbo.fn_entityName_public(fromLTID, fromXID), dbo.fn_entityName(fromLTID, fromXID)) AS displayName, fromLTID, fromXID, message, deleted, pinned
+                            FROM messages
+                            LEFT JOIN linkedEntities LE ON LE.toLTID = 255 AND LE.toXID = messageID
+                            WHERE LE.websiteID = @websiteID.asInt AND messageID = @msgID.asInt
+                        ) t1
+                    </ec:data><ec:var msg = @msg[1]/>
+
+                    <ec:var content/>
+                    <ec:content>
+                        <form method="POST" id="commentForm" class="forumComment aComment aReplyForm">
+                            <div class="tComponent" id="obj_commentHandler">
+                                <input type="hidden" id="act" name="act" value="comment"/>
+                                <input type="hidden" id="linkedEntityID" name="linkedEntityID" value="@linkedEntityID"/>
+                                <div class="formfield text aReplyText" onclick="shiftReplyBoxFocus('textarea_myComment');">
+                                    <textarea class="reply_textarea" id="textarea_myComment" name="myReply" placeholder="Share your thoughts!" onclick="shiftReplyBoxFocus('textarea_myComment');" maxlength="8192" required></textarea>
+                                    <div class="replyFormOptions">
+                                        <button type="submit" loader="#commentForm" id="submit_" class="submit-btn btn btn-secondary submitOnClick">Post</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+
+                        <div class="forumComment aComment" id="message-@msgID" level="0">   
+                            @renderComment(@msgID|@msg[msgLEID]|@msg[fromLTID]|@msg[fromXID]|@msg[displayName]|@now|@msg[message]|@msg[pinned]|@msg[deleted]|0|@msg[voteScore])
+                        </div>
+                    </ec:content>
+                    @logAction(2|@LTID|@XID|Created comment)
+                    @responder.replace(#commentForm|@content)
+                </ec:case>
+
+
+
+                <ec:case if=@act.is(reply) rem="replying to a different comment">
+                    <ec:data msg connection=@connection>
+                        SELECT level, msgLEID, dbo.fn_voteScore_quick(msgLEID) AS voteScore, displayName, fromLTID, fromXID, message, deleted, pinned FROM (
+                            SELECT dbo.fn_message_getLevel(messageID) AS level, dbo.fn_linkedEntity_getID(255, messageID) AS msgLEID, ISNULL(dbo.fn_entityName_public(fromLTID, fromXID), dbo.fn_entityName(fromLTID, fromXID)) AS displayName, fromLTID, fromXID, message, deleted, pinned
+                            FROM messages
+                            LEFT JOIN linkedEntities LE ON LE.toLTID = 255 AND LE.toXID = messageID
+                            WHERE LE.websiteID = @websiteID.asInt AND messageID = @msgID.asInt
+                        ) t1
+                    </ec:data><ec:var msg=@msg[1]/>
+
+                    <ec:var content/>
+                    <ec:content>
+                        <div class="forumComment aReply" id="message-@msgID" level="@msg[level].alt(0)">
+                            <ec:loop count=@msg[level].alt(0)>
+                                <div class="indent">
+                            </ec:loop>
+
+                            @renderComment(@msgID|@msg[msgLEID]|@msg[fromLTID]|@msg[fromXID]|@msg[displayName]|@now|@msg[message]|@msg[pinned]|@msg[deleted]|@msg[level]|@msg[voteScore])
+
+                            <ec:loop count=@msg[level].alt(0)>
+                                </div>
+                            </ec:loop>
+                        </div>
+                    </ec:content>
+                    <ec:var selector="#replyForm-@parentMessageID"/>
+                    @logAction(2|@LTID|@XID|Created reply to msgID: @parentMessageID)
+                    @responder.replace(@selector|@content)
+                </ec:case>
+            </ec:case>
+        </ec:case>
+        <ec:set if=@else errMsg = "Either your message was blank or an unknown server error occurred."/>
+
+        <ec:case if=@iv(@errMsg)>
+            @notification(An error occurred while processing your message. Please try again later.)
+            @logError(Message Error|@errMsg|101)
+        </ec:case>
+    </ec:case>
+
+
+
+    <ec:case if=@act.is(pin|unpin) rem="pin or unpin a comment BUT NOT A DM">
+        <ec:var msgID = @svr[param/msgID].nullifblank/>
+        <ec:var selector="#pinStatus-@msgID" content=""/>
+
+        <ec:data dt_messageAuthor connection=@connection>
+            SELECT fromLTID, fromXID FROM messages WHERE messageID = @msgID.asInt.alt(0)
+        </ec:data><ec:var fromLTID=@dt_messageAuthor[1/fromLTID] fromXID=@dt_messageAuthor[1/fromXID]/>
+
+        <ec:case if=@all(@iv(@user.employeeID)|@user.accessLevel(255|@msgID).isGreatAs(4)) rem="only employees can pin or unpin">
+            <ec:data xx procedure="pr_message_edit" connection=@connection>
+                <messageID>@msgID.asInt</messageID>
+                <userID>@user.userID.asInt</userID>
+                <employeeID>@user.employeeID.asInt</employeeID>
+                <pinned>@if(@act.is(pin)|1|0)</pinned>
+            </ec:data>
+
+            <ec:case if=@iv(@xx[1/errorMessage].nullifblank)>
+                <ec:notification>@xx[1/errorMessage].nullifblank</ec:notification>
+                @logError(Change Pin Status Error|@xx[1/errorMessage].alt(An error occurred while @act()ning the commment)|101)
+            </ec:case>
+
+            <ec:case if=@else rem="success ... update on client">
+                <ec:content if=@act.is(pin)><ec:icon title="Pinned comment" icon="pushpin" size="sml" color="rgb(75, 75, 75)" direction="left" style="margin-left:3px;"/></ec:content>
+                @logAction(3|255|@msgID|@act()ned comment)
+
+                <ec:var selector2="#pinAction-@msgID" content2/>
+                <ec:content2   if=@act.is(pin)><li id="pinAction-@msgID" class="ajaxClick" ecid="obj_commentHandler" loader="#message-@msgID" act="unpin" msgID="@msgID"><ec:icon title="" icon="pushpin" size="sml" direction="left"/> Unpin</li></ec:content2>
+                <ec:content2 if=@act.is(unpin)><li id="pinAction-@msgID" class="ajaxClick" ecid="obj_commentHandler" loader="#message-@msgID" act="pin" msgID="@msgID"><ec:icon title="" icon="pushpin" size="sml" direction="left"/> Pin</li></ec:content2>
+                @responder.update(@selector|@content)
+                @responder.replace(@selector2|@content2)
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else rem="only employees can pin or unpin">
+            <ec:notification><span style="color:red;">You are not authorized to pin or unpin this comment.</span></ec:notification> 
+            @logAction(76|255|@msgID|Forbade @if(@iv(@user.employeeID)|employee|user) from pinning/unpinning a comment.)
+        </ec:case>
+    </ec:case>
+
+
+
+    <ec:case if=@act.is(editComment) rem="change message content">
+        <ec:var msgID = @svr[param/msgID].nullifblank  msg = @svr[param/myEdit]/>
+        <ec:var selector = "#editForm-@msgID()"  content/>
+
+        <ec:data dt_messageAuthor connection=@connection>
+            SELECT fromLTID, fromXID FROM messages WHERE messageID = @msgID.asInt.alt(0)
+        </ec:data><ec:var fromLTID=@dt_messageAuthor[1/fromLTID] fromXID=@dt_messageAuthor[1/fromXID]/>
+
+        <ec:case if=@any(@all(@iv(@user.employeeID)|@user.accessLevel(255|@msgID).isGreatAs(4))|@all(@any(@all(@fromLTID.is(1|@null|)|@fromXID.is(@user.userID))|@all(@fromLTID.is(2)|@fromXID.is(@user.employeeID)))|@displayName.isnot([deleted])|@sendDate.isGreaterThan(@calc(@today.add(-28))))) rem="op or employee only">
+            <ec:data xx procedure="pr_message_edit" connection=@connection>
+                <messageID>@msgID.asInt</messageID>
+                <userID>@user.userID.asInt</userID>
+                <employeeID>@user.employeeID.asInt</employeeID>
+                <message>@msg</message>
+            </ec:data>
+
+            <ec:case if=@iv(@xx[1/errorMessage].nullifblank)>
+                <ec:notification>@xx[1/errorMessage].nullifblank</ec:notification>
+                @logError(Edit Comment Error|@xx[1/errorMessage].alt(An error occurred while editing the commment)|101)
+            </ec:case>
+
+            <ec:case if=@else rem="edit was successful and legal">
+                <ec:script>
+                    document.getElementById('editForm-@msgID()').style.display = 'none';
+                    document.getElementById('message-@msgID').style.display = 'block';
+                </ec:script>
+                <ec:set selector="#message-@msgID()-text"/>
+                <ec:set content=@msg/>
+                
+                @responder.update(@selector|@content)
+                @logAction(3|255|@msgID|Edited comment on @LTID/@XID)
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@else rem="user should not be able to edit this message">
+            <ec:notification><span style="color:red;">You are not authorized to edit this comment.</span></ec:notification> 
+            @logAction(76|255|@msgID|Forbade @if(@iv(@user.employeeID)|employee|user) from editing a comment.)
+        </ec:case>
+    </ec:case>
+
+
+
+    <ec:case if=@act.is(dissociate) rem="remove sender from comment BUT NOT DM">
+        <ec:var msgID = @svr[param/msgID].nullifblank/>
+        <ec:var selector="" content=""/>
+
+        <ec:data dt_messageAuthor connection=@connection>
+            SELECT fromLTID, fromXID FROM messages WHERE messageID = @msgID.asInt.alt(0)
+        </ec:data><ec:var fromLTID=@dt_messageAuthor[1/fromLTID] fromXID=@dt_messageAuthor[1/fromXID]/>
+        
+        <ec:case if=@all(@any(@all(@iv(@user.employeeID)|@user.accessLevel(255|@msgID).isGreatAs(4))|@all(@fromLTID.is(1|@null|)|@fromXID.is(@user.userID))|@all(@fromLTID.is(2)|@fromXID.is(@user.employeeID)))|@displayName.isnot([unknown]|[deleted])) rem="op or employee only">
+            <ec:data xx procedure="pr_message_dissociate" connection=@connection>
+                <messageID>@msgID.asInt</messageID>
+                <userID>@user.userID.asInt</userID>
+                <employeeID>@user.employeeID.asInt</employeeID>
+            </ec:data>
+            
+            <ec:case if=@iv(@xx[1/errorMessage].nullifblank) rem="error occurred">
+            <ec:notification>@xx[1/errorMessage].alt(An error occurred while dissociating author from the commment)</ec:notification>
+                @logError(Delete Comment Error|@xx[1/errorMessage].alt(An error occurred while dissociating author from the commment)|101)
+            </ec:case>
+        
+            <ec:case if=@else rem="update the display name, message content, and dropdown options">
+                <ec:set selector="#displayName-@msgID" content="[unknown]"/>
+                @responder.update(@selector|@content)
+
+                <ec:set selector="#dissociate-@msgID" content=""/>
+                @responder.replace(@selector|@content)
+                
+                @logAction(22|255|@msgID|Unlinked comment author from msgID: @msgID)
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else rem="only OP or employee can delete">
+            <ec:notification><span style="color:red;">You are not authorized to dissociate the author from this comment.</span></ec:notification> 
+            @logAction(76|255|@msgID|Forbade @if(@iv(@user.employeeID)|employee|user) from dissociating author a comment.)
+        </ec:case>
+    </ec:case>
+
+
+
+    <ec:case if=@act.is(delete) rem="mark message as deleted">
+        <ec:var msgID = @svr[param/msgID].nullifblank/>
+        <ec:var selector="" content=""/>
+
+        <ec:data dt_messageAuthor connection=@connection>
+            SELECT fromLTID, fromXID FROM messages WHERE messageID = @msgID.asInt.alt(0)
+        </ec:data><ec:var fromLTID=@dt_messageAuthor[1/fromLTID] fromXID=@dt_messageAuthor[1/fromXID] displayName=dt_messageAuthor[1/]/>
+
+        <ec:case if=@any(@all(@iv(@user.employeeID)|@user.accessLevel(255|@msgID).isGreatAs(4))|@all(@fromLTID.is(1|@null|)|@fromXID.is(@user.userID))|@all(@fromLTID.is(2)|@fromXID.is(@user.employeeID))) rem="OP or employee only">
+            <ec:data xx procedure="pr_record_delete" connection=@connection>
+                <LTID>255</LTID>
+                <XID>@msgID.asInt</XID>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+
+            <ec:case if=@iv(@xx[1/message].nullifblank) rem="error occurred">
+                <ec:notification>@xx[1/message].alt(An error occurred while deleting the commment)</ec:notification>
+                @logError(Delete Comment Error|@xx[1/message].alt(An error occurred while deleting the commment)|101)
+            </ec:case>
+        
+            <ec:case if=@else rem="update the display name, message content, and dropdown options">
+                <ec:set selector="#displayName-@msgID" content="[unknown]"/>
+                @responder.update(@selector|@content)
+
+                <ec:set selector="#message-@msgID-text" content="[deleted]"/>
+                @responder.update(@selector|@content)
+
+                <ec:set selector="#options-@msgID .dropdown" content=""/>
+                @responder.update(@selector|@content)
+                
+                @logAction(4|255|@msgID|Deleted comment, msgID: @msgID)
+            </ec:case>
+        </ec:case>
+        
+        <ec:case if=@else rem="only OP or employee can delete">
+            <ec:notification><span style="color:red;">You are not authorized to delete this comment.</span></ec:notification> 
+            @logAction(76|255|@msgID|Forbade @if(@iv(@user.employeeID)|employee|user) from deleting a comment.)
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_reportComment type="tDialogForm">
+    @self.title.set(Report Comment For Violation)
+    @self.buttonCaption.set(Report)
+
+    <ec:case if=@nv(@user.userID)>
+        @self.buttonCaption.set(Cancel)
+        <p class="notice">You must be signed in to report a comment</p>
+    </ec:case>
+
+    <ec:case if=@else>
+        <ec:var msgID = @svr[param/msgID].nullifblank msgLEID = @svr[param/msgLEID].nullifblank rem="both used to validate the target message"/>
+        <ec:var reasonID = @svr[param/reasonID] rem="20 is violation of site policies"/>
+        <ec:var details = @svr[param/details].nullifblank/>
+
+        <ec:data dt_resolution connection=@connection>
+            SELECT t1.resolved, t1.resolvedOn, t1.resolvedByEmployeeID, dbo.fn_entityName(2, t1.resolvedByEmployeeID) AS employeeName, t1.resolutionDetails
+            FROM linkedEntities_reported t1
+            WHERE 1=1 AND reasonID = @reasonID.asInt.alt(0) AND reportedLEID = @msgLEID.asInt.alt(0) AND reportedByUserID = @user.userID.asInt
+        </ec:data>
+        <ec:var res = @dt_resolution[1]  isResolved=@res[resolved].alt(0)/>
+
+
+        <ec:case if=@all(@state.is(respond)|@svr[param/submittedBy].isnot(select_reasonID)|@isResolved.is(0|false))>
+            <ec:case if=@all(@iv(@reasonID)|@iv(@msgID)|@iv(@msgLEID))>
+                <ec:data xx procedure="pr_linkedEntity_report" connection=@connection>
+                    <LTID>255</LTID>
+                    <XID>@msgID.asInt</XID>
+                    <LEID>@msgLEID.asInt</LEID>
+                    <reportReasonID>@reasonID.asInt</reportReasonID>
+                    <details>@details</details>
+                    <reportedByUserID>@user.userID.asInt</reportedByUserID>
+                </ec:data>
+                <ec:set errMsg = @xx[errorMessage]/>
+
+                <ec:case if=@iv(@errMsg)>@notification(@errMsg|15)</ec:case>
+                <ec:case if=@nv(@errMsg)>
+                    @notification(Your report has been received. We will review it and take action if necessary.)
+                    @close()
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@else>
+                @notification(Report reason or target message is missing. Please contact a system administrator if you believe this is in error.)
+            </ec:case>
+        </ec:case>  
+
+
+        <ec:case if=@all(@not(@closed)|@isResolved.is(0|false))>
+            <ec:data dt_message connection=@connection>
+                SELECT dbo.fn_voteScore_quick(msgLEID) AS voteScore, displayName, message, sendDate FROM (
+                            SELECT dbo.fn_linkedEntity_getID(255, messageID) AS msgLEID, ISNULL(dbo.fn_entityName_public(fromLTID, fromXID), dbo.fn_entityName(fromLTID, fromXID)) AS displayName, message, sendDate
+                            FROM messages
+                            LEFT JOIN linkedEntities LE ON LE.toLTID = 255 AND LE.toXID = messageID
+                            WHERE LE.websiteID = @websiteID.asInt AND messageID = @msgID.asInt
+                        ) t1
+            </ec:data>
+            <ec:var msg=@dt_message[1]/>
+
+            <style>
+                #aReportedComment {
+                    font-family:arial; font-size:.8rem;
+                    & table tr {padding:2px 0px;}
+                }
+
+                <ec:case if=@userSettings[theme].is(light)>
+                    #aReportedComment {background-color:#fafafa;}
+                </ec:case>
+
+                <ec:case if=@userSettings[theme].is(dark)>
+                    #aReportedComment {background-color:rgb(35,35,35);}
+                </ec:case>()
+            </style>
+
+            <br/>
+            <div id="aReportedComment" style="width:100%; border:1px solid var(--box-border-color); border-radius:5px; padding:7px;)">
+                <table>
+                    <tr>
+                        <td>@msg[displayName]</td>
+                        <td style="color:#cfcfcf;">@timePassed(@msg[sendDate].alt(@today))</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">@msg[message]</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2">
+                            <span style="display:inline-block;"><ec:icon title="" icon="arrow-up" color="grey" size="sml" direction="left" style="display:inline-block;"/><span style="display:inline-block;">@msg[voteScore]&nbsp;</span><ec:icon title="" icon="arrow-down" color="grey" size="sml" direction="right" style="display:inline-block;"/></span>
+                            <span style="display:inline-block; transform:translateY(3px);"><ec:icon title="" icon="comment" color="grey" size="sml" direction="left"/><ec:icon title="" icon="share" color="grey" size="sml" direction="left"/><ec:icon title="" icon="option-horizontal" color="grey" size="sml" direction="left"/></span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <ec:data dt_reasons connection=@connection>
+                SELECT reportReasonID, description, memo FROM linkedEntities_reportReasons WHERE isHidden = 0 
+            </ec:data>
+
+            <ec:data dt_memo format="XML">
+                @dt_reasons.getRecord(reportReasonID|@reasonID).xml
+            </ec:data>
+
+            <br/>
+            <input type="hidden" id="msgID" name="msgID" value="@msgID"/>
+            <input type="hidden" id="msgLEID" name="msgLEID" value="@msgLEID"/>
+            <ec:input_select title="Report Reason" id="reasonID" name="reasonID" class="submitOnChange" options=@dt_reasons fieldValue=@reasonID.alt(20)/>
+            <p class="notice" id="reasonMemo">@dt_memo[memo]</p>
+            <br/><ec:input_textArea title="Additional Details" id="details" name="details" fieldValue=@details.nullifblank placeholder="Please provide any additional details that will help us process your report."/>
+        </ec:case>
+
+
+        <ec:case if=@all(@not(@closed)|@isResolved.is(1|true))>
+            @self.title.set(Report Resolution) @self.buttonCaption.set(Close)
+            <br/><span><strong><ec:icon if=@isResolved.is(1|true) title="Report is resolved." icon="check-sign" size="sml" color="#45E868" direction="left"/><ec:icon if=@isResolved.is(0|false) title="Report is not resolved." icon="remove-sign" size="sml" color="#D83030" direction="left"/>@if(@isResolved.is(0|false)|Not@chr(32))Resolved <ec:case if=@isResolved.is(1|true)>by <a href="/console?ltid=2&xid=@res[resolvedByEmployeeID]">@res[employeeName]</a> on @res[resolvedOn].formatDate(dd MMM yyyy)</ec:case></strong></span>
+            <br/><br/><hr/>
+            <ec:input_textArea title="Resolution Details" id="resolutionDetails" name="resolutionDetails" fieldValue=@res[resolutionDetails].nullifblank placeholder="Employee did not provide additional resolution details." readOnly/>
+        </ec:case>
+    </ec:case>
+</ec:object>

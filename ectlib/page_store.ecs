@@ -1,0 +1,139 @@
+@share
+@pageFound.set(1)
+
+<ec:module comp_highlights/>
+<ec:module comp_masonry/>
+
+<ec:var storeURL = @null/>
+<ec:set storeURL = @app.right(@calc(@app.length - 6)).lower if=@app.isnot(home|store|home/|store/|@null|)/>
+
+
+<ec:data dt_collection connection=@connection>
+    SELECT collectionID, parentCollectionID, name, memo, iconURL
+    FROM vw_collection
+    @if(@iv(@storeURL)|WHERE 1=1 AND websiteID = @websiteID.asInt AND name = @sqlstr(@storeURL.replace(-|@chr(32)).replace(_|-)))
+    @if(@nv(@storeURL)|WHERE 1=1 AND websiteID = @websiteID.asInt AND parentCollectionID IS NULL)
+</ec:data>
+<ec:var thisCollection = @dt_collection[1]/>
+<ec:set XID = @thisCollection[collectionID].nullifblank/>
+<ec:set LEID = @getLEID(18|@XID.alt(0))/>
+@if(@nv(@ecid)|@logAction(1|18|@XID|))
+
+<ec:var isRootGroup=0/>
+<ec:set isRootGroup=1 if=@nv(@thisCollection[parentEntitGroupID].nullifblank)/>
+
+
+<ec:data dt_childCollections connection=@connection>
+    SELECT collectionID, name, dbo.fn_entityImage(@LEID.alt(0), 1) AS iconURL
+    FROM vw_collections
+    WHERE websiteID = @websiteID.asInt
+    AND parentCollectionID = @XID.alt(0).asInt AND isHidden = 0
+</ec:data>
+
+
+<ec:data dt_highlights connection=@connection>
+    SELECT highlightID
+    FROM vw_highlights
+    WHERE websiteID = @websiteID.asInt
+    AND startDate <= CAST(GETDATE() AS DATE) AND ISNULL(endDate, DATEADD(day, 1, GETDATE())) >= CAST(GETDATE() AS DATE) --starts on the "start date" and ends at the end of the "end date"
+    AND highlightTypeID IN (1,2,3,4,5,6,7,8)
+    AND (dispOnCollectionID = @XID.alt(0).asInt @if(@nv(@storeURL)|OR dispOnCollectionID IS NULL))
+    GROUP BY highlightTypeID, endDate, startDate, highlightID
+    ORDER BY endDate, startDate
+</ec:data>
+
+
+<ec:style>
+    #primaryContent {min-height:calc(100vh - 179px); min-height:calc(100dvh - 179px);}
+</ec:style>
+
+
+
+
+
+<ec:function pageContent>
+    <div id="primaryContent">
+        <ec:case if=@iv(@search) rem="search across whole site or in collection and descendants">
+            @notification(This feature isn't set up yet.)
+        </ec:case>
+
+
+        <ec:case if=@else>
+            <!-- this collection -->
+            <ec:titlebox class="collectionBanner" rem="use for collection SEO/description">
+                <img class="collectionBanner-img" src="@thisCollection[iconURL]" alt="@thisCollection[name] group"/>
+                <div class="collectionBanner-txt">
+                    <h2>@thisCollection[name]</h2>
+                    <span>@thisCollection[memo]</span>
+                    <ec:metaTag name="description" content="@thisCollection[memo]"/>
+                    <ec:metaTag name="og:description" content="@thisCollection[memo]"/>
+                </div>
+            </ec:titlebox>
+
+
+            <!-- child collections -->
+            <div style="display:flex; flex-wrap:wrap; width:95%; margin:auto; gap:11px;">
+                <ec:loop data=@dt_childCollections connection=@connection>
+                    <div class="collectionCard anchorify" id="CL-@rs[collectionID]" href="/store/@rs[name].replace(-|_).replace(@chr(32)|-).lower()">
+                        <span class="collectionCard-img"><img src="@rs[iconURL]" alt="@rs[name] group"/></span>
+                        <span class="collectionCard-name"><h3><a href="/store/@rs[name].replace(-|_).replace(@chr(32)|-).lower()" @if(@userSettings[theme].is(dark)|class="whiteLink")>@rs[name]</a></h3></span>
+                    </div>
+                </ec:loop>
+
+                <ec:case if=@isRootGroup.alt(0) rem="homepage only">
+                    <div class="collectionCard anchorify" id="CL-doc" href="/doc/">
+                        <span class="collectionCard-img"><img src="/linkedTableIcons/document.svg" alt="document icon"/></span>
+                        <span class="collectionCard-name"><h3><a href="/doc/" @if(@userSettings[theme].is(dark)|class="whiteLink")>Documents / Forums / Help</a></h3></span>
+                    </div>
+                </ec:case>
+            </div><br/>
+
+
+            <!-- highlights -->
+            <div id="highlightsMasonry" style="width:95%; margin:auto;">
+                <ec:loop data=@dt_highlights>
+                    @highlight(@rs[highlightID])
+                </ec:loop>
+            </div>
+            <ec:object obj_highlights_masonry type="tMasonry" container="#highlightsMasonry" itemSelector=".highlightContainer"/>
+        
+            <!-- products/sets -->
+        </ec:case>
+    </div>
+</ec:function>
+
+
+
+
+<ec:var aTitle = "@host.lower - Explore. Shop. Thrive."/>
+<ec:set aTitle = "Browse @thisCollection[name]" if=@iv(@storeURL)/>
+
+<ec:webpage title=@aTitle>
+    <ec:var rMenuItems/>
+    <ec:rMenuItems>
+        <ec:case if=@iv(@user.userID)>
+            <li class="anchorify" rel="nofollow" href="/account">Account</li>
+            <li class="anchorify" rel="nofollow" href="/account?opt=orders">Order History</li>
+            <li class="anchorify" rel="nofollow" href="/account?opt=history">Browsing History</li>
+            <li class="anchorify" rel="nofollow" href="#">Watchlist</li>
+        </ec:case>
+        <li class="anchorify" rel="nofollow" href="/doc/faq-and-help">Help</li>
+
+        <ec:case if=@nv(@user.userID)><li class="anchorify" rel="nofollow" href="/login?returnto=@svr[request/url].urlEncode@svr[request/query].nullifblank.with(?|).urlEncode">Login</li></ec:case>
+        <ec:case if=@iv(@user.userID)><li class="anchorify" rel="nofollow" href="/login?act=logout">Logout</li></ec:case>
+        
+        <ec:case if=@iv(@user.employeeID)>
+            <br/><hr/><br/>
+            <li class="anchorify" href="/console?ltid=18&xid=@XID">Edit Page</li>
+            <li class="anchorify" href="/console">Console</li>
+        </ec:case>
+    </ec:rMenuItems>
+    <ec:topbar bannerIcon=@siteSettings[topbarIcon] rMenuContent=@rMenuItems lMenuContent=@lMenuItems searchAction="/@rootApp.alt(store)" searchPlaceholder="Search products, documents, and more!"/>
+
+    @pageContent()
+    @bottombar()
+
+    @comment(these are at the end to behave as a default description if one is not included within pageContent for whatever reason)
+    <ec:metaTag name="description" content="Browse products, services, and publications on @siteDescription@chr(46)"/>
+    <ec:metaTag name="og:description" content="Browse products, services, and publications on @siteDescription@chr(46)"/>
+</ec:webpage>

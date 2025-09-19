@@ -1,0 +1,580 @@
+@share
+<ec:var fdescription = @svr[param/fdescription].nullifblank/>
+
+<ec:object dt_websites page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>websiteID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT websiteID, websiteURL, description
+            FROM vw_websites
+            WHERE (LE_websiteID = @websiteID.asInt OR websiteID = @websiteID.asInt) /*restrict access*/
+
+            @if(@iv(@fdescription)|AND (@SQLKeywordClause(@sqlesc(@fdescription)|description websiteURL) AND parentWebsiteID IS NULL))
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT websiteURL, description, cookieTag, iconURL, iconDescription
+            FROM vw_website
+            WHERE (LE_websiteID = @websiteID.asInt OR websiteID = @websiteID.asInt) /*restrict access*/
+            AND websiteID = @XID.asInt                                              /*get particular record*/
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">description</sort>
+</ec:object>
+<ec:object obj_websites_pageNavigator dataObj=@dt_websites type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_websites dataObj=@dt_websites type="tComponent">
+    <ec:var optionsList/>
+    <ec:optionsList>@if(@websiteID.is(1)|@defaultListOptions())</ec:optionsList>
+    <ec:titlebox title="Websites"  options=@optionsList()>
+        <table class="tbl">
+            <tr>
+                <th>Website Name</th>
+                <th style="text-align: left;">Default Domain</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=@LTID&xid=@rs[websiteID]">
+                    <td>@rs[description]</td>
+                    <td style="text-align: left;">@rs[websiteURL]</td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_websites_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_website dataObj=@dt_websites type="tComponent">
+    <ec:var site=@dataObj.dataDef[data/1]/>
+
+    <ec:titlebox title="Website" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@site[iconURL]" alt="@site[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID"/>
+                <ec:displayField title="Website Name" content=@site[description]/>
+                <ec:var siteLink/><ec:siteLink><a href="@protocol()@site[websiteURL]" target="_blank">@site[websiteURL]<ec:icon title="" icon="hyperlink" size="sml" direction="right" style="transform:translate(4px, 4px);"/></a></ec:siteLink>
+                <ec:displayField title="Domain @hint(This does not include subdomains such as www. Add desired subdomains as alternate domains.)" content="@siteLink"/>
+                <ec:displayField title="Cookie Tag" content=@site[cookieTag]/>
+                <ec:displayField title="Admin Email @hint(This is the default email used to sign into the master admin account.)" content="admin@chr(64)@site[websiteURL]"/>
+                <ec:displayField title="Admin Password @hint(This is the default password used to sign into the master admin account.)" content="@chr(64)AdminMMdd@hint(Replace MMdd with the month and day the website was created. E.g. 1031 for Oct 31.)"/>
+            </div>
+        </div>
+
+        <br/><br/><hr/><br/>
+
+        @obj_alternativeURLs()
+        @obj_website_settings()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Website" type="tDialogRecordForm">
+    <ec:var websiteURL = @svr[param/websiteURL].nullifblank/>
+    <ec:var websiteName = @svr[param/websiteName].nullifblank/>
+    <ec:var cookieTag = @svr[param/cookieTag].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@websiteURL)|@iv(@websiteName))>
+            <ec:data xx procedure="pr_website_new" connection=@connection>
+                <websiteURL>@websiteURL</websiteURL>
+                <websiteName>@websiteName</websiteName>
+                <cookieTag>@cookieTag</cookieTag>
+            </ec:data>
+            <ec:var errMsg=@xx[errorMessage]  newWebsiteID=@xx[newWebsiteID]/>
+
+            <ec:case if=@iv(@errMsg)>
+                @logError(error|obj_newWebsite_dialog unknown SQL error|101)
+            </ec:case>
+
+            <ec:case if=@iv(@newWebsiteID)>
+                @logAction(2|@LTID|@newWebsiteID)
+                @notification(Website WST-@newWebsiteID() created successfully||1)    
+                @redirect(/console?ltid=@LTID&xid=@newWebsiteID)
+                @close()
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "Both a name and URL are required to create a new website record."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Website Name" id="websiteName" name="websiteName" fieldValue=@websiteName require/>
+        <ec:input_URL title="Domain" id="websiteURL" name="websiteURL" fieldValue=@websiteURL hintContent="This does not include subdomains such as www." require/>
+        <ec:input_text title="Cookie Tag" id="cookieTag" name="cookieTag" fieldValue=@site[cookieTag].alt(@cookieTag) maxlength="6" hintContent="An up-to-6 character name for the website cookie to store on the client." require/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Website" type="tDialogRecordForm">
+    <ec:var websiteName = @svr[param/websiteName].nullifblank/>
+    <ec:var websiteURL = @svr[param/websiteURL].nullifblank/>
+    <ec:var cookieTag = @svr[param/cookieTag].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@websiteURL)|@iv(@websiteName))>
+            <ec:data xx procedure="pr_website_edit" connection=@connection>
+                <websiteID>@XID.asInt</websiteID>
+                <websiteURL>@websiteURL</websiteURL>
+                <websiteName>@websiteName</websiteName>
+                <cookieTag>@cookieTag</cookieTag>
+            </ec:data>
+            <ec:set errMsg=@xx[errorMessage]/>
+
+            <ec:case if=@iv(@errMsg)>
+                @logError(error|obj_editWebsite_dialog unknown SQL error|101)
+            </ec:case>
+            <ec:case if=@nv(@errMsg)>
+                @logAction(3|@LTID|@XID|Edited website)
+                @dt_websites.refresh()
+                @obj_website.refresh()
+                @close
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "Both a name and URL are required to edit a website record."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_website connection=@connection>
+            SELECT websiteURL, description, cookieTag
+            FROM vw_website
+            WHERE LE_websiteID = @websiteID.asInt AND websiteID = @XID.asInt
+        </ec:data>
+        <ec:var site = @dt_website[1]/>
+        
+        @if(@iv(@errMsg)|@notification(@errorMeerrMsgssage))<br/>
+        <ec:input_text title="Website Name" id="websiteName" name="websiteName" fieldValue=@site[description].alt(@websiteName) require/>
+        <ec:input_URL title="Primary URL" id="websiteURL" name="websiteURL" fieldValue=@site[websiteURL].alt(@websiteURL) hintContent="This does not include subdomains such as www." require/>
+        <ec:input_text title="Cookie Tag" id="cookieTag" name="cookieTag" fieldValue=@site[cookieTag].alt(@cookieTag) maxlength="6" hintContent="An up-to-6 character name for the website cookie to store on the client." require/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_website_settings type="tComponent">
+    <ec:case if=@accessLevel.isGreatAs(7) rem="only highest level admin can see/adjust global settings"> 
+        <ec:data dt_siteSettings connection=@connection>
+            SELECT t1.websiteSettingID, t1.websiteSettingTypeID, t1.value, t1.tag, t2.websiteSettingTypeMemo FROM (
+
+                SELECT websiteSettingID, websiteSettingTypeID, value, tag
+                FROM vw_websiteSettings
+                WHERE websiteID = @XID.alt(0)
+                
+                UNION
+                
+                SELECT NULL AS websiteSettingID, t1.websiteSettingTypeID, t1.websiteSettingDefaultValue AS value, t1.websiteSettingTypeDescription AS tag
+                FROM websiteSettingTypes t1
+                LEFT JOIN websiteSettings t2 ON t1.websiteSettingTypeID = t2.websiteSettingTypeID
+                WHERE NOT EXISTS (SELECT 1 FROM vw_websiteSettings WHERE websiteSettingTypeID = t1.websiteSettingTypeID AND websiteID = @XID.alt(0))
+                
+            ) t1
+            LEFT JOIN websiteSettingTypes t2 ON t1.websiteSettingTypeID = t2.websiteSEttingTypeID
+            --ORDER BY tag ASC
+        </ec:data>
+
+
+        <ec:titlebox title="Website Settings">
+            @obj_cacheButton_admin() @hint(If settings aren't taking effect as expected, click clear website cache and contact a system administrator if the issue persists.)
+            <p class="notice" id="settingsMessage" style="margin-left:28px;"></p><br/>
+
+            <div class="settingsMenu">
+                <ec:loop data=@dt_siteSettings>
+                    <ec:var options=@null/>
+
+
+                    <ec:case if=@rs[tag].is(Bottombar Content)>
+                        <ec:options><a href="javascript:void(0)" class="ajaxClick" ecid="obj_setting_edit" websiteSettingID="@rs[websiteSettingID]" websiteSettingTypeID="@rs[websiteSettingTypeID]" settingTag="@rs[tag]"><ec:icon title="Edit @rs[tag]" icon="pencil"/></a></ec:options>
+                        <ec:titlebox title="Website Footer Content" hintContent="@rs[websiteSettingTypeMemo].nullifblank" options=@options contentStyle="padding-top:12px;">
+                            <ec:style>
+                                    #ect_bottombar {
+                                        display:block;
+                                        width:100%;
+                                        min-height:200px;
+                                        background-color:#2d2d2d;
+                                        color:white;
+                                        z-index:995;
+                                        padding:27px;
+                                        position:relative;
+                                    }
+                                
+                                    #primaryContent:has(+ #ect_bottombar) {
+                                        min-height:calc(100dvh - 144px);
+                                    }
+                            </ec:style>
+                        
+                            <div id="ect_bottombar">
+                                    <h4 style="margin-left:27px;">@dt_websites[].dataDef[data/1/description].alt(@chr(91)Website Name@chr(93)) &copy; @today.formatDate(yyyy)</h4><br/>
+                                
+                                    <div style="margin-left:27px;">
+                                        <style>
+                                            #ect_bottombar_menus {
+                                                display:flex;
+                                                flex-wrap:wrap;
+                                                justify-content:flex-start;
+                                                width:100%; height:100%;
+                                            }
+                                        
+                                            .ect_bottombar_menu {
+                                                margin:13px 27px;
+                                            
+                                                & ul {
+                                                    font-family:calibri;
+                                                    list-style-type:none;
+                                                    & a {color:#dadada;}
+                                                }
+                                            }
+                                        </style>
+
+                                        @rs[value]
+                                    </div>
+                            </div>
+                        </ec:titlebox>
+                    </ec:case> 
+
+
+                    <ec:case if=@rs[tag].is(Topbar Icon)>
+                        <ec:options><a href="javascript:void(0)" class="ajaxClick" ecid="obj_setting_edit" websiteSettingID="@rs[websiteSettingID]" websiteSettingTypeID="@rs[websiteSettingTypeID]" settingTag="@rs[tag]"><ec:icon title="Edit @rs[tag]" icon="pencil"/></a></ec:options>
+                        <ec:titlebox title="Website Top Banner/Nav Icon" hintContent="@rs[websiteSettingTypeMemo].nullifblank" options=@options contentStyle="padding-top:12px;">
+                            <img src="@rs[value]" style="height: 80px;"/>
+                            <span>@rs[value]</span>
+                        </ec:titlebox>
+                    </ec:case> 
+
+
+                </ec:loop>
+            </div>
+        </ec:titlebox>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_cacheButton_admin type="tComponent" style="display:inline-block; width:max-content;">
+    <ec:case if=@accessLevel.isGreatAs(7)>
+        <ec:case if=@all(@state.is(refresh)|@act.is(clearSiteStorage|clearDBStorage))>
+            <ec:var siteID=@null/> <ec:set siteID=@websiteID if=@act.is(clearSiteStorage)/>
+
+            <ec:data xx procedure="pr_sessionStorage_clear" connection=@connection>
+                <sessionID>@NULL</sessionID>
+                <tag>@NULL</tag>
+                <websiteID>@siteID.asInt</websiteID>
+            </ec:data>
+
+            @obj_cacheButton.refresh()
+            @reload()
+        </ec:case>
+        
+
+        <ec:data dt_cacheCount connection=@connection>
+            SELECT COUNT(ss.sessionStorageID) AS cacheCount
+            FROM sessionStorage ss
+            LEFT JOIN sessions s ON ss.sessionID = s.sessionID
+            WHERE s.websiteID = @websiteID.asInt
+        </ec:data>
+
+        <ec:data dt_cacheCount2 connection=@connection>
+            SELECT COUNT(sessionStorageID) AS cacheCount
+            FROM sessionStorage
+        </ec:data>
+
+        <a href="javascript:void(0)" class="btn btn-warning btn-sml ajaxClick" ecid="obj_cacheButton_admin" act="clearSiteStorage" loader="body" confirm="Clear cached items for all users on this website and reload page?">Clear Website Cache (@dt_cacheCount[1/cacheCount])</a>
+        <ec:case if=@all(@websiteID.is(1)|@xid.is(1))><a href="javascript:void(0)" class="btn btn-warning btn-sml ajaxClick" ecid="obj_cacheButton_admin" act="clearDBStorage" loader="body" confirm="Clear cached items for all users on all websites and reload page?">Clear All Website Caches (@dt_cacheCount2[1/cacheCount])</a></ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_alternativeURLs type="tComponent">
+    <ec:var siteID = @svr[param/siteID].nullifblank/>
+
+    <ec:case if=@all(@act.is(delete)|@iv(@siteID))>
+        <ec:case if=@accessLevel.alt(0).isGreatAs(4) rem="4 not 5 because this is technically editing the parent record">
+            <ec:data xx procedure="pr_record_delete" connection=@connection>
+                <LTID>102</LTID>
+                <XID>@siteID.asInt</XID>
+                <XXID>@XID.asInt</XXID>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:set errMsg = @xx[message].nullifblank/>
+            
+            <ec:case if=@iv(@errMsg)>
+                @notification(@errMsg)
+                @logError(error|@errMsg|101)
+            </ec:case>
+            
+            <ec:case if=@nv(@errMsg)>
+                @logAction(4|102|@siteID|Deleted alternate URL for siteID: @XID)
+            </ec:case>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:data dt_altURLs connection=@connection>
+        SELECT websiteURL, websiteID, cookieTag
+        FROM vw_website
+        WHERE LE_websiteID IS NULL AND parentWebsiteID = @XID.asInt --child sites don't get an LEID so LE_websiteID is NULL
+    </ec:data>
+
+    <table class="tbl">
+        <tr>
+            <th>Alternate Domains @hint(Alternate domains and subdomains the server should respond to, for/as this website specifically. Additionally, alternate cookie tags can be provided. DNS records need to be separately configured in the DNS server.)</th>
+            <th>Cookie Tag @hint(Inherits from root domain if blank.)</th>
+            <th><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_alternativeURLs_add"><ec:icon title="Add Alternative URL" icon="plus" size="sml"/></a></th>
+        </tr>
+        <ec:loop data=@dt_altURLs>
+            <tr>
+                <td><a href="http://@rs[websiteURL]" target="_blank">@rs[websiteURL]<ec:icon title="" icon="hyperlink" size="sml" direction="left" style="transform: translateY(1.5px);"/></a></td>
+                <td>@rs[cookieTag].alt(&nbsp;)</td>
+                <td>
+                    <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_alternativeURLs" act="delete" siteID="@rs[websiteID]" confirm="Are you sure you want to remove @rs[websiteURL] as an alternate domain? THIS IS NOT RECOMMENDED!"><ec:icon title="Delete Alternate Domain" icon="remove" size="xsml"/></a>
+                    <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_alternativeURLs_edit" siteID="@rs[websiteID]"><ec:icon title="Edit Alternative URL" icon="pencil" size="sml"/></a>
+                </td>
+            </tr>
+        </ec:loop>
+    </table>
+</ec:object>
+
+
+
+
+
+<ec:object obj_alternativeURLs_edit title="Edit Alternative URL" type="tDialogForm">
+    <ec:var siteID = @svr[param/siteID].nullifblank/>
+    <ec:var altURL = @svr[param/altURL].nullifblank/>
+    <ec:var cookieTag = @svr[param/cookieTag].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@altURL)>
+            <ec:data xx procedure="pr_websiteAltURL_edit" connection=@connection>
+                <websiteID>@siteID.asInt</websiteID>
+                <websiteURL>@altURL</websiteURL>
+                <cookieTag>@cookieTag</cookieTag>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+            <ec:case if=@iv(@errMsg)>
+                @notification(@errMsg)
+                @logError(error|@errMsg|101)
+            </ec:case>
+
+            <ec:case if=@nv(@errMsg)>
+                @obj_alternativeURLs.refresh()
+                @close
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A URL must be provided."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_alternativeSiteURL connection=@connection>
+            SELECT t1.websiteID, t1.websiteURL, t1.cookieTag, ISNULL(t1.cookieTag, t2.cookieTag) AS parentCookieTag
+            FROM websites t1
+            LEFT JOIN websites t2 ON t1.parentWebsiteID = t2.websiteID
+            WHERE t1.websiteID = @siteID.asInt
+        </ec:data>
+        <ec:var altSite = @dt_alternativeSiteURL[1]/>
+        
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <input type="hidden" id="siteID" name="siteID" value="@svr[param/siteID]"/>
+        <ec:input_url title="Alternative URL" name="altURL" id="altURL" fieldValue=@altSite[websiteURL].alt(@altURL) hintContent="Do not include protocol (https:// or http://) or any slashes (such as / or \)." require/>
+        <ec:input_text title="Cookie Tag" id="cookieTag" name="cookieTag" placeholder=@if(@altSite[parentCookieTag].isnot(@altSite[cookieTag])|@altSite[parentCookieTag]) fieldValue=@altSite[cookieTag] maxlength="6" hintContent="Recommended: Leave blank to inherit from root domain; Using an alternate cookie tag will force users to log into each subdomain (that has a different tag) separately."/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_alternativeURLs_add title="Add Alternative URL" type="tDialogForm">
+    <ec:var altURL = @svr[param/altURL].nullifblank/>
+    <ec:var cookieTag = @svr[param/cookieTag].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@altURL)>
+            <ec:data xx procedure="pr_websiteAltURL_new" connection=@connection>
+                <parentSiteID>@XID.asInt</parentSiteID>
+                <websiteURL>@altURL</websiteURL>
+                <cookieTag>@cookieTag</cookieTag>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+            <ec:case if=@iv(@errMsg)>
+                @notification(@errMsg)
+                @logError(error|@errMsg|101)
+            </ec:case>
+            
+            <ec:case if=@nv(@errMsg)>
+                @obj_alternativeURLs.refresh()
+                @close
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A URL must be provided."/>
+        </ec:case>
+    </ec:case>
+    
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_url title="Alternative URL" name="altURL" id="altURL" fieldValue=@altURL hintContent="Do not include protocol (https:// or http://) or any slashes (such as / or \)." require/>
+        <ec:input_text title="Cookie Tag" id="cookieTag" name="cookieTag" placeholder=@if(@altSite[parentCookieTag].isnot(@altSite[cookieTag])|@altSite[parentCookieTag]) fieldValue=@altSite[cookieTag] maxlength="6" hintContent="Recommended: Leave blank to inherit from root domain; Using an alternate cookie tag will force users to log into each subdomain (that has a different tag) separately."/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_setting_edit title="Edit @svr[param/settingTag].alt(Setting)" type="tDialogForm">
+    <ec:var settingID = @svr[param/websiteSettingID].nullifblank  settingTypeID = @svr[param/websiteSettingTypeID].nullifblank  settingTag = @svr[param/settingTag]  siteID=@XID.alt(0)/>
+    <ec:var settingValue = @svr[param/value].nullifblank/>
+
+
+    <ec:case if=@any(@nv(@settingTypeID)|@nv(@siteID))>
+        @logError(Invalid Setting Reference|settingTypeID or websiteID, as XID, was not provided while attempting to edit a setting|101)
+        @notification(An error occurred while attempting to load the edit setting dialog. Please contact a website technician.)           
+        @close(1)
+    </ec:case>
+
+
+    <ec:case if=@else rem="valid setting to edit">
+        <ec:case if=@state.is(respond)>
+            <ec:case if=@all(@iv(@settingTypeID)|@iv(@siteID))>
+                <ec:data xx procedure="pr_websiteSetting_edit" connection=@connection>
+                    <settingID>@settingID.asInt.nullifblank</settingID>
+                    <settingTypeID>@settingTypeID.asInt</settingTypeID>
+                    <settingValue>@settingValue</settingValue>
+                    <websiteID>@siteID.asInt</websiteID>
+                </ec:data>
+                <ec:set errMsg=@xx[errorMessage]/>
+    
+                <ec:case if=@iv(@errMsg)>
+                    @logError(error|obj_editWebsiteSetting_dialog - @errMsg|101)
+                </ec:case>
+                <ec:case if=@nv(@errMsg)>
+                    @logAction(3|@LTID|@XID|Edited website @settingTag(); settingID: @settingID)
+                    @dt_websites.refresh()
+                    @obj_website_settings.refresh()
+                    @close()
+                </ec:case>
+            </ec:case>
+    
+            <ec:case if=@else>
+                @logError(Invalid Setting Reference|settingTypeID or websiteID, as XID, was not provided to obj_setting_edit during state "respond"|101)
+                @notification(An error occurred while attempting to submit a setting modification. Please contact a website technician.)           
+                @close(1)
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>
+            <ec:data dt_setting connection=@connection>
+                SELECT ID, typeID, value FROM (
+                    SELECT websiteSettingID AS ID, websiteSettingTypeID AS typeID, websiteSettingValue AS value
+                    FROM websiteSettings
+                    WHERE websiteID = @siteID AND websiteSettingTypeID = @settingTypeID @settingID.with(AND websiteSettingID = |)
+
+                    UNION
+
+                    SELECT NULL AS ID, websiteSettingTypeID AS typeID, websiteSettingDefaultValue AS value
+                    FROM websiteSettingTypes
+                    WHERE NOT EXISTS (SELECT 1 FROM websiteSettings WHERE websiteID = @siteID AND websiteSettingTypeID = @settingTypeID)
+                ) AS t1
+                WHERE t1.typeID = @settingTypeID
+            </ec:data>
+            <ec:var aSetting = @dt_setting[1]/>
+            
+
+            @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+            <input type="hidden" id="settingTag" name="settingTag" value="@settingTag"/>
+            <input type="hidden" id="websiteSettingID" name="websiteSettingID" value="@settingID"/>
+            <input type="hidden" id="websiteSettingTypeID" name="websiteSettingTypeID" value="@settingTypeID"/>
+    
+            @comment(edit by setting type)
+            <ec:case if=@aSetting[typeID].is(1) rem="topbar icon">
+                <ec:input_url title="Icon URL" id="value" name="value" containerStyle="width:100%;" style="width:100%;" fieldValue=@settingValue.alt(@aSetting[value]) pattern=".*\/.*\..*" placeholder="https://www.example.com/icon.svg" hintContent="Format with protocol, domain (including subdomain if applicable), and file URL or only file URL. E.g. https://www.example.com/icon.svg or /icon.svg. Change to blank to use default icon." require/>
+            </ec:case>
+            
+            
+            <ec:case if=@aSetting[typeID].is(2) rem="bottombar content">
+                <ec:input_ace title="HTML Content" id="value" name="value" fieldValue=@settingValue.alt(@aSetting[value]) hintContent="Styles for #ect_bottombar_menus (div) and #ect_bottombar_menus .ect_bottombar_menu (div containing ul+li) are hard-coded into bottombar."/>
+            </ec:case>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@any(@websiteID.is(1)|@websiteID.is(@XID))  rem="only primary/root/default website can manage others ... own website can manage itself">
+        <ec:case if=@nv(@XID)>
+            <ec:consoleSearchBox>
+                <ec:input_text title="Website Name" id="fdescription" name="fdescription" fieldValue=@fdescription placeholder=""/>
+            </ec:consoleSearchBox>    
+            
+            @obj_websites()
+        </ec:case>
+        <ec:case if=@iv(@XID)>@obj_website()</ec:case>
+    </ec:case>
+
+
+    <ec:case if=@all(@websiteID.isnot(1)|@nv(@XID)) rem="No particular website is selected, redirect to this website's page">
+        @redirect(/console?ltid=102&xid=@websiteID.asInt)
+    </ec:case>
+
+
+    <ec:case if=@all(@websiteID.isnot(1)|@websiteID.isnot(@XID)) rem="A particular website is selected and it doesn't belong to this one... Error message instead.">
+        <ec:titlebox style="padding:11px;">
+            To create and manage other websites hosted on the database, please log into the primary website (websiteID: 1).
+        </ec:titlebox>
+
+        <ec:set errMsg="Invalid access via non-root website."/>
+        @logError(Site Is Not Root|@errMsg|44)
+    </ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

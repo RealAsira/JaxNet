@@ -1,0 +1,579 @@
+@share
+
+<ec:module lib_pageFunctions/>
+<ec:param databaseType rem="'mysql' and 'sql server' are valid options"/>
+<ec:case if=@nv(@lib_dataFunctionsCalled)>
+    <ec:var lib_dataFunctionsCalled=1 global/>
+    <ec:var provider global rem="how tParam formats data parameters, also used by tDataObj"/>
+
+    <ec:var charIndexRight = @xCharIndexRight.asReference global/>
+    <ec:var getLEID = @xGetLEID.asReference global/>
+    <ec:var ipv6_condense = @xIpv6_condense.asReference global/>
+    <ec:var ipv6_expand = @xIpv6_expand.asReference global/>
+    <ec:var logAction = @xLogAction.asReference global/>
+    <ec:var MIMEType = @xMIMEType.asReference global/>
+    <ec:var nextWorkDay = @xNextWorkDay.asReference global/>
+    <ec:var prevWorkDay = @xPrevWorkDay.asReference global/>
+    <ec:var sessionStorage = @xSessionStorage.asReference global/>
+    <ec:var stripSpecialCharacters=@xStripSpecialCharacters.asReference global/>
+    <ec:var thisWeek = @xThisWeek.asReference global/>
+    <ec:var timePassed = @xTimePassed.asReference global/>
+    <ec:var upperFirst=@xUpperFirst.asReference global/>
+    <ec:var validPassword=@xValidPassword.asReference global/>
+</ec:case>
+
+<ec:set provider=@databaseType if=@iv(@databaseType)/>
+
+
+
+
+
+<ec:function xCharIndexRight>
+  <ec:param aString char required/>
+  <ec:param indexPos = 1/>
+  <ec:var returnedIndex = @aString().charIndex(@char()|@indexPos())/>
+  
+  <ec:case if=@returnedIndex.isnot(0)>
+    <ec:var testIndex = @charIndexRight(@aString|@char|@returnedIndex.add(1))/>
+    <ec:set returnedIndex=@testIndex() if=@testIndex.isnot(0)/>
+    @return(@returnedIndex)
+  </ec:case>
+  <ec:case if=@else>@return(0)</ec:case>
+</ec:function>
+
+
+
+
+
+<ec:function xGetLEID>
+    <ec:param fLTID fXID required/>
+
+    <ec:case if=@all(@iv(@fLTID.nullifblank)|@iv(@fXID.nullifblank))>
+        <ec:data dt_LEID connection=@connection>
+            SELECT dbo.fn_linkedEntity_getID(@fLTID.asInt, @fXID.asInt) AS LEID
+        </ec:data>
+        @return(@dt_LEID[1/LEID].nullifblank)
+    </ec:case>
+    <ec:case if=@else>@return(@null)</ec:case>
+</ec:function>
+
+
+
+
+
+<ec:function xIpv6_condense rem="condense a full length ipv6 to its shorthand">
+    <ec:param long_ipv6/>
+
+    <ec:var short_ipv6/>
+    <ec:set short_ipv6 = @long_ipv6.replace(:0|:).replace(:0|:).replace(:0|:).replace(:0|:) rem="replace :0 up to 4 times to omit 0000s and :0s"/>
+
+    @return(@short_ipv6.nullifblank)
+</ec:function>
+
+
+
+
+
+<ec:function xIpv6_expand rem="expand an ipv6 to its full length if it is condensed">
+    <ec:param short_ipv6/>
+
+    <ec:var long_ipv6/>
+    <ec:var previousColonIndex2/>
+
+    <ec:loop count=8 rem="8 segments of ipv6">
+        @comment(start and end points of the segment)
+        <ec:case if=@index.is(1) rem="first iteration should have first index point start at beginning of ipv6">
+            <ec:var colonIndex1=1/>
+        </ec:case>
+        <ec:case if=@not(@index.is(1))>
+            <ec:var colonIndex1=@previousColonIndex2.add(1)/>
+        </ec:case>
+        <ec:var colonIndex2=@short_ipv6.charIndex(:|@colonIndex1)/>
+        <ec:var ipSegment=@short_ipv6.copy(@colonIndex1|@colonIndex2).replace(:|) rem="get the segment and ensure no colons are attached"/>
+
+        <ec:case if=@not(@ipSegment.length.is(4)) rem="shorter than 4, therefore it needs preceding 0s">
+            @if(@ipSegment.length.is(0)|@ipSegment.setValue(0000))
+            @if(@ipSegment.length.is(1)|@ipSegment.setValue(000@ipSegment))
+            @if(@ipSegment.length.is(2)|@ipSegment.setValue(00@ipSegment))
+            @if(@ipSegment.length.is(3)|@ipSegment.setValue(0@ipSegment))
+            @ipSegment
+        </ec:case>
+
+        @comment(reconstruct the ip)
+        <ec:case if=@not(@index.is(8)) rem="segments 1-7">
+            @long_ipv6.setValue(@long_ipv6()@ipSegment():)
+            <ec:set previousColonIndex2=@colonIndex2/>
+        </ec:case>
+        <ec:case if=@index.is(8) rem="last segment doesn't get colon">
+            @long_ipv6.setValue(@long_ipv6()@ipSegment())
+        </ec:case>
+    </ec:loop>
+    
+    @return(@long_ipv6.nullifblank)
+</ec:function>
+
+
+
+
+
+<ec:function xLogAction rem="doesn't record requestFile because requsetFiles should only be recorded on error">
+    <ec:param actionID=1 anLTID=@null anXID=@null memo=@null/>
+    <ec:set if=@nv(@anLTID.nullifblank) anLTID=@LTID.nullifblank/>
+    <ec:set if=@nv(@anXID.nullifblank) anXID=@XID.nullifblank/>
+
+    <ec:case if=@iv(@actionID.nullifblank) rem="can log to database">
+        <ec:data procedure="pr_actionLog_new" connection=@connection>
+            <userID>@user.userID.asInt</userID>
+            <sessionID>@user.sessionID.asInt</sessionID>
+            <actionID>@actionID.asInt</actionID>
+            <memo>@memo</memo>
+            <requestFile>@NULL</requestFile>
+            <LTID>@anLTID.asInt.nullifblank</LTID>
+            <XID>@anXID.asInt.nullifblank</XID>
+            <url>@svr[request/url]@svr[request/query].nullifblank.with(?|)</url>
+            <ipv4>@ipv4.nullifblank</ipv4>
+            <ipv6>@ipv6.nullifblank</ipv6>
+        </ec:data>
+    </ec:case>
+
+    <ec:case if=@else>
+        @logError(Log Action Error|Unable to log an action to the database without actionID|101)
+    </ec:case>
+</ec:function>
+
+
+
+
+
+<ec:function xMIMEType>
+    <ec:param fileName = @fileName.nullifblank/>
+    <ec:case if=@nv(@fileName.nullifblank)>
+        @response_statusCode(400)
+        @exception(fn:xMIMEType was called without a file name supplied)
+    </ec:case>
+    
+    <ec:var extension = @fileName.copy(@fileName.charIndex(.)|@fileName.length())/>
+    <ec:case if=@fileName.charIndex(.).is(0) rem="if . is not found then charIndex returns 0 instead of the index">
+        @response_statusCode(400)
+        @exception(A file extension is required as part of the fileName for fn:xMIMEType)
+    </ec:case>
+    
+    <ec:data dt_MIMEs format="XML">
+        <record extension=".aac"><MIME>audio/aac</MIME></record>
+        <record extension=".avif"><MIME>image/avif</MIME></record>
+        <record extension=".avi"><MIME>video/x-msvideo</MIME></record>
+        <record extension=".bin"><MIME>application/octet-stream</MIME></record>
+        <record extension=".bmp"><MIME>image/bmp</MIME></record>
+        <record extension=".cda"><MIME>audio/x-cdf</MIME></record>
+        <record extension=".cjs"><MIME>text/javascript</MIME></record>
+        <record extension=".css"><MIME>text/css</MIME></record>
+        <record extension=".csv"><MIME>text.csv</MIME></record>
+        <record extension=".dll"><MIME>application/octet-stream</MIME></record>
+        <record extension=".doc"><MIME>application/msword</MIME></record>
+        <record extension=".docx"><MIME>application/vnd.openxmlformats-officedocument.wordprocessingml.document</MIME></record>
+        <record extension=".ecs"><MIME>text/plain</MIME></record>
+        <record extension=".exe"><MIME>application/vnd.microsoft.portable-executable</MIME></record>
+        <record extension=".gif"><MIME>image/gif</MIME></record>
+        <record extension=".htm"><MIME>text/html</MIME></record>
+        <record extension=".html"><MIME>text/html</MIME></record>
+        <record extension=".ico"><MIME>image/vnd.microsoft.icon</MIME></record>
+        <record extension=".jar"><MIME>application/java-archive</MIME></record>
+        <record extension=".jpeg"><MIME>image/jpeg</MIME></record>
+        <record extension=".jpg"><MIME>image/jpeg</MIME></record>
+        <record extension=".js"><MIME>text/javascript</MIME></record>
+        <record extension=".json"><MIME>application/json</MIME></record>
+        <record extension=".jsonld"><MIME>application/ld+json</MIME></record>
+        <record extension=".mid"><MIME>audio/midi</MIME></record>
+        <record extension=".midi"><MIME>audio/x-midi</MIME></record>
+        <record extension=".mjs"><MIME>text/javascript</MIME></record>
+        <record extension=".mp3"><MIME>audio/mpeg</MIME></record>
+        <record extension=".mp4"><MIME>video/mp4</MIME></record>
+        <record extension=".mpeg"><MIME>video/mpeg</MIME></record>
+        <record extension=".png"><MIME>image/png</MIME></record>
+        <record extension=".pdf"><MIME>application/pdf</MIME></record>
+        <record extension=".php"><MIME>application/x-httpd-php</MIME></record>
+        <record extension=".ppt"><MIME>application/vnd.ms-powerpoint</MIME></record>
+        <record extension=".pptx"><MIME>application/vnd.openxmlformats-officedocument.presentationml.presentation</MIME></record>
+        <record extension=".rar"><MIME>application/vnd.rar</MIME></record>
+        <record extension=".rtf"><MIME>application/rtf</MIME></record>
+        <record extension=".svg"><MIME>image/svg+xml</MIME></record>
+        <record extension=".tif"><MIME>image/tiff</MIME></record>
+        <record extension=".tiff"><MIME>image/tiff</MIME></record>
+        <record extension=".ts"><MIME>video/mp2t</MIME></record>
+        <record extension=".ttf"><MIME>font/ttf</MIME></record>
+        <record extension=".txt"><MIME>text/plain</MIME></record>
+        <record extension=".wav"><MIME>audio/wav</MIME></record>
+        <record extension=".weba"><MIME>audio/webm</MIME></record>
+        <record extension=".webm"><MIME>video/webm</MIME></record>
+        <record extension=".webp"><MIME>image/webp</MIME></record>
+        <record extension=".woff"><MIME>font/woff</MIME></record>
+        <record extension=".woff2"><MIME>font/woff2</MIME></record>
+        <record extension=".xhtml"><MIME>application/xhtml+xml</MIME></record>
+        <record extension=".xls"><MIME>application/vnd.ms-excel</MIME></record>
+        <record extension=".xml"><MIME>application/xml</MIME></record>
+        <record extension=".zip"><MIME>application/zip</MIME></record>
+        <record extension=".7z"><MIME>application/x-7z-compressed</MIME></record>
+    </ec:data>
+
+    <ec:var MIME = @dt_MIMEs.getRecord(extension|@extension)/>
+    @return(@MIME[1])
+</ec:function>
+
+
+
+
+
+<ec:function xNextWorkDay>
+    <ec:param aDate rem="start calculating from this date instead of today"/>
+    <ec:var aDate = @aDate.nullifblank.alt(@today).asDate/>
+    <ec:var aDay  = @aDate.formatDate(ddd)/>
+
+    <ec:set aDate=@aDate.add(1) if=@aDay.is(Sun|Mon|Tue|Wed|Thu)/>
+    <ec:set aDate=@aDate.add(3) if=@aDay.is(Fri)/>
+    <ec:set aDate=@aDate.add(2) if=@aDay.is(Sat)/>
+
+    @return(@aDate.asDate)
+</ec:function>
+
+
+
+
+
+<ec:function xPrevWorkDay>
+    <ec:param aDate rem="start calculating from this date instead of today"/>
+    <ec:var aDate = @aDate.nullifblank.alt(@today).asDate/>
+    <ec:var aDay  = @aDate.formatDate(ddd)/>
+
+    <ec:set aDate=@aDate.add(-1) if=@aDay.is(Sat|Fri|Thu|Wed|Tue)/>
+    <ec:set aDate=@aDate.add(-2) if=@aDay.is(Sun)/>
+    <ec:set aDate=@aDate.add(-3) if=@aDay.is(Mon)/>
+
+    @return(@aDate.asDate)
+</ec:function>
+
+
+
+
+
+<ec:function xSessionStorage>
+    <ec:param tag required rem="automatically stored and retrieved with the sessionID as part of the tag"/>
+    <ec:param overwrite=0/>
+    <ec:var storedValue/>
+
+    <ec:case if=@not(@overwrite) rem="if overwrite then don't retrieve data">
+        <ec:data xx connection=@connection>
+            SELECT dbo.fn_sessionStorage_get(@user.sessionID.asInt, @sqlstr(@tag@user.sessionID.asInt)) AS storedValue
+        </ec:data>
+        <ec:set storedValue=@xx[1/storedValue].nullifblank/>
+    </ec:case>
+
+    <ec:case if=@nv(@storedValue) rem="store or update it and return">
+        <ec:set storedValue=@sender.execute/>
+        <ec:data procedure="pr_sessionStorage_store" connection=@connection>
+            <sessionID>@user.sessionID.asInt</sessionID>
+            <tag>@tag@user.sessionID.asInt</tag>
+            <value>@storedValue</value>
+        </ec:data>
+    </ec:case>
+
+    @return(@storedValue)
+</ec:function>
+
+
+
+
+
+<ec:function xStripSpecialCharacters>
+    <ec:param fieldValue = @fieldValue.nullifblank/>
+    @fieldValue.replace(@chr(32)|).replace(!|).replace(@chr(64)|).replace(#|).replace($|).replace(%|).replace(^|).replace(&|).replace(@chr(42)|).replace(@chr(40)|).replace(@chr(41)|).replace(_|).replace(@chr(45)|).replace(@chr(43)|).replace(@chr(61)|).replace({|).replace(}|).replace([|).replace(]|).replace(\|).replace(@chr(124)|).replace(;|).replace(:|).replace(@chr(39)|).replace(@chr(34)|).replace(,|).replace(@chr(60)|).replace(@chr(62)|).replace(.|).replace(/|).replace(?|).replace(~|).replace(`|)
+</ec:function>
+
+
+
+
+
+<ec:function xThisWeek>
+    <ec:var month = @today.formatDate(mm)/>
+    <ec:var day = @today.formatDate(dd)/>
+
+    <ec:var thisWeek = @calc(@floor(@calc(@calc(@month * 4.35) + @calc(@day / 7))))/>
+    @return(@thisWeek)
+</ec:function>
+
+
+
+
+
+<ec:function xTimePassed>
+    <ec:param aDate required/>
+
+    <ec:var dif = @calc(@now - @aDate.asDate()).asInt.alt(0)/>
+    <ec:var elapsed/>
+
+    <ec:set elapsed = "0 min. ago"                                       if=@dif.isLessThan(.000694444)                                     rem="seconds ago"/>
+    <ec:set elapsed = "@trunc(@calc(@dif / .000694444)).asInt min. ago"  if=@all(@dif.isGreatAs(.000694444)|@dif.isLessThan(.04166666667))  rem="calculate in minutes"/>
+    <ec:set elapsed = "@trunc(@calc(@dif / .041666667)).asInt hr. ago"   if=@all(@dif.isGreatAs(.04166666667)|@dif.isLessThan(1))           rem="calculate in hours"/>
+    <ec:set elapsed = "@trunc(@calc(@dif / 1.00000000)).asInt dy. ago"   if=@all(@dif.isGreatAs(1)|@dif.isLessThan(7))                      rem="calculate in days"/>
+    <ec:set elapsed = "@trunc(@calc(@dif / 7.00000000)).asInt wk. ago"   if=@all(@dif.isGreatAs(7)|@dif.isLessThan(30))                     rem="calculate in weeks"/>
+    <ec:set elapsed = "@trunc(@calc(@dif / 30.0000000)).asInt mth. ago"  if=@all(@dif.isGreatAs(30)|@dif.isLessThan(364))                   rem="calculate in months"/>
+    <ec:set elapsed = "@trunc(@calc(@dif / 365.242500)).asInt yr. ago"   if=@dif.isGreatAs(364)                                             rem="calculate in years"/>
+
+    @return(@elapsed.alt(0 min. ago))
+</ec:function>
+
+
+
+
+
+<ec:function xUpperFirst rem="returns the string with a capitalized first letter without modifying other capitalization">
+    <ec:param fieldValue=@fieldValue.nullifblank/>
+    @fieldValue.left(1).upper()@fieldValue.right(@calc(@fieldValue.length - 1))
+</ec:function>
+
+
+
+
+
+<ec:function xValidPassword rem="0 means password is invalid, 1 means password is valid">
+    <ec:param password/>
+    <ec:var isValid=1/>
+
+    <ec:set rem="lowercase letter" isValid=0 if=@not(@password.contains(a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z))/>
+    <ec:set rem="uppercase letter" isValid=0 if=@not(@password.contains(A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z))/>
+    <ec:set rem="number"           isValid=0 if=@not(@password.contains(1|2|3|4|5|6|7|8|9|0))/>
+    <ec:set rem="symbol"           isValid=0 if=@not(@password.contains(~|`|!|@chr(64)|#|$|%|^|&|*|@chr(40)|@chr(41)|_|-|+|=|{|[|}|]|@chr(124)|\|:|;|@chr(34)|@chr(39)|@chr(60)|,|@chr(62)|.|?|/))/>
+    <ec:set rem="length"           isValid=0 if=@not(@password.length.isBetween(6|20))/>
+
+    @return(@isValid.alt(0))
+</ec:function>
+
+
+
+
+
+
+
+<ec:type tDataObj>
+    <ec:var dataDef/>
+    <ec:var limit SQL/>
+    <ec:var componentRegister/>
+    <ec:var parameters/>
+    <ec:var staticPagedQuery/>
+
+
+
+    <ec:function initialize>
+        <ec:param dataDef asReference/>
+        <ec:param page=1/><ec:case if=@nv(@clientGet(page))>@clientStore(page|@page)</ec:case>
+        <ec:param limit=1/>@self.limit.setValue(@limit)
+        <ec:param parameters/>@self.parameters.setReference(@parameters)
+        <ec:param staticPagedQuery=0/>@self.staticPagedQuery.setValue(@staticPagedQuery)/>
+
+        <ec:case if=@nv(@dataDef)>
+            <ec:data fDataDef format="xml">@sender.execute</ec:data>
+            @self.dataDef.setReference(@fDataDef)
+        </ec:case>
+        <ec:param SQL=@dataDef[SQLSelect]/>@self.SQL.SetValue(@SQL)/>
+
+        <ec:var connectionRecord=@serversettings[connections].getRecord(name|@self.dataDef[connection]) asReference/>
+        @self.dataDef.store(provider|@connectionRecord[ProviderName])
+        <ec:data componentRegister format="xml"></ec:data>@self.componentRegister.setReference(@componentRegister)
+    </ec:function>
+
+
+
+    <ec:function currentPage>
+        @return(@clientGet(page).alt(1))
+    </ec:function>
+
+
+
+    <ec:function register>
+        <ec:param component />
+        <ec:var aNewRecord=@componentRegister.addRecord(item)/>
+        <ec:var objectRecord=@aNewRecord.addRecord(object)/>
+        @aNewRecord.store(objectName|@component.objectName)
+        @objectRecord.setReference(@component)/>
+        @return()
+    </ec:function>
+
+
+
+    <ec:function render/>
+
+
+
+    <ec:function activate rem="data retrieved by first component that goes to render all others ignored">
+        <ec:getdata if=@nv(@dataDef[data])/>
+    </ec:function>
+
+
+
+    <ec:function refresh rem="forced refresh">
+        <ec:designate/>
+    </ec:function>
+
+
+
+    <ec:function designate rem="set by responding component - causes refresh of all other components that use this dataObj">
+        <ec:case if=@iv(@dataDef[data])>
+            @response_statusCode(500)
+            @exception(The refresh / designate function cannot be used because the dataObj has already been activated)
+        </ec:case>
+        <ec:param page/>@clientStore(page|@page)
+        <ec:param parameters asReference/>
+        <ec:getdata parameters=@parameters/>
+        <ec:loop componentRegister>
+            <ec:case if=@rs[object].type.isnot(tDialogForm) rem="do not open or refresh modal dialogs">
+                @responder.refresh(@rs[object])
+            </ec:case>
+        </ec:loop>
+        @return()
+    </ec:function>
+
+
+
+    <ec:function getData rem="unknown purpose ... used in fn_designate and fn_activate">
+        <ec:param parameters=@self.parameters asReference/>
+        <ec:getData_dynamicQuery if=@not(@self.staticPagedQuery) parameters=@parameters/>
+        <ec:getData_staticPagedQuery if=@self.staticPagedQuery/>
+    </ec:function>
+
+
+
+    <ec:function getData_staticPagedQuery rem="unknown purpose ... used by fn_getData">
+        <ec:var page=@clientGet(page).nullifblank.alt(1) rem="private variable"/>
+        <ec:var SQL=@dataDef[SQLSelect]/>
+        <ec:var connection=@dataDef[connection]/>
+        <ec:case if=@nv(@connection)>@response_statusCode(500) @exception(tDataObj.getData.dataDef did not provide a CONNECTION name)</ec:case>
+
+        <ec:data data connection=@connection>
+            @SQL
+        </ec:data>
+
+        <ec:var recordCount=@data[1/totalRecords].alt(0)/>
+        <ec:var totalPages=@trunc(@calc((@recordCount+@limit-1)/@limit))/>@clientStore(totalPages|@totalPages)
+        <ec:set page=@min(@page|@totalPages)/>@clientStore(page|@page)
+
+        <ec:var InfoRecord=@dataDef.addRecord(info)/>
+        @infoRecord.store(recordCount|@recordCount)
+        @infoRecord.store(recordsPerPage|@limit)
+        @infoRecord.store(totalPages|@totalPages)
+        @infoRecord.store(startRecord|@startRecord)
+        @infoRecord.store(page|@page)
+
+        <ec:case>
+            <ec:case if=@iv(@dataDef[data])>@dataDef[data].setReference(@Data)</ec:case>
+            <ec:case if=@else>@dataDef.addRecord(data).setReference(@data)</ec:case>
+        </ec:case>
+        @return(@null)
+    </ec:function>
+
+
+
+    <ec:function getData_dynamicQuery rem="unknown purpose ... used by fn_getData">
+        <ec:param parameters=@self.parameters asReference/>@self.parameters.setReference(@parameters)
+        <ec:var page=@clientGet(page).nullifblank.alt(1)/>
+        <ec:var SQL=@dataDef[SQLSelect]/>
+        <ec:set SQL=@SQL.replace(@chr(64)|@chr(30)) rem="security: remove ec:executable commands in parameters injected in SQL"/>
+        <ec:set SQL=@SQL.replace(ec:|@chr(31)) rem="security: remove ec:executable commands in parameters injected in SQL"/>
+        <ec:set SQL=@SQL.replace(#|@chr(64))/>
+
+        <ec:set provider=@dataDef[provider]/>
+        <ec:var connection=@dataDef[connection]/>
+        <ec:case if=@nv(@connection)>@response_statusCode(500) @exception(tDataObj.getData.dataDef did not provide a CONNECTION name)</ec:case>
+
+        @comment(loop parameters copies parameters to variables)
+        <ec:loop parameters>@var(@rs.key|@rs.asValue|tParam)</ec:loop>
+
+        <ec:var SQLSelect=@executeScript(@SQL)/>
+        <ec:set SQLSelect=@SQLSelect.replace(@chr(30)|@chr(64)) rem="security: remove ec:executable commands in parameters injected in SQL"/>
+        <ec:set SQLSelect=@SQLSelect.replace(@chr(31)|ec:) rem="security: remove ec:executable commands in parameters injected in SQL"/>
+        <ec:var countSQL="SELECT COUNT(*) FROM (@SQLSelect) AS countedTable"/>
+
+        <ec:data countRS connection=@connection>@countSQL</ec:data>
+        <ec:var recordCount=@countRS[1/1].alt(0)/>
+        <ec:var totalPages=@trunc(@calc((@recordCount+@limit-1)/@limit))/>@clientStore(totalPages|@totalPages)
+        <ec:set page=@min(@page|@totalPages)/>@clientStore(page|@page)
+
+        <ec:var startRecord=@max(0|@calc(@limit*@page-@limit))/>
+        <ec:var infoRecord=@dataDef.addRecord(info)/>
+        @infoRecord.store(recordCount|@recordCount)
+        @infoRecord.store(recordsPerPage|@limit)
+        @infoRecord.store(totalPages|@totalPages)
+        @infoRecord.store(startRecord|@startRecord)
+        @infoRecord.store(page|@page)
+
+        <ec:var pagedSQL/>
+        <ec:pagedSQL if=@dataDef[provider].is(MySQL)>
+            @SQLSelect
+            ORDER BY @dataDef[order]
+            LIMIT @startRecord, @limit
+        </ec:pagedSQL>
+        <ec:pagedSQL if=@dataDef[provider].is(SQL Server)>
+            <ec:var fromPos=@SQLSelect.charindex(from@chr(32)) selectClause=@SQLSelect.copy(1|@fromPos.add(-1)) fromClause=@SQLSelect.copy(@fromPos)/>
+            @comment(this is the one spot where it is okay to use SELECT *)
+
+            SELECT * FROM (
+                @selectClause, ROW_NUMBER() OVER (
+                    ORDER BY @dataDef[sort] @if(@iv(@dataDef[sort].attribute(by))|@dataDef[sort].attribute(by).upper)
+                    ) AS _row @fromClause
+            ) _ResultSet
+            WHERE _row > @startRecord AND _row <= @calc(@startRecord + @limit)
+            
+            <ec:case if=@iv(@dataDef[order])>ORDER BY @dataDef[order]</ec:case>
+        </ec:pagedSQL>
+        
+         <ec:data data connection=@connection>
+            @pagedSQL
+        </ec:data>
+
+        <ec:case>
+            <ec:case if=@iv(@dataDef[data])>@dataDef[data].setReference(@data)</ec:case>
+            <ec:case if=@else>@dataDef.addRecord(data).setReference(@data)</ec:case>
+        </ec:case>
+        @return(@null)
+    </ec:function>
+</ec:type>
+
+
+
+
+
+<ec:type tPageNavigator type="tComponent">
+    <ec:function beforeInitialize>
+        <ec:set persist=1/>
+    </ec:function>
+     
+    <ec:function renderContent>
+        <ec:param showPages/><ec:var showPages=@showPages.nullifblank.alt(10)/>
+
+        <ec:case if=@nv(@dataObj)>@response_statusCode(500) @exception(tPageNavigator missing dataObj)</ec:case>
+        <ec:case if=@state.is(respond)>
+            @dataObj.designate(@svr[param/value])
+        </ec:case>
+        <ec:set page=@dataObj.currentPage/>
+        <ec:case if=@state.is(respond)>@pushBrowserHistory.refresh </ec:case>
+        <ec:var totalRecords=@dataObj.datadef[info/recordCount] recordsPerPage=@dataObj.datadef[info/recordsPerPage] totalPages=@dataObj.datadef[info/totalPages] />
+
+        <ec:case if=@totalPages.isGreaterThan(1))>
+            <div class="pageNavigator">
+                <ec:var startPage=@calc(@page-@trunc(@calc(@showPages/2))).atLeast(1) endPage=@calc(@startPage+@showPages).atMost(@totalPages)/>
+                <ec:case if=@page.isGreaterThan(1)><a href="javascript:void(0)" rel="nofollow" name="page" value="@calc(@page-1)" class="ajaxClick previousPage">Previous</a></ec:case>
+                <ec:var pageNum=@startPage/>
+                
+                <ec:loop until=@pageNum.isGreaterthan(@endPage)>
+                    <ec:case if=@pageNum.is(@page)>
+                        <a href="javascript:void(0)" rel="nofollow" class="currentPage">@pageNum</a>
+                    </ec:case>
+                    <ec:case if=@else>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" name="page" value="@pageNum">@pageNum</a>
+                    </ec:case>
+                    @pageNum.inc()
+                </ec:loop>
+                <ec:case if=@any(@nv(@totalPages)|@endPage.isGreaterThan(@page))><a href="javascript:void(0)" rel="nofollow" name="page" value="@calc(@page+1)" class="ajaxClick nextPage">Next</a></ec:case>
+            </div>
+        </ec:case>
+        <ec:case if=@not(@totalPages.isGreaterThan(1))><!-- Empty Page Navigator --></ec:case>
+    </ec:function>
+</ec:type>

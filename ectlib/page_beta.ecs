@@ -1,0 +1,140 @@
+@share
+@pageFound.set(1)
+
+@if(@nv(@user.userID)|@var(returnto|/beta) @var(returnto|@returnto.urlencode) @logError(Unauthorized|must be signed in to access beta page|76) @redirect(/login?returnto=@returnto))
+@if(@nv(@user.employeeID)|@logError(Unauthorized|must be an employee to access beta page|76) @redirect(/home))
+@if(@nv(@ecid)|@logAction(1|||))
+
+<ec:module lib_pageElements/>
+<ec:module lib_pageFunctions/>
+<ec:module lib_dataFunctions/>
+<ec:module type_tParam/>
+<ec:module comp_contactCards ownerLTID="2" ownerXID="3"/>
+
+
+<ec:object tDiag title="tDiagTest" type="tDialogForm">
+    Lorem ipsum dolor sit amet consectetur adipisicing elit. Nulla omnis perspiciatis illum, esse molestias inventore architecto voluptate optio, accusantium nam officiis aliquam voluptates. Numquam necessitatibus voluptates deleniti. Dicta explicabo aut est tenetur alias totam, quia in doloremque veritatis perferendis quidem voluptates consectetur? Reprehenderit inventore vero iste! Ab rem iste id.
+    <br/><br/><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="tDiag2">Reveal 2</a>
+
+    <!-- inputs testing   Don't focus on type = button, file, hidden, radio, range, reset, or submit.-->
+    <br/><br/>
+    <input type="button" value="btn"/>
+    <input type="file" value="file"/>
+    <input type="hidden" value="hidden"/>
+    <input type="radio" value="radio"/>
+    <input type="range" value="range"/>
+    <input type="reset" value="reset"/>
+    <input type="submit" value="submit"/>
+    <input type="text" value="text"/>
+</ec:object>
+
+
+
+<ec:object tDiag2 title="tDiagTest2" type="tDialogForm" style="width:40%;">
+    Going to use these smaller tDialogForms for searches like searching for bin loc to put bin into, user to add to group, etc...<br/><br/>
+
+    <ec:var myVar="'313" blankVar=''/>
+    <ec:set myVar=@myVar blankVar=@blankVar.nullifblank type="tParam"/>
+    Also, here are tParam functions being used:<br/>
+    raw: @myVar<br/>
+    .type: @myVar.type<br/>
+    .as(int): @myVar.as(int)<br/>
+
+    @notification(This notification was called from tDiag2|3|0)
+    @notification(This notification was called from tDiag2|3|0)
+    @notification(This notification was called from tDiag2|5|0)
+    @notification(This notification was called from tDiag2|5|0)
+    @notification(This notification was called from tDiag2|6|0)
+    @notification(This notification was called from tDiag2|6|0)
+
+    <ec:case if=@state.is(respond)>
+        @responder.update(#testTitle|tDialog Reveal Buttons)
+    </ec:case>
+</ec:object>
+
+
+
+<ec:object tRevealTDialogs type="tComponent">
+    <h4 id="testTitle">Reveal tDialogs</h4>
+    <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="tDiag">Reveal 1</a><br/>
+    <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="tDiag2">Reveal 2</a><br/><br/>
+</ec:object>
+
+
+
+
+<ec:object obj_testImageUpload type="tComponent" rem="THIS WAS STUPID HARD TO GET WORKING ... KEEP THIS EXAMPLE INDEFINITELY">
+        <ec:case if=@all(@state.is(respond)|@iv(@svr[request/files]))>
+        <ec:var content/>
+        <ec:loop data = @svr[request/files]>
+            @copyFile(@rs[path]|@fileStore()\files\tempImages\@rs[fileName])
+            @deleteFile(@rs[path]).hide
+
+            <ec:content>
+                @content()
+                <img src="\files\tempImages\@rs[fileName]" alt="empty" width="300px"/>
+            </ec:content>
+        </ec:loop>
+        
+        @responder.replace(#drop-area-upload2|@content)
+        @comment(wouldn't normally replace the upload element ... depends on request type)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_mouseZoneTest type="tComponent">
+    @comment(bounds are approximate... use testServer and view browser console to see exact percents and where borders are)
+    <div id="primaryContent">
+        <table style="width:100dvw; height:100dvh; table-layout:fixed; border:1px solid white; border-collapse: collapse;">
+            <tr style="height:30dvh; border:1px solid white; border-collapse: collapse; ">
+                <td style="width:20dvw; text-align:left;"  >@hint(test1)<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;@hint(test1)</td>
+                <td style="width:60dvw; text-align:center;">@hint(test2)</td>
+                <td style="width:20dvw; text-align:center;" >@hint(test3)</td>
+            </tr>
+            <tr style="height:50dvh; border:1px solid white; border-collapse: collapse;">
+                <td style="width:20dvw; text-align:left;"  >@hint(test4)</td>
+                <td style="width:60dvw; text-align:center; border:1px solid white;" rowspan="2">@hint(test5)</td>
+                <td style="width:20dvw; text-align:center;" >@hint(test6)</td>
+            </tr>
+            <tr style="height:20dvh; border:1px solid white; border-collapse: collapse;">
+                <td style="width:20dvw; text-align:left;" >@hint(test7)</td>
+                <td style="width:20dvw; text-align:center;">@hint(test8)</td>
+            </tr>
+        </table>
+    </div>
+</ec:object>
+
+
+
+
+
+<ec:webpage title="Beta Page">
+    <ec:metaTag name="description" content="Beta page for employees only"/>
+    <ec:metaTag name="og:description" content="Beta page for employees only"/>
+    <ec:metaTag name="og:image" content="/imgs-default/markup.png"/>
+
+    <ec:notification seconds=8 loader=0><span><strong>Version: </strong>@sys_version() on @sys_buildConfig()</span></ec:notification>
+
+    <ec:var menuItems/>
+    <ec:menuItems>
+        <li class="anchorify" target="_blank" href="/home">Site Home</li>
+        <li class="anchorify" target="_blank" href="/status">Site Status</li>
+        <li class="anchorify" target="_blank" href="/console">Console</li>
+    </ec:menuItems>
+    <ec:topbar bannerIcon=@siteSettings[topbarIcon] bannerIcon=@siteSettings[topbarIcon] rMenuContent=@menuItems/>
+
+    <div id="primaryContent" style="display:none;">
+        @tRevealTDialogs()
+        <ec:downloadLink filePath="\AT\test1">filePath download test</ec:downloadLink>
+
+        <ec:uploadForm mode="dragDrop" ecid="obj_testImageUpload" loader="#drop-area-upload2" id="upload2" name="upload2"/>
+        @obj_testImageUpload()
+    </div>
+
+    @obj_mouseZoneTest
+
+    @bottombar()
+</ec:webpage>

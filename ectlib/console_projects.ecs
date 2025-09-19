@@ -1,0 +1,134 @@
+@share
+<ec:module comp_input_entity/>
+
+<ec:var fkeywords = @svr[param/fkeywords].nullifblank/>
+<ec:var fprojectStatusID = @svr[param/fprojectStatusID].nullifblank/>
+<ec:var fleadEmployeeID = @svr[param/X_fleadEmployeeID].nullifblank/>
+
+@comment(date range filters)
+<ec:var fstartDate_start = @svr[param/fstartDate_start].nullifblank/>
+<ec:var fstartDate_end = @svr[param/fstartDate_end].nullifblank/>
+<ec:var fdueDate_start = @svr[param/fdueDate_start].nullifblank/>
+<ec:var fdueDate_end = @svr[param/fdueDate_end].nullifblank/>
+<ec:var ffinishDate_start = @svr[param/ffinishDate_start].nullifblank/>
+<ec:var ffinishDate_end = @svr[param/ffinishDate_end].nullifblank/>
+
+
+<ec:object dt_projects page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>projectID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT projectID, projectName, startDate, dueDate, completeDate, projectStatusDescription, leadName, leadImg
+            FROM vw_projects
+            WHERE 1=1 AND websiteID = @websiteID.alt(0)
+
+            @comment(ADD FILTERS HERE)
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT * FROM projects
+            WHERE projectID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">projectID</sort>
+</ec:object>
+<ec:object obj_projects_pageNavigator dataObj=@dt_projects type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_projects dataObj=@dt_projects type="tComponent">
+    <ec:titlebox title="Projects"  options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=4&xid=@rs[taskID]">
+
+                </tr>
+            </ec:loop>
+        </table>
+        
+        @obj_projects_pageNavigator()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_project dataObj=@dt_projects type="tComponent">
+    <ec:var prj=@dataObj.dataDef[data/1]/>
+    <ec:titlebox title="Project" options=@defaultRecordOptions()>
+        <div class="displayFields">
+
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Project" type="tDialogRecordForm">
+    <ec:case if=@state.is(respond)>
+
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Project" type="tDialogRecordForm">
+    <ec:case if=@state.is(respond)>
+
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:data dt_projectStatus_select connection=@connection>
+                SELECT projectStatusID, projectStatusDescription
+                FROM projectStatuses
+            </ec:data>
+
+            <ec:input_text title="Keywords" id="fkeywords" name="fkeywords" fieldValue=@fkeywords/> 
+            <ec:input_select title="Project Status" id="fprojectStatusID" name="fprojectStatusID" fieldValue=@fprojectStatusID options=@dt_projectStatus_select allowNull/>
+            <ec:input_dateRange title="Start Date" id="fstartDate" name="fstartDate" fieldValue1=@fstartDate_start fieldValue2=@fstartDate_end allowNull/>
+            <ec:input_dateRange title="Due Date" id="fdueDate" name="fdueDate" fieldValue1=@fdueDate_start fieldValue2=@fdueDate_end allowNull/>
+            <ec:input_dateRange title="Finish Date" id="ffinishDate" name="ffinishDate" fieldValue1=@ffinishDate_start fieldValue2=@ffinishDate_end allowNull/>
+            <ec:input_entity title="Lead" id="fleadEmployeeID" name="fleadEmployeeID" fieldLTID=@if(@iv(@fleadEmployeeID)|2|@null) fieldXID=@fleadEmployeeID filterLTID="2"/>
+            <span class="notice">Filters are currently non-functional</span>
+        </ec:consoleSearchBox>
+
+        @obj_projects()
+    </ec:case>
+    <ec:case if=@iv(@XID)>
+        @obj_project()
+    </ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

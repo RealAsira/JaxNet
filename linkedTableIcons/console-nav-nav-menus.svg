@@ -1,0 +1,23 @@
+<svg width="300" height="300" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g filter="url(#filter0_d_825_404)">
+<mask id="mask0_825_404" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="300" height="300">
+<rect width="300" height="300" fill="#D9D9D9"/>
+</mask>
+<g mask="url(#mask0_825_404)">
+<rect x="26" y="206.74" width="248" height="43.26" rx="10" fill="#2387C0"/>
+<rect x="26" y="128.18" width="248" height="42.5733" rx="10" fill="#2387C0"/>
+<rect x="26" y="49" width="248" height="43.26" rx="10" fill="#2387C0"/>
+</g>
+</g>
+<defs>
+<filter id="filter0_d_825_404" x="-4" y="0" width="308" height="308" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="2"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_825_404"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_825_404" result="shape"/>
+</filter>
+</defs>
+</svg>

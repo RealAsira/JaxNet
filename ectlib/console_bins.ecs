@@ -1,0 +1,71 @@
+@share
+
+<ec:object dt_bins page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>binID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT *
+            FROM bins
+            LEFT JOIN linkedEntities LE ON toLTID = 15 AND toXID = bins.binID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT *, linkedTables.iconURL, linkedTables.description AS iconDescription
+            FROM bins
+            LEFT JOIN linkedTables ON 15 = linkedTables.linkedTableID
+            LEFT JOIN linkedEntities LE ON toLTID = 15 AND toXID = bins.binID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            AND bins.binID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">bins.binID</sort>
+</ec:object>
+<ec:object obj_bins_pageNavigator dataObj=@dt_bins type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_bins dataObj=@dt_bins type="tComponent">
+    <ec:titlebox title="Bins" options=@defaultListOptions()>
+        <table class="tbl">
+            
+        </table>
+        @obj_bins_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_bin dataObj=@dt_bins type="tComponent">
+    <ec:var bin=@dataObj.dataDef[data/1]/>
+    <ec:titlebox title="Bin" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@bin[iconURL]" alt="@bin[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+
+            </div>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>@obj_bins</ec:case>
+    <ec:case if=@iv(@XID)>@obj_bin</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

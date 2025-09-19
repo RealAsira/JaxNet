@@ -1,0 +1,205 @@
+@share
+@pageTitle.setValue(Console Settings)
+
+<ec:style>
+    .settingsMenu {display:flex; flex-wrap:wrap;}
+    .aSetting {display:inline-block; margin-right:11px;}
+</ec:style>
+
+
+
+
+
+<ec:object obj_settings type="tComponent">
+    <ec:case if=@all(@state.is(respond)|@act.is(modify))>
+        <ec:var settingName = @svr[param/settingName].nullifblank/>
+        <ec:var settingID = @svr[param/settingID].nullifblank/>
+        <ec:var settingTypeID = @svr[param/settingTypeID].nullifblank/>
+        <ec:var settingValueID = @svr[param/settingValueID].nullifblank/>
+
+        <ec:case if=@iv(@settingID)>
+            <ec:data xx procedure="sp_setting_edit" connection=@connection>
+                <userID>@user.userID.asInt</userID>
+                <settingID>@settingID.asInt</settingID>
+                <settingTypeID>@settingTypeID.asInt</settingTypeID>
+                <settingValueID>@settingValueID.asInt</settingValueID>
+            </ec:data>
+        </ec:case>
+
+        <ec:case if=@nv(@settingID)>
+            <ec:data xx procedure="sp_setting_new" connection=@connection>
+                <userID>@user.userID.asInt</userID>
+                <settingTypeID>@settingTypeID.asInt</settingTypeID>
+                <settingValueID>@settingValueID.asInt</settingValueID>
+            </ec:data>
+            <ec:set settingID = @xx[settingID].nullifblank/>
+        </ec:case>
+
+        <ec:set errMsg = @xx[errorMessage].nullifblank/>
+        <ec:case if=@iv(@errMsg)>@notification(@errMsg)</ec:case>
+
+        <ec:case if=@nv(@errMsg)>
+            <ec:var settingValue = @xx[settingValue].nullifblank/>
+            @userSettings[].store(@settingName.replace(@chr(32)|)|@settingValue).hide()
+            @userSettings[@settingName.replace(@chr(32)|)].storeAttribute(settingID|@settingID).hide()
+            @userSettings[@settingName.replace(@chr(32)|)].storeAttribute(settingTypeID|@settingTypeID).hide()
+            @userSettings[@settingName.replace(@chr(32)|)].storeAttribute(settingValueID|@settingValueID).hide()
+            @userSettings[@settingName.replace(@chr(32)|)].storeAttribute(date|@now).hide()
+            
+            <ec:data xx procedure="pr_sessionStorage_clear" connection=@connection>
+                <sessionID>@user.sessionID.asInt.alt(0)</sessionID>
+                <tag>settings@user.sessionID.asInt.alt(0)</tag>
+            </ec:data>
+            <ec:var selector="#setting-@settingTypeID()" content="@aSetting(@settingID|@settingTypeID|@settingValueID|@settingName)"/>
+            @responder.replace(@selector|@content)
+            @obj_cacheButton.refresh()
+            @obj_cacheButton_admin.refresh()
+
+            <ec:script>document.getElementById('settingsMessage').innerText = 'Settings saved. Continue changing settings or reload to apply changes.';</ec:script>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@act.isnot(modify)>
+        <ec:data dt_settings connection=@connection>
+            SELECT settingID, settingTypeID, settingValueID, value, tag, isEmployeeSetting
+            FROM vw_settings
+            WHERE userID = @user.userID.alt(0)
+
+            UNION
+
+            SELECT NULL AS settingID, t1.settingTypeID, t2.settingValueID, t2.value, t1.description AS tag, t1.isEmployeeSetting
+            FROM settingTypes t1
+            LEFT JOIN settingValues t2 ON t1.settingTypeID = t2.settingTypeID
+            WHERE t2.isDefault = 1 AND NOT EXISTS (SELECT 1 FROM vw_settings WHERE settingTypeID = t1.settingTypeID AND userID = @user.userID.alt(0))
+
+            ORDER BY isEmployeeSetting DESC, tag ASC
+        </ec:data>
+
+        <ec:titlebox title="Console Settings">
+            <p class="notice" id="settingsMessage"></p><br/>
+            
+            <ec:loop data=@dt_settings>
+                <ec:case if=@rs[isEmployeeSetting].isHeader>
+                    <ec:case if=@rs[isEmployeeSetting].is(1|true)><h3>Employee Settings</h3><hr/><br/></ec:case>
+                    <ec:case if=@rs[isEmployeeSetting].is(0|false)><br/><br/><h3>User Settings</h3><hr/><br/></ec:case>
+                    <div class="settingsMenu">
+                </ec:case>
+
+                        @aSetting(@rs[settingID]|@rs[settingTypeID]|@rs[settingValueID]|@rs[tag])  
+
+                <ec:case if=@rs[isEmployeeSetting].isFooter>
+                    </div>
+                </ec:case>
+            </ec:loop>
+            <br/>
+
+            @obj_cacheButton() @hint(If settings aren't taking effect as expected, click clear website cache and contact a system administrator if the issue persists.)
+            <br/><br/>
+            @obj_cacheButton_admin()
+        </ec:titlebox>
+    </ec:case>
+</ec:object> 
+
+
+
+
+
+
+
+
+
+
+
+<ec:function aSetting>
+    <ec:param settingID settingTypeID settingValueID tag/>
+
+    <ec:data dt_values connection=@connection>
+        SELECT settingValueID, value FROM settingValues WHERE settingTypeID = @settingTypeID.alt(0)
+    </ec:data>
+
+    <ec:data dt_memo connection=@connection>
+        SELECT memo FROM settingTypes WHERE settingTypeID = @settingTypeID.alt(0)
+    </ec:data>
+
+    <div class="aSetting" id="setting-@settingTypeID()">
+        <form>
+            <input type="hidden" id="settingName" name="settingName" value="@tag"/>
+            <input type="hidden" id="settingID" name="settingID" value="@settingID"/>
+            <input type="hidden" id="settingTypeID" name="settingTypeID" value="@settingTypeID"/>
+            <input type="hidden" id="act" name="act" value="modify"/>
+            <ec:input_select title="@tag" id="settingValueID"  name="settingValueID" class="submitOnChange" loader="#setting-@settingTypeID()" fieldValue=@settingValueID options=@dt_values hintContent=@dt_memo[1/memo]/>
+        </form>
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:object obj_cacheButton type="tComponent" style="display:inline-block; width:max-content;">
+    <ec:case if=@all(@state.is(refresh)|@act.is(clear))>
+        <ec:data xx procedure="pr_sessionStorage_clear" connection=@connection>
+            <sessionID>@user.sessionID.asInt.alt(0)</sessionID>
+            <tag>@NULL</tag>
+        </ec:data>
+        @reload()
+    </ec:case>
+
+    <ec:data dt_cacheCount connection=@connection>
+        SELECT COUNT(sessionStorageID) AS cacheCount FROM sessionStorage WHERE sessionID = @user.sessionID.alt(0)
+    </ec:data>
+    <a href="javascript:void(0)" class="btn btn-warning btn-sml ajaxClick" ecid="obj_cacheButton" act="clear" loader="body" confirm="Clear your cached items and reload page?">Clear Cache (@dt_cacheCount[1/cacheCount])</a>
+</ec:object>
+
+
+
+
+
+<ec:object obj_cacheButton_admin type="tComponent" style="display:inline-block; width:max-content;">
+    <ec:case if=@accessLevel.isGreatAs(7)>
+        <ec:case if=@all(@state.is(refresh)|@act.is(clearSiteStorage|clearDBStorage))>
+            <ec:var siteID=@null/> <ec:set siteID=@websiteID if=@act.is(clearSiteStorage)/>
+
+            <ec:data xx procedure="pr_sessionStorage_clear" connection=@connection>
+                <sessionID>@NULL</sessionID>
+                <tag>@NULL</tag>
+                <websiteID>@siteID.asInt</websiteID>
+            </ec:data>
+
+            @obj_cacheButton.refresh()
+            @reload()
+        </ec:case>
+        
+
+        <ec:data dt_cacheCount connection=@connection>
+            SELECT COUNT(ss.sessionStorageID) AS cacheCount
+            FROM sessionStorage ss
+            LEFT JOIN sessions s ON ss.sessionID = s.sessionID
+            WHERE s.websiteID = @websiteID.asInt
+        </ec:data>
+
+        <ec:data dt_cacheCount2 connection=@connection>
+            SELECT COUNT(sessionStorageID) AS cacheCount
+            FROM sessionStorage
+        </ec:data>
+
+        <a href="javascript:void(0)" class="btn btn-warning btn-sml ajaxClick" ecid="obj_cacheButton_admin" act="clearSiteStorage" loader="body" confirm="Clear cached items for all users on this website and reload page?">Clear Website Cache (@dt_cacheCount[1/cacheCount])</a>
+        <ec:case if=@websiteID.is(1)><a href="javascript:void(0)" class="btn btn-warning btn-sml ajaxClick" ecid="obj_cacheButton_admin" act="clearDBStorage" loader="body" confirm="Clear cached items for all users on all websites and reload page?">Clear All Website Caches (@dt_cacheCount2[1/cacheCount])</a></ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    @obj_settings
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

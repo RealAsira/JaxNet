@@ -1,0 +1,65 @@
+@share
+@pageFound.set(1)
+<ec:var APIkey = @svr[param/APIkey].nullifblank/>
+<ec:var auth = @checkKey(@APIkey).nullifblank/>
+
+<ec:function checkKey>
+    <ec:param key/>
+    <ec:var auth/>
+    <ec:set auth=0                              rem="0 is invalid and is default state"/>
+    <ec:set auth=@null if=@nv(@key)             rem="null if missing"/>
+
+    <ec:case if=@iv(@key) rem="validate key/auth for APIs that require it">
+        @comment(none yet...)
+        @comment(opt.is(serverBarcode))
+    </ec:case>
+
+    <ec:set auth=1 if=@opt.is(widget)           rem="widget API is an iframe and should always be allowed"/>
+    <ec:set auth=1 if=@referer.contains(@host)  rem="if referer is own website, then authorization should always be granted"/>
+
+    <ec:set auth=1 if=1                         rem="temp override until authorization system is completed"/>
+    @return(@auth.nullifblank)
+</ec:function>
+
+
+<ec:output>
+    <ec:case if=@iv(@auth) rem="has a key">
+        <ec:case if=@auth rem="is allowed">
+            <ec:case rem="which API is being called?">
+                <ec:module API_serverBarcode if=@opt.is(serverBarcode)/>
+                <ec:module API_widget if=@opt.is(widget)/>
+
+                <ec:case if=@else>
+                    <ec:case if=@iv(@opt)>
+                        <ec:set errMsg="API option (opt) is invalid"/>
+                        @logError(API Invalid Opt|@errMsg|75)
+                    </ec:case>
+                    <ec:case if=@nv(@opt)>
+                        <ec:set errMsg="API option (opt) is required"/>
+                        @logError(API Missing Opt|@errMsg|75)
+                    </ec:case>
+                    
+                    @RESPONSE_CONTENTTYPE(application/json)
+                    {"error": "@jesc(@errMsg)"}
+                    @stop()
+                </ec:case>
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@not(@auth)>
+            @logError(API Invalid Key|@errMsg|76)
+            @RESPONSE_CONTENTTYPE(application/json)
+            {"error": "Passkey (APIkey) is invalid"}
+            @stop()
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@nv(@auth) rem="missing a key">
+        @logError(API Missing Key|@errMsg|75)
+        @RESPONSE_CONTENTTYPE(application/json)
+        {"error": "Passkey (APIkey) is required"}
+        @stop()
+    </ec:case>
+</ec:output>
+@stop()

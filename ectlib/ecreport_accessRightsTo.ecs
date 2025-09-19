@@ -1,0 +1,275 @@
+@share
+
+<ec:module comp_input_entity/>
+<ec:var fLTID=@svr[param/fLTID].nullifblank  fXID=@svr[param/fXID].nullifblank/>
+<ec:var recordAccessLevel=@user.accessLevel(@fLTID|@fXID)/>
+
+@pageTitle.setValue(Who Can Access @fLTID.asInt@fXID.asInt.with(/|)?)
+
+
+<ec:object dt_accessRights page=@page limit="72" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>accessRightGrantedID</primaryKey>
+    <sqlSelect>
+        SELECT vw.accessRightGrantedID, vw.accessToLTID, vw.accessToXID, vw.accessForLTID, vw.accessForXID, vw.grantedDate, vw.entityName, vw.accessRightID, vw.level
+        FROM vw_accessRights vw
+        LEFT JOIN linkedEntities LE ON accessForLTID = LE.toLTID AND accessForXID = LE.toXID --joining on entities, to only return for the current site
+        WHERE 1=1 AND LE.websiteID = @websiteID.asInt AND
+        (@fLTID.asInt.alt(0).with(vw.accessToLTID = |)  AND  vw.accessToXID @if(@iv(@fXID)|= @fXID.asInt|IS NULL)
+        OR
+        vw.accessToLTID = 100  AND  vw.accessToXID = @fLTID.asInt.alt(0))
+    </sqlSelect>
+    <sort>vw.accessRightGrantedID ASC</sort>
+    <order>accessForLTID ASC, entityName ASC, accessRightID DESC, grantedDate ASC</order>
+</ec:object>
+<ec:object obj_accessRights_pageNavigator dataObj=@dt_accessRights type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_reportAccessRights dataObj=@dt_accessRights type="tComponent">
+    <ec:data recordName connection=@connection>
+        <ec:case if=@iv(@fXID)>
+            SELECT CONCAT(dbo.fn_entityName(linkedTableID, @fXID), ' (', description, ')') AS name
+            FROM linkedTables WHERE linkedTableID = @fLTID.alt(0)
+        </ec:case>
+        <ec:case if=@nv(@fXID)>
+            SELECT dbo.fn_entityName(linkedTableID, NULL) AS name
+            FROM linkedTables WHERE linkedTableID = @fLTID.alt(0)
+        </ec:case>
+    </ec:data>
+
+    <ec:var options/>
+    <ec:options>
+        <ec:case if=@recordAccessLevel.isGreatAs(6) rem="allowed to modify access rights">
+            <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_accessRight_new"><ec:icon title="Grant access right to this record" icon="plus"/></a>
+        </ec:case>
+    </ec:options>
+
+    <ec:titlebox title="Who Can Access '@recordName[1/name]'?" options=@options>
+        <ec:loop data=@dataObj.dataDef[data]>
+            <ec:case if=@rs[accessForLTID].isheader()>
+                <table class="tbl">
+                    <tr>
+                        <th>@if(@rs[accessForLTID].is(1)|User)@if(@rs[accessForLTID].is(2)|Employee)@if(@rs[accessForLTID].is(3)|User Group)</th>
+                        <th>Level</th>
+                        <th>Date Granted Access</th>
+                        <th>LTID/XID</th>
+                        <th>&nbsp;</th>
+                    </tr>
+            </ec:case>
+
+                    <tr>
+                        <td><a href="/console?ltid=@rs[accessForLTID]&xid=@rs[accessForXID]" rel="nofollow">@rs[entityName]</a></td>
+                        <td>@rs[level]</td>
+                        <td>@rs[grantedDate].formatDate(dd mmm yyyy)</td>
+                        <td><a href="/console?ltid=@rs[accessToLTID]&xid=@rs[accessToXID]">@rs[accessToLTID]@rs[accessToXID].nullifblank.with(/|)</a></td>
+                        <td>&nbsp;
+                            <ec:case if=@recordAccessLevel.isGreatAs(6) rem="allowed to modify access rights">
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_accessRight_revoke" rightGrantedID="@rs[accessRightGrantedID]" confirm="Revoke this entity's access to this record?"><ec:icon title="Revoke access right to this record" icon="remove" size="xsml"/></a>
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_accessRight_edit" rightGrantedID="@rs[accessRightGrantedID]"><ec:icon title="Edit access right to this record" icon="pencil" size="sml"/></a>
+                            </ec:case>
+                        </td>
+                    </tr>
+
+            <ec:case if=@rs[accessForLTID].isfooter()>
+                </table>
+            </ec:case>
+        </ec:loop>
+
+        @obj_accessRights_pageNavigator
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+
+
+<ec:object obj_accessRight_new title="Grant Access" type="tDialogForm">
+    <ec:case if=@recordAccessLevel.isGreatAs(6)>
+        <ec:var rightID = @svr[param/rightID].nullifblank  eLTID=@svr[param/L_e_entity].nullifblank  eXID=@svr[param/X_e_entity].nullifblank/>
+
+        <ec:case if=@state.is(respond)>
+            <ec:case if=@all(@iv(@rightID)|@iv(@fLTID)|@iv(@eLTID)|@iv(@eXID))>
+                <ec:set rightID=@min(@rightID|6)  if=@not(@recordAccessLevel.isLessAs(7))/>
+                <ec:data xx procedure="pr_accessRight_grant" connection=@connection>
+                    <accessRightID>@rightID.asInt.alt(0)</accessRightID>
+                    <toLTID>@fLTID.asInt</toLTID>
+                    <toXID>@fXID.asInt</toXID>
+                    <forLTID>@eLTID.asInt</forLTID>
+                    <forXID>@eXID.asInt</forXID>
+                </ec:data>
+                <ec:set errMsg=@xx[errorMessage]/>
+
+                <ec:case if=@iv(@errMsg)>
+                    @logError(Grant Access Error|@xx[errMsg]|101)
+                    @notification(@xx[errMsg])
+                </ec:case>
+
+                <ec:case if=@else>
+                    @logAction(45|@fLTID|@fXID|@eLTID/@eXID was granted access level @rightID.alt(0))
+                    @dt_accessRights.refresh()
+                    @obj_reportAccessRights.refresh()
+                    @close
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@else>
+                @notification(Both an entity and access level are required to grant access)
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>
+            <ec:data dt_rightsSelect connection=@connection>
+                SELECT accessRightID, accessRightDescription FROM accessRights
+                <ec:case if=@not(@recordAccessLevel.isLessAs(7))>WHERE accessRightID IN (0,1,2,3,4,5,6)</ec:case>
+            </ec:data>
+
+            <br/>
+            <input type="hidden" id="fLTID" name="fLTID" value="@fLTID"/>
+            <input type="hidden" id="fXID" name="fXID" value="@fXID"/>
+            <ec:input_entity title="Entity" id="e_entity" name="e_entity" fieldLTID=@eLTID fieldXID=@eXID filterLTID="1,2,3"/>
+            <ec:input_select title="Access Level" id="rightID" name="rightID" fieldValue=@rightID options=@dt_rightsSelect require/>
+
+            <ec:script if=@all(@state.is(refresh)|@nv(@message.nullifblank))>
+                //auto-click entitySearch
+                document.getElementById('searchEntities_e_entity').click();
+            </ec:script>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@else>
+        @logError(Denied Employee Access Right Granting|An employee with insufficient access rights attempted to grant access rights|44)
+        @notification(You don't have a sufficient access level to grant access rights. Please contact a system administrator if you believe this is in error.)
+        @close(1)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+
+
+<ec:object obj_accessRight_edit title="Edit Access" type="tDialogForm">
+    <ec:case if=@recordAccessLevel.isGreatAs(6)>
+        <ec:var rightGrantedID=@svr[param/rightGrantedID].nullifblank/>
+        <ec:data dt_rightInfo connection=@connection>
+            SELECT TOP 1 accessRightID, accessToLTID, accessToXID, accessForLTID, accessForXID, grantedDate
+            FROM accessRightsGranted
+            WHERE accessRightGrantedID = @rightGrantedID.alt(0)
+        </ec:data><ec:var right=@dt_rightInfo[1]/>
+        <ec:var rightID=@svr[param/rightID].alt(@right[accessRightID]).nullifblank  eLTID=@svr[param/L_e_entity].alt(@right[accessForLTID]).nullifblank  eXID=@svr[param/X_e_entity].alt(@right[accessForXID]).nullifblank/>
+
+        <ec:case if=@state.is(respond)>
+            <ec:case if=@all(@iv(@rightGrantedID)|@iv(@rightID))>
+                <ec:set rightID=@min(@rightID|6)  if=@not(@recordAccessLevel.isLessAs(7))/>
+                <ec:data xx procedure="pr_accessRight_edit" connection=@connection>
+                    <accessRightGrantedID>@rightGrantedID.asInt</accessRightGrantedID>
+                    <accessRightID>@rightID.asInt.alt(0)</accessRightID>
+                </ec:data>
+                <ec:set errMsg=@xx[errorMessage]/>
+
+                <ec:case if=@iv(@errMsg)>
+                    @logError(Edit Access Error|@errMsg|101)
+                    @notification(@errMsg)
+                </ec:case>
+
+                <ec:case if=@else>
+                    <ec:case if=@rightID.isGreaterThan(@right[accessRightID]) rem="access level was increased">
+                        @logAction(45|@fLTID|@fXID|@eLTID/@eXID access level increased to @rightID.alt(0))
+                    </ec:case>
+                    <ec:case if=@rightID.isLessThan(@right[accessRightID]) rem="access level was decreased">
+                        @logAction(46|@fLTID|@fXID|@eLTID/@eXID access level decreased to @rightID.alt(0))
+                    </ec:case>
+                    @dt_accessRights.refresh()
+                    @obj_reportAccessRights.refresh()
+                    @close
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@else>
+                @notification(Missing access level or rightGrantedID)
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>
+            <ec:data dt_rightsSelect connection=@connection>
+                SELECT accessRightID, accessRightDescription FROM accessRights
+                <ec:case if=@not(@recordAccessLevel.isLessAs(7))>WHERE accessRightID IN (0,1,2,3,4,5,6)</ec:case>
+            </ec:data>
+
+            <br/>
+            <input type="hidden" id="rightGrantedID" name="rightGrantedID" value="@rightGrantedID"/>
+            <ec:input_entity title="Entity" id="e_entity" name="e_entity" fieldLTID=@eLTID.alt(@right[accessForLTID]) fieldXID=@eXID.alt(@right[accessForXID]) filterLTID="1,2,3" disabled/>
+            <ec:input_select title="Access Level" id="rightID" name="rightID" fieldValue=@rightID.alt(@right[accessRightID]) options=@dt_rightsSelect require/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@else>
+        @logError(Denied Employee Access Right Modification|An employee with insufficient access rights attempted to modify access rights|44)
+        @notification(You don't have a sufficient access level to modify access rights. Please contact a system administrator if you believe this is in error.)
+        @close()
+    </ec:case>
+</ec:object>
+
+
+
+
+
+
+
+<ec:object obj_accessRight_revoke type="tComponent">
+    <ec:case if=@recordAccessLevel.isGreatAs(6)>
+        <ec:var rightGrantedID=@svr[param/rightGrantedID].nullifblank/>
+        <ec:case if=@all(@state.is(refresh)|@iv(@rightGrantedID))>
+            <ec:data xx procedure="pr_accessRight_revoke" connection=@connection>
+                <accessRightGrantedID>@rightGrantedID.asInt</accessRightGrantedID>
+            </ec:data>
+
+            <ec:data dt_rightInfo connection=@connection>
+                SELECT TOP 1 accessForLTID, accessForXID
+                FROM accessRightsGranted
+                WHERE accessRightGrantedID = @rightGrantedID.alt(0)
+            </ec:data>
+
+            @logAction(46|@fLTID|@fXID|@dt_rightInfo[1/accessForLTID]/@dt_rightInfo[1/accessForXID] had access revoked)
+            @dt_accessRights.refresh()
+            @obj_reportAccessRights.refresh()
+        </ec:case>
+    </ec:case>
+
+    <ec:case if=@else>@notification(Insufficient access level to modify access rights.)</ec:case>
+</ec:object>
+
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:consoleSearchBox>
+        <input type="hidden" id="opt" name="opt" value="accessRights"/>
+        <ec:input_number title="LTID" id="fLTID" name="fLTID" fieldValue=@fLTID/>
+        <ec:input_number title="XID" id="fXID" name="fXID" fieldValue=@fXID/>
+    </ec:consoleSearchBox>
+
+    @obj_reportAccessRights
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <a href="/console?ltid=@fLTID&xid=@fXID" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View Record</a><br/>
+    <a href="/console?ltid=105&xid=1&fAction=45&fLTID=@fLTID&fXID=@fXID" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View Rights Granted Log</a><br/>
+    <a href="/console?ltid=105&xid=1&fAction=46&fLTID=@fLTID&fXID=@fXID" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View Rights Revoked Log</a>
+</ec:function>

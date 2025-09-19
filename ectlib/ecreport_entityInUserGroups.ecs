@@ -1,0 +1,70 @@
+@share
+
+<ec:var eLTID=@svr[param/eLTID].nullifblank  eXID=@svr[param/eXID].nullifblank/>
+@pageTitle.setValue(@eLTID@eXID.with(/|) Joined User Groups)
+
+<ec:object dt_joinedGroups page=@page limit="72" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>userGroupID</primaryKey>
+    <sqlSelect>
+        SELECT userGroupID, groupName, joinDate
+        FROM vw_joinedGroups
+        WHERE 1=1
+
+        @eLTID.with(AND memberLTID = |)
+        @eXID.with(AND memberXID = |)
+        @if(@any(@nv(@eLTID)|@nv(@eXID))|AND 1=2)
+    </sqlSelect>
+    <sort>groupName ASC</sort>
+</ec:object>
+<ec:object obj_joinedGroups_pageNavigator dataObj=@dt_joinedGroups type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_reportRightsGranted dataObj=@dt_joinedGroups type="tComponent">
+    <ec:data dt_entityName connection=@connection>
+        SELECT CONCAT(dbo.fn_entityName(linkedTableID, @eXID.alt(0)), ' (', description, ')') AS entityName
+        FROM vw_linkedTables
+        WHERE linkedTableID = @eLTID.alt(0)
+    </ec:data>
+    <ec:titlebox title="@dt_entityName[1/entityName] Joined User Groups:">
+        <table class="tbl">
+            <tr>
+                <th>Group Name</th>
+                <th>Join Date</th>
+                <th>&nbsp;</th>
+            </tr>
+        <ec:loop data=@dataObj.dataDef[data]>
+            <tr class="anchorify" href="/console?ltid=3&xid=@rs[userGroupID]">
+                <td>@rs[groupName]</td>
+                <td>@rs[joinDate].formatDate(dd mmm yyyy)</td>
+                <td>&nbsp;</td>
+            </tr>
+        </ec:loop>
+        </table>
+        
+        @obj_joinedGroups_pageNavigator
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:consoleSearchBox>
+        <ec:input_number title="LTID" id="eLTID" name="eLTID" fieldValue=@eLTID/>
+        <ec:input_number title="XID" id="eXID" name="eXID" fieldValue=@eXID/>
+    </ec:consoleSearchBox>
+
+    @obj_reportRightsGranted
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

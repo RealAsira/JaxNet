@@ -1,0 +1,11 @@
+@share
+@pageFound.set(1) @LTID.set(255)
+@if(@nv(@ecid)|@logAction(1|||))
+
+<ec:var commentID = @svr[param/commentID].alt(@svr[param/messageID]).alt(0)/>
+
+
+
+<ec:webpage title="Comment">
+    This page is incomplete but will be used for a chronological view of a comment and replies to it.
+</ec:webpage>

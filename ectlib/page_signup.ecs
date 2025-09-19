@@ -1,0 +1,88 @@
+@share
+@pageFound.set(1)
+
+<ec:set returnto=@returnto.alt(/home)/>
+<ec:case if=@iv(@user.userID)>@redirect(#returnto)@stop</ec:case>
+
+<ec:var firstName=@svr[param/firstName].nullifblank/>
+<ec:var lastName=@svr[param/lastName].nullifblank/>
+<ec:var email=@svr[param/email].left(255).nullifblank/>
+<ec:var password=@svr[param/password].left(32).nullifblank/>
+<ec:var password2=@svr[param/password2].left(32).nullifblank/>
+<ec:var persist=@svr[param/persist].alt(0)/>
+<ec:var signInMessage=@signInMessage.nullifblank/>
+
+<ec:case if=@all(@iv(@firstName)|@iv(@lastName)|@iv(@email)|@iv(@password)|@iv(@password2)|@iv(@persist))>
+    <ec:set if=@not(@password2.is(@password))  signInMessage="Passwords do not match." />
+    <ec:set if=@not(@validPassword(@password)) signInMessage="Please provide a password that matches the password rules."/>
+
+    <ec:case if=@signInMessage.nullifblank.isNull>
+        <ec:var signupInfo/>
+        <ec:set signupInfo = @user.signup(@firstName|@lastName|@email|@password)/>
+
+        <ec:case>
+            <ec:case if=@not(@signupInfo[userID].isnull) rem="new account created">
+                @logAction(2|1|@signupInfo[userID]|New user signed up)
+            </ec:case>
+
+            <ec:case if=@iv(@signupInfo[errorMessage].nullifblank) rem="sign up error">
+                <ec:set signInMessage = @signupInfo[errorMessage]/>
+            </ec:case>
+
+            <ec:case if=@nv(@signupInfo[errorMessage].nullifblank) rem="sign in if no error">
+                <ec:var loginUserID/>
+                <ec:set loginUserID = @user.forceLogin(@signupInfo[userID]|@user.sessionID|@persist)/>
+                @if(@loginUserID.isnot(0|@null|)|@redirect(#returnto))
+                @stop()
+            </ec:case>
+        </ec:case>
+    </ec:case>
+</ec:case>
+
+
+
+
+
+<ec:webpage title="@host account sign up">
+    <ec:metaTag name="description" content="Sign up for or log into an account with @host"/>
+    <ec:metaTag name="og:description" content="Sign up for or log into an account with @host"/>
+    <ec:metaTag name="og:image" content="/imgs-default/account.png"/>
+    <ec:metaTag name="og:url" content="/signup"/>
+    <ec:metaLink rel="canonical" href="/signup"/>
+
+    <ec:var menuItems/>
+    <ec:menuItems>
+      <li class="anchorify" href="/home">Site Home</li>
+    </ec:menuItems>
+    <ec:topbar bannerIcon=@siteSettings[topbarIcon] rMenuContent=@menuItems/>
+
+    <div id="primaryContent">
+        <br/>
+        <br desktop/>
+        <br desktop/>
+        <ec:titlebox dark class="col-40 col-center">
+            <div style="height:8px;">&nbsp;</div>  
+            <span><h2 style="margin-left:13px; font-size:1.4rem; display:inline;">Sign Up</h2>&nbsp;&nbsp;<p style="color:red; display:inline;">@signInMessage.alt(&nbsp;)</p></span>
+            <br/><br/>
+            <form method="POST" style="padding:0px 13px;">
+                <ec:input_text title="First Name" id="firstName" name="firstName" fieldValue=@firstName maxlength="50" require/>
+                <ec:input_text title="Last Name" id="lastName" name="lastName" fieldValue=@lastName maxlength="50" require/><br/>
+                <ec:input_email title="Email" id="email" name="email" fieldValue=@email maxlength="255" require/>
+                <ec:input_password title="Password" id="password" name="password" minlength="6" maxlength="20" hintContent="Password must include at least one lowercase letter, one uppercase letter, one number, one symbol, and be six to twenty characters in length." require/>
+                <ec:input_password title="Confirm Password" id="password2" name="password2" minlength="6" maxlength="20" require/>
+                <ec:input_checkbox title="Stay signed in?" id="persist" name="persist" fieldValue="1"/><br/>
+                <ec:var submitTitle/><ec:submitTitle>Sign Up&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="user" size="sml" color="white"/></ec:submitTitle>
+                <ec:input_submit class="btn-info shadowOnHover" title=@submitTitle/>
+                <a href="javascript:void(0)" rel="nofollow">Forgot password?</a>
+            </form><br/>
+            <p style="margin-left:13px;">By clicking "Sign Up" you agree to our <a href="/doc/terms-of-service">terms of service</a> and <a href="/doc/privacy-policy">privacy policy</a>.</p>
+            <br/>
+        </ec:titlebox>
+        <br/><br/>
+        <div class="col-40 col-center" style="text-align:center;">
+            <p>Already Have An Account?</p>
+            <hr style="margin:7px 0px 13px 0px;"/>
+            <a href="login?returnto=@returnto.urlencode" rel="nofollow" class="btn btn-secondary">Goto login instead</a>
+        </div>
+    </div>
+</ec:webpage>

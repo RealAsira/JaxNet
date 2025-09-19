@@ -1,0 +1,440 @@
+@share
+
+<ec:module comp_input_tariffCode/>
+
+<ec:var fkeywords = @svr[param/fkeywords].nullifblank/>
+<ec:var fproductTypeID = @svr[param/fproductTypeID].nullifblank/>
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+<ec:var fonSale = @svr[param/fonSale].nullifblank/>
+<ec:var fhidden = @svr[param/fhidden].nullifblank/>
+<ec:var fdiscontinued = @svr[param/fdiscontinued].alt(false)/>
+
+<ec:case if=@nv(@XID)>
+    @if(@iv(@fkeywords)|@notification(Need to create filter for search by not only keywords BUT also sku, and upc))
+    @if(@any(@iv(@fdate_start)|@iv(@fdate_end))|@notification(Need to create filter for search by variant creation date))
+    @if(@iv(@fonSale)|@notification(Need to create filter for search by variant sale status))
+    @if(@iv(@fdiscontinued)|@notification(Need to create filter for search by discontinued status))
+</ec:case>
+
+<ec:style>
+    .titlebox_content {& ol, & ul {margin-left: 20px;}}
+</ec:style>
+    
+<ec:object dt_products page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>productID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT pr.productID, pr.description, dbo.fn_productVariants_count(productID) AS variantsCount, linkedTables.iconURL, linkedTables.description AS iconDescription
+            FROM products pr
+            LEFT JOIN linkedTables ON 19 = linkedTables.linkedTableID
+            LEFT JOIN linkedEntities LE ON toLTID = 19 AND toXID = pr.productID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+
+            @if(@fhidden.isnull|AND (IIF(ISNULL(dbo.fn_productVariants_countVisible(productID), 0) = 0, 1, 0) = 0 OR IIF(ISNULL(dbo.fn_productVariants_countVisible(productID), 0) = 0, 1, 0) = 1))
+            @if(@fhidden.is(true)|AND (IIF(ISNULL(dbo.fn_productVariants_countVisible(productID), 0) = 0, 1, 0) = 1))
+            @if(@fhidden.is(false)|AND (IIF(ISNULL(dbo.fn_productVariants_countVisible(productID), 0) = 0, 1, 0) = 0))
+
+            @if(@iv(@fkeywords)|AND FREETEXT((pr.description, pr.keywords), 'NEAR(@sqlesc(@fkeywords))'))
+            @if(@iv(@fproductTypeID)|AND pr.productTypeID = @fproductTypeID.asInt)
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT pr.productID, pr.description, pt.description AS productType, pr.customsDescription, pr.allowReplies, pr.memo,
+            dbo.fn_productVariants_count(productID) AS variantsCount, IIF(ISNULL(dbo.fn_productVariants_countVisible(productID), 0) = 0, CAST(1 AS BIT), CAST(0 AS BIT)) AS isHidden,
+            countries.name AS countryName, tariffCodes.tariffCode, tariffCodes.description AS tariffDescription,
+            linkedTables.iconURL, linkedTables.description AS iconDescription
+            FROM products pr
+            LEFT JOIN linkedTables ON 19 = linkedTables.linkedTableID
+            LEFT JOIN productTypes pt ON pr.productTypeID = pt.productTypeID
+            LEFT JOIN countries ON pr.originCountryID = countries.countryID
+            LEFT JOIN tariffCodes ON pr.tariffCodeID = tariffCodes.tariffCodeID
+            LEFT JOIN linkedEntities LE ON toLTID = 19 AND toXID = pr.productID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            AND pr.productID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">pr.productID</sort>
+</ec:object>
+<ec:object obj_products_pageNavigator dataObj=@dt_products type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_products dataObj=@dt_products type="tComponent">
+    <ec:titlebox title="Products"  options=@defaultListOptions()>
+        <style>
+            .iconColumn {width:29px;}
+            .productIcon {height:25px; margin:2px;}
+        </style>
+
+        <table class="tbl">
+            <tr>
+                <th colspan="2">Name / Description</th>
+                <th>Variants</th>
+            </tr>
+
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=19&xid=@rs[productID]">
+                    <td class="iconColumn"><img class="productIcon" src="@rs[iconURL]" alt="@rs[iconDescription]"/></td>
+                    <td>@rs[description]</td>
+                    <th>@quantityBadge(@rs[variantsCount])</th>
+                </tr> 
+            </ec:loop>
+        </table>
+
+        @obj_products_pageNavigator()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_product dataObj=@dt_products type="tComponent">
+    <ec:var prod=@dataObj.dataDef[data/1]/>
+    <ec:var revealKeywordsBtn/><ec:revealKeywordsBtn><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_keywordsList">View Keywords</a></ec:revealKeywordsBtn>
+
+    <ec:titlebox title="Product" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@prod[iconURL]" alt="@prod[iconDescription]"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@prod[productID]"/>
+                <ec:displayField title="Product Name" content="@prod[description]"/>
+                <ec:displayField title="Product Type" content="@prod[productType]"/>
+                <ec:displayField title="Keywords" content=@revealKeywordsBtn/>
+                <ec:displayField title="Allow Comments?" content=@prod[allowReplies] style="@if(@prod[allowReplies].is(false)|color:#f0b624;)"/>
+                <ec:displayField title="Hidden?" content="@prod[isHidden] @if(@prod[isHidden].is(true)|@hint(At least one variant needs to be visible for the product to be visible.))" style="@if(@prod[isHidden].is(true)|color:#f0b624;)"/>
+            </div>
+            <div class="displayFields">
+                <ec:displayField title="Origin Country" content="@prod[countryName]"/>
+                <ec:displayField title="HS Tariff Code" content="@prod[tariffCode].alt(None) @if(@iv(@prod[tariffDescription].nullifblank)|@hint(@prod[tariffDescription].alt(No description stored in database.)))"/>
+                <ec:displayField title="Customs Description" content="@prod[customsDescription].alt(None provided)"/>
+            </div>
+        </div>
+    </ec:titlebox>
+
+    <ec:titlebox title="Product Memo">
+        @prod[memo].decode
+    </ec:titlebox>
+
+    
+    <ec:titlebox title="Member of Collections">
+        <!-- do this section like obj_productVariants-->
+    </ec:titlebox>
+
+    <ec:titlebox title="Related Items" hintContent="Similar or often / good-to-pair products, documents, etc... that are related to this product.">
+        <!-- do this section like obj_productVariants-->
+    </ec:titlebox>
+
+
+    @obj_productVariants()
+</ec:object>
+
+
+
+
+
+<ec:object obj_keywordsList title="Keywords" buttonCaption="Close" type="tDialogForm">
+    <ec:case if=@not(@closed)>
+        <ec:data dt_keywords connection=@connection>
+            SELECT dbo.fn_sortAlphaString(keywords) AS sortedKeywords FROM products WHERE productID = @XID.asInt.alt(0)
+        </ec:data>
+        <br/><strong>Automatically generated keywords</strong><br/><p class="notice">The product name, ID, and key phrases such as "product," "group," and "set".</p><br/><br/>
+
+        @dt_keywords[1/sortedKeywords].lower
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_productVariants style="width:100%;" renderAfterPageLoad type="tComponent">
+    <ec:data dt_parentProduct connection=@connection>
+        SELECT dbo.fn_productVariants_count(productID) AS variantsCount, IIF(ISNULL(dbo.fn_productVariants_countVisible(productID), 0) = 0, CAST(1 AS BIT), CAST(0 AS BIT)) AS isHidden
+        FROM products pr
+        WHERE productID = @XID.alt(0)
+    </ec:data><ec:var prod = @dt_parentProduct[1]/>
+
+    <ec:data dt_productVariants connection=@connection>
+        SELECT *
+        FROM productVariants
+        WHERE parentProductID = @XID.alt(0)
+    </ec:data>
+
+    <ec:var variantOptions/>
+    <ec:variantOptions>
+        <ec:case if=@user.accessLevel(20|@null).alt(0).isGreatAs(3) rem="allowed to create variants"><a href="javascript:void(0)" class="ajaxClick" ecid="obj_variant_new"><ec:icon title="Add Variant" icon="plus"/></a></ec:case>
+        <ec:case if=@user.accessLevel(20|@null).alt(0).isGreatAs(4) rem="allowed to edit variants">
+            <ec:case if=@prod[isHidden].is(true)><a href="javascript:void(0)" class="ajaxClick" ecid="obj_variantsHidden_toggle" act="unhideAllVariants" loader="#tbl_productVariants"><ec:icon title="Make all variants visible on the website" icon="eye-open"/></a></ec:case>
+            <ec:case if=@prod[isHidden].is(false)><a href="javascript:void(0)" class="ajaxClick" ecid="obj_variantsHidden_toggle" act="hideAllVariants" loader="#tbl_productVariants"><ec:icon title="Hide all variants from the website" icon="eye-close"/></a></ec:case>
+        </ec:case>
+    </ec:variantOptions>
+
+    <ec:titlebox title="Product Variants @quantityBadge(@prod[variantsCount])" id="tbl_productVariants" options=@variantOptions>
+        <ec:loop data=@dt_productVariants>
+            @rs[].key
+        </ec:loop>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_variantsHidden_toggle type="tComponent">
+    <ec:case if=@act.is(hideAllVariants)>
+        <data procedure="pr_productVariants_markHidden">
+            <parentProductID>@XID.alt(0)</parentProductID>
+        </data>
+        @notification(All product variants are now hidden from the website)
+        @dt_products.refresh()
+        @obj_product.refresh()
+        @obj_productVariants.refresh()
+    </ec:case>
+    <ec:case if=@act.is(unhideAllVariants)>
+        <data procedure="pr_productVariants_unmarkHidden">
+            <parentProductID>@XID.alt(0)</parentProductID>
+        </data>
+        @notification(All product variants are now visible on the website)
+        @dt_products.refresh()
+        @obj_product.refresh()
+        @obj_productVariants.refresh()
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_variant_new title="New Product Variant" type="tDialogForm">
+    <ec:var recordAccessLevel = @user.accessLevel(20|@null).alt(0)/>
+    
+    <ec:case if=@recordAccessLevel.isGreatAs(3) rem="allowed to create variants">    
+        @comment(vars)
+
+
+        <ec:case if=@state.is(respond)>
+            <ec:case if=1 rem="validate information entered"> 
+                <ec:data DISABLE xx procedure="pr_productVariant_new" connection=@connection>    
+                    <websiteID>@websiteID.asInt</websiteID>
+                </ec:data>
+                <ec:var newVariantID = @xx[newProductVariantID].nullifblank/>
+
+                <ec:case if=@iv(@newVariantID)>
+                    @logAction(2|20|@newVariantID)
+                    @notification(Product Variant PVR-@newVariantID() created successfully||1)
+                    @redirect(/console?ltid=20&xid=@newVariantID)
+                    @close()
+                </ec:case>
+                <ec:case if=@else>
+                    <ec:set errMsg = "An error occurred. Please contact a system administrator."/>
+                    @logError(error|obj_newProductVariant_dialog unknown SQL error|101)
+                </ec:case>
+            </ec:case>
+            <ec:case if=@else>
+                <ec:set errMsg = "A xx, xx, and xx are all required to create a product variant."/>
+            </ec:case>
+        </ec:case>
+
+
+
+        <ec:case if=@not(@closed)>
+            @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+
+        </ec:case>
+    </ec:case>
+
+
+
+    <ec:case if=@else>
+        @logError(Denied Employee From Creating Product Variant|An employee with insufficient access rights attempted to create a new product variant|44)
+        @notification(Insufficient access level to create new product variant.)
+        @close(1)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Product" type="tDialogRecordForm">
+    <ec:var productTypeID = @svr[param/productTypeID].nullifblank  description = @svr[param/description].nullifblank  memo = @svr[param/memo].nullifblank  keywords = @svr[param/keywords].nullifblank/>
+    <ec:var tariffCodeID = @svr[param/tariffCodeID].nullifblank  originCountryID = @svr[param/originCountryID].nullifblank  customsDescription = @svr[param/customsDescription].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@productTypeID)|@iv(@description)|@iv(@originCountryID))> 
+            <ec:data xx procedure="pr_product_new" connection=@connection>    
+                <productTypeID>@productTypeID.asInt</productTypeID>
+                <description>@description.replace(&|and)</description>
+                <memo>@memo.encode</memo>
+                <keywords>@keywords</keywords>
+                <tariffCodeID>@tariffCodeID.asInt</tariffCodeID>
+                <originCountryID>@originCountryID.asInt</originCountryID>
+                <customsDescription>@customsDescription</customsDescription>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newProductID = @xx[newProductID].nullifblank/>
+
+            <ec:case if=@iv(@newProductID)>
+                @logAction(2|@LTID|@newProductID)
+                @notification(Product PRD-@newProductID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@newProductID)
+                @close()
+            </ec:case>
+            <ec:case if=@else>
+                <ec:set errMsg = "An error occurred. Please contact a system administrator."/>
+                @logError(error|obj_newProduct_dialog unknown SQL error|101)
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "A product name, type, and origin country are all required to create a product."/>
+        </ec:case>
+    </ec:case>
+
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_productTypeSelect connection=@connection>
+            SELECT productTypeID, description FROM productTypes
+        </ec:data>
+
+        <ec:data dt_countriesSelect connection=@connection>
+            SELECT countryID, name FROM countries
+            ORDER BY (CASE 
+                WHEN countryID = 222 THEN 1
+                ELSE 2 END
+            ), name
+        </ec:data>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Name" id="description" name="description" fieldValue=@description require/>
+        <ec:input_select title="Product Type" id="productTypeID" name="productTypeID" fieldValue=@productTypeID options=@dt_productTypeSelect require/>
+        <ec:input_select title="Origin Country" id="originCountryID" name="originCountryID" fieldValue=@originCountryID options=@dt_countriesSelect require/>
+        <br/><ec:input_text title="Keywords" id="keywords" name="keywords" containerstyle="width:100%;" style="width:100%;" fieldValue=@keywords hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Include adjectives@br()&nbsp;&nbsp;-Avoid articles."/>
+        
+        <br/>
+        <br/><ec:input_tariffCode title="HS Tariff Code" id="tariffCodeID" name="tariffCodeID" fieldValue=@tariffCodeID/>
+        <br/><ec:input_text title="Customs Description" id="customsDescription" name="customsDescription" containerstyle="width:100%;" style="width:100%;" fieldValue=@customsDescription maxLength="256" hintContent="A brief but detailed (succinct) description of the product.@br()&nbsp;&nbsp;-Avoid adjectives / articles.@br()&nbsp;&nbsp;-Avoid random symbols or crude language."/>
+        <br/><br/>
+        <ec:input_textField title="Listing Memo" id="memo" name="memo" fieldValue=@memo placeholder="This is the product description and any inline images."/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Product" type="tDialogRecordForm">
+    <ec:var productTypeID = @svr[param/productTypeID].nullifblank  description = @svr[param/description].nullifblank  memo = @svr[param/memo].nullifblank  keywords = @svr[param/keywords].nullifblank  allowReplies = @svr[param/allowReplies].nullifblank/>
+    <ec:var tariffCodeID = @svr[param/tariffCodeID].nullifblank  originCountryID = @svr[param/originCountryID].nullifblank  customsDescription = @svr[param/customsDescription].nullifblank/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@productTypeID)|@iv(@description)|@iv(@originCountryID))>  
+            <ec:data xx procedure="pr_product_edit" connection=@connection>    
+                <productID>@XID.asInt</productID>
+                <productTypeID>@productTypeID.asInt</productTypeID>
+                <description>@description.replace(&|and)</description>
+                <memo>@memo.encode</memo>
+                <keywords>@keywords</keywords>
+                <tariffCodeID>@tariffCodeID.asInt</tariffCodeID>
+                <originCountryID>@originCountryID.asInt</originCountryID>
+                <customsDescription>@customsDescription</customsDescription>
+                <allowReplies>@allowReplies.alt(0).asBool</allowReplies>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+
+            <ec:var selector="#viewOnSite" content/><ec:content><a id="viewOnSite" href="/product/@description.replace(&|and).lower.replace(@chr(32)|-)">View on Website <ec:icon title="" icon="hyperlink" size="sml" direction="left"/></a></ec:content>
+            @responder.replace(@selector|@content)
+            
+            @logAction(3|@LTID|@XID|Edited product)
+            @dt_products.refresh()
+            @obj_product.refresh()
+            @close()
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "Required fields to edit product were not provided."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_productData connection=@connection>
+            SELECT productTypeID, description, memo, keywords, tariffCodeID, originCountryID, customsDescription, allowReplies
+            FROM products
+            WHERE productID = @XID.asInt
+        </ec:data>
+        <ec:var prodRec = @dt_productData[1]/>
+
+        <ec:data dt_productTypeSelect connection=@connection>
+            SELECT productTypeID, description FROM productTypes
+        </ec:data>
+
+        <ec:data dt_countriesSelect connection=@connection>
+            SELECT countryID, name FROM countries
+            ORDER BY (CASE 
+                WHEN countryID = 222 THEN 1
+                ELSE 2 END
+            ), name
+        </ec:data>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Name" id="description" name="description" fieldValue=@description.alt(@prodRec[description]) require/>
+        <ec:input_select title="Product Type" id="productTypeID" name="productTypeID" fieldValue=@productTypeID.alt(@prodRec[productTypeID]) options=@dt_productTypeSelect require/>
+        <ec:input_select title="Origin Country" id="originCountryID" name="originCountryID" fieldValue=@originCountryID.alt(@prodRec[originCountryID]) options=@dt_countriesSelect require/>
+        <ec:input_checkbox title="Allow Comments?" id="allowReplies" name="allowReplies" fieldValue=@if(@allowReplies.is(true)|1).alt(@if(@prodRec[allowReplies].is(true)|1))/>
+        <br/><ec:input_text title="Keywords" id="keywords" name="keywords" containerstyle="width:100%;" style="width:100%;" fieldValue=@keywords.alt(@prodRec[keywords]) hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Include adjectives@br()&nbsp;&nbsp;-Avoid articles."/>
+        
+        <br/>
+        <br/><ec:input_tariffCode title="HS Tariff Code" id="tariffCodeID" name="tariffCodeID" fieldValue=@tariffCodeID.alt(@prodRec[tariffCodeID])/>
+        <br/><ec:input_text title="Customs Description" id="customsDescription" name="customsDescription" containerstyle="width:100%;" style="width:100%;" fieldValue=@customsDescription.alt(@prodRec[customsDescription]) maxLength="256" hintContent="A brief but detailed (succinct) description of the product.@br()&nbsp;&nbsp;-Avoid adjectives / articles.@br()&nbsp;&nbsp;-Avoid random symbols or crude language."/>
+        <br/><br/>
+        <ec:input_textField title="Listing Memo" id="memo" name="memo" fieldValue=@memo.alt(@prodRec[memo]) placeholder="This is the product description and any inline images."/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:data dt_productTypesSelect connection=@connection>
+                SELECT productTypeID, description FROM productTypes
+            </ec:data>
+
+            <ec:input_text title="Keywords / SKU / UPC" id="fkeywords" name="fkeywords" fieldValue=@fkeywords/> 
+            <ec:input_select title="Product Type" id="fproductTypeID" name="fproductTypeID" fieldValue=@fproductTypeID options=@dt_productTypesSelect allowNull/>
+            <ec:input_dateRange title="Date Range" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+            <ec:input_trueFalse title="On Sale?" id="fonSale" name="fonSale" fieldValue=@fonSale.nullifblank allowNull/>
+            @comment(price range)
+            <ec:input_trueFalse title="Hidden?" id="fhidden" name="fhidden" fieldValue=@fhidden.alt(false) allowNull/>
+            <ec:input_trueFalse title="Discontinued?" id="fdiscontinued" name="fdiscontinued" fieldValue=@fdiscontinued.alt(false) allowNull/>
+        </ec:consoleSearchBox>
+            
+        @obj_products()
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>@obj_product()</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:object obj_incompleteProducts type="tComponent">
+            <a href="/console?LTID=105&XID=18">Incomplete Products @quantityBadge(@random(198))</a>
+        </ec:object>
+        @obj_incompleteProducts()
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>
+        <a id="viewOnSite" href="/product/@dt_products.dataDef[data/1/description].lower.replace(@chr(32)|-)">View on Website <ec:icon title="" icon="hyperlink" size="sml" direction="left"/></a><br/>
+    </ec:case>
+</ec:function>

@@ -1,0 +1,1194 @@
+@share
+
+<ec:case if=@nv(@lib_pageElementsCalled)>
+    <ec:var lib_pageElementsCalled=1 global/>
+
+    <ec:var br = @xbr.asReference global/>
+    <ec:var hr = @xbr.asReference global/>
+    <ec:var backButtonBar = @xBackButtonBar.asReference global/>
+    <ec:var barcode = @xBarcode.asReference global rem="ONLY use on employee facing parts of the system. For public facing parts of the system, use serverBarcode"/>
+    <ec:var barcode_server = @xBarcode_server.asReference global/>
+    <ec:var displayField = @xDisplayField.asReference global/>
+    <ec:var downloadLink = @xDownloadLink.asReference global/>
+    <ec:var hint = @xHint.asReference global/>
+    <ec:var icon = @xIcon.asReference global/>
+    <ec:var loader_circle = @xLoader_circle.asReference global/>
+    <ec:var notification = @xNotification.asReference global/>
+    <ec:var quantityBadge = @xQuantityBadge.asReference global/>
+    <ec:var titlebox = @xTitlebox.asReference global/>
+    <ec:var uploadForm = @xUploadForm.asReference global/>
+    
+    <ec:var docsTopbar = @xDocsTopbar.asReference global/>
+    <ec:var bottombar = @xBottombar.asReference global/>
+    <ec:var topbar = @xTopbar.asReference global/>
+
+    <ec:var input_ace = @xInput_ace.asReference global/>
+    <ec:var input_checkbox = @xInput_checkbox.asReference global/>
+    <ec:var input_color = @xInput_color.asReference global/>
+    <ec:var input_date = @xInput_date.asReference global/>
+    <ec:var input_dateRange = @xInput_dateRange.asReference global/>
+    <ec:var input_dateRange1 = @xInput_dateRange1.asReference global/>
+    <ec:var input_dateRange2 = @xInput_dateRange2.asReference global/>
+    <ec:var input_dateTime = @xInput_dateTime.asReference global/>
+    <ec:var input_email = @xInput_email.asReference global/>
+    <ec:var input_file = @xInput_file.asReference global/>
+    <ec:var input_hidden = @xInput_hidden.asReference global/>
+    <ec:var input_month = @xInput_month.asReference global/>
+    <ec:var input_money = @xInput_money.asReference global/>
+    <ec:var input_number = @xInput_number.asReference global/>
+    <ec:var input_numberRange = @xInput_numberRange.asReference global/>
+    <ec:var input_password = @xInput_password.asReference global/>
+    <ec:var input_range = @xInput_range.asReference global/>
+    <ec:var input_reset = @xInput_reset.asReference global/>
+    <ec:var input_search = @xInput_search.asReference global/>
+    <ec:var input_select = @xInput_select.asReference global/>
+    <ec:var input_ssn = @xInput_ssn.asReference global/>
+    <ec:var input_submit = @xInput_submit.asReference global/>
+    <ec:var input_tel = @xInput_tel.asReference global/>
+    <ec:var input_text = @xInput_text.asReference global/>
+    <ec:var input_textArea = @xInput_textArea.asReference global/>
+    <ec:var input_textField = @xInput_textField.asReference global/>
+    <ec:var input_time = @xInput_time.asReference global/>
+    <ec:var input_trueFalse = @xInput_trueFalse.asReference global/>
+    <ec:var input_url = @xInput_url.asReference global/>
+    <ec:var input_week = @xInput_week.asReference global/>
+    <ec:var input_zip = @xInput_zipcode.asReference global/>
+</ec:case>
+
+
+
+
+
+
+@comment(xbr and xhr should only be used when reference syntax doesn't allow triangle brackets)
+<ec:function xbr>
+    <br/>
+</ec:function>
+
+<ec:function xhr>
+    <hr/>
+</ec:function>
+
+
+
+
+
+<ec:function xBackButtonBar>
+    <ec:param title url/>
+    <a class="backButtonBar" @if(@iv(@url.nullifblank)|href="@url.alt(#)"|onclick="history.back();")>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;@title.nullifblank.alt(Go back)</a>
+</ec:function>
+
+
+
+
+
+<ec:function xBarcode rem="client side barcode generator">
+    <ec:param symb val required/>
+    <ec:param class id/>
+    <div class="jsBarcode @class()" @id.with(id="|") symb="@symb" val="@val"></div>
+</ec:function>
+
+
+
+
+
+<ec:function xBarcode_server rem="server side barcode generator">
+    <ec:param symb val required/>
+    <img alt="@symb().alt(unknown type) barcode with@if(@nv(@val.nullifblank)|out) value @val()" src="/api?opt=serverBarcode&symb=@symb()&val=@val()"/>
+</ec:function>
+
+
+
+
+
+<ec:function xDisplayField>
+    <ec:param title content style titleStyle contentStyle href class/>
+
+    <div class="displayField@class.with( |)" @href.with(href="|") @style.with(style="|")>
+        <div class="displayField-header" @titleStyle.with(style="|")>@title.alt(Item)</div>
+        <div class="displayField-content" @contentStyle.with(style="|")>@content.alt(&nbsp;)</div>
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:function xDownloadLink>
+    <ec:param filePath fileID fileFolderID mode/>
+    <ec:param style class id/>
+
+    <ec:var paramCount = 0/>
+    @if(@iv(@filePath.nullifblank())|@paramCount.inc())
+    @if(@iv(@fileID.nullifblank())|@paramCount.inc())
+    @if(@iv(@fileFolderID.nullifblank())|@paramCount.inc())
+
+    <ec:case if=@paramCount.isnot(1) rem="no params or more than one param">
+        @throw(Error: @paramCount() Download Types|Too Many Or Few Download Types|Access denied. Only one download method can be processed at a time|409)
+    </ec:case>
+
+    
+    <ec:case if=@iv(@filePath)>
+        <ec:var key1=@hash_hmac_SHA256(@filePath()|@user.sessionID()@today()@saltKey()) key2=@hash_hmac_SHA256(@filePath()|@user.sessionID()@today().add(1)@saltKey())/>
+        <a href="/dwn?filePath=@filePath().urlencode()&key1=@key1()&key2=@key2()@mode.nullifblank.with(&mode=|)" rel="nofollow" @if(@mode.is(view)|target="_blank") @class.with(class="|") @id.with(id="|")@style.with(style="|")>@sender.execute()</a>
+    </ec:case>
+    
+    <ec:case if=@iv(@fileID)>
+        <ec:var key1=@hash_hmac_SHA256(@fileID()|@user.sessionID()@today()@saltKey()) key2=@hash_hmac_SHA256(@fileID()|@user.sessionID()@today().add(1)@saltKey())/>
+        <a href="/dwn?fileID=@fileID()&key1=@key1()&key2=@key2()@mode.nullifblank.with(&mode=|)" rel="nofollow" @if(@mode.is(view)|target="_blank") @class.with(class="|") @id.with(id="|")@style.with(style="|")>@sender.execute()</a>
+    </ec:case>
+    
+    <ec:case if=@iv(@fileFolderID)>
+        <ec:var key1=@hash_hmac_SHA256(@fileFolderID()|@user.sessionID()@today()@saltKey()) key2=@hash_hmac_SHA256(@fileFolderID()|@user.sessionID()@today().add(1)@saltKey())/>
+        <a href="/dwn?fileFolderID=@fileFolderID()&key1=@key1()&key2=@key2()@mode.nullifblank.with(&mode=|)" rel="nofollow" @if(@mode.is(view)|target="_blank") @class.with(class="|") @id.with(id="|")@style.with(style="|")>@sender.execute()</a>
+    </ec:case>
+</ec:function>
+
+
+
+
+
+<ec:function xHint>
+    <ec:param content containerStyle/>
+    <ec:var hintNodeID=@guid.replace({|).replace(}|)/>
+
+    <div class="xHintContainer" id="xHintContainer-@hintNodeID" onmouseover="handleHintPosition('@hintNodeID')" onmouseleave="handleHintLeave('@hintNodeID');" @containerStyle.with(style="|")>
+        <div class="xHint">?</div>
+        <div class="xHintContent" id="hintContent-@hintNodeID" mouseZone="5">
+            <ec:case if=@iv(@content)>
+                @content
+            </ec:case>
+            <ec:case if=@else>
+                @sender.execute()
+            </ec:case>
+        </div>
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:function xIcon>
+    <ec:param icon required/>
+    <ec:param title size color direction class href style onclick/>
+    @comment(sizes: tiny, sml, med, lrg, xlrg, px50, px80, px100, px200)
+    @comment(directions: none, left, right)
+    <div @onclick.with(onclick="|") @title.alt(@icon.upper).with(title="|") class="icndiv @size.alt(med) @icon @class" @href.with(href="|") style="@color.nullifblank.with(background-color:|;) float:@direction.alt(right); @style.with(|)"></div>
+</ec:function>
+
+
+
+
+
+
+<ec:function xInput_ace>
+    <ec:param title hintContent fieldValue id name class style containerStyle placeholder mode theme require labeless onchange readOnly/>
+    @comment(valid modes are css, html, javascript, json, mysql, php, sass, scss, sql, sqlserver, svg, text, typescript, xml)
+    @comment(valid themes are chaos, chrome, cobalt, dawn, dracula, dreamwever, github, idle_fingers, iplastic, monokai, nord_dark, sqlserver)
+    <!-- https://ace.c9.io/#nav=about -->
+    <!-- https://github.com/ajaxorg/ace-builds/tree/master/src-min-noconflict -->
+
+    <div class="formfield aceEditor" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="store_ace_@id">
+            @title.alt(Editor)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label>
+        <textarea name="@name" id="store_ace_@id" style="display:none;" @onchange.with(onchange="|") @if(@require.alt(0)|required)>@fieldValue</textarea>
+        <div id="ace_@id()_editor" class="aceEditor_editor" @style.with(style="|")></div>
+        <script>
+            var editor = ace.edit('ace_@id()_editor');
+
+            editor.getSession().setUseWrapMode(true);
+            editor.getSession().setMode("ace/mode/@mode.alt(html)");
+            editor.setTheme("ace/theme/@theme.alt(idle_fingers)");
+
+            editor.setValue($('#store_ace_@id').val());
+            editor.getSession().on('change', function(e){
+                $('#store_ace_@id').val(editor.getValue());
+            });
+
+            @if(@readOnly.alt(0)|editor.setReadOnly(true);)
+        </script>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_checkbox>
+    <ec:param fieldValue id class name placeholder title hintContent require containerStyle labeless onchange disabled/>
+    <div class="formfield checkbox" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="checkbox_@id()">
+            @title.alt(Checkbox)
+            <ec:hint if=@iv(@hintContent) containerStyle="margin-left:15px;">@hintContent</ec:hint>
+        </label>
+        <input type="checkbox" id="checkbox_@id" name="@name.alt(checkbox)" value="1" @class.with(class="|") @placeholder.with(placeholder="|") @if(@fieldValue.alt(0)|checked) @if(@require.alt(0)|required) @onchange.with(onchange="|") @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_color>
+    <ec:param fieldValue id class name title hintContent require containerStyle labeless onchange disabled/>
+    <div class="formfield color" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="color_@id">
+            @title.alt(Color)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label>
+        <input type="color" inputmode="none" id="color_@id" name="@name.alt(color)" @class.with(class="|") @fieldValue.alt(#ff0000).with(value="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_date>
+    <ec:param fieldValue id class name title hintContent require containerStyle allowNull labeless onchange disabled/>
+    <div class="formfield date" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="date_@id">
+            @title.alt(Date)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input type="text" id="date_@id" name="@name.alt(date)" autocomplete="off" @class.with(class="|") @if(@allowNull.alt(0)|@fieldValue.asDate.formatDate(mm/dd/yyyy).with(value="|")|@fieldValue.asDate.alt(@today).formatDate(mm/dd/yyyy).with(value="|")) @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+    <style>.ui-state-active, .ui-widget-content .ui-state-active, .ui-widget-header .ui-state-active, a.ui-button:active, .ui-button:active, .ui-button.ui-state-active:hover {background:#4dade3; border:1px solid #3b84ad; color:#fff;}</style>
+    <ec:script if=@not(@readOnly.alt(0))>$("#date_@id").datepicker();</ec:script>
+</ec:function>
+
+
+<ec:function xInput_dateRange>
+    <ec:param fieldValue1 fieldValue2 id class name title hintContent require containerStyle allowNull labeless onchange readOnly disabled/>
+    <ec:input_dateRange1 if=@not(@allowNull.alt(0)) fieldValue1=@fieldValue1.nullifblank fieldValue2=@fieldValue2.nullifblank id=@id.nullifblank class=@class.nullifblank name=@name.nullifblank title=@title.nullifblank hintContent=@hintContent.nullifblank require=@require.nullifblank containerStyle=@containerStyle.nullifblank allowNull=0 labeless=@labeless.nullifblank onchange=@onchange.nullifblank readOnly=@readOnly.nullifblank disabled=@disabled.nullifblank/>
+    <ec:input_dateRange2 if=@allowNull.alt(0) fieldValue1=@fieldValue1.nullifblank fieldValue2=@fieldValue2.nullifblank id=@id.nullifblank class=@class.nullifblank name=@name.nullifblank title=@title.nullifblank hintContent=@hintContent.nullifblank require=@require.nullifblank containerStyle=@containerStyle.nullifblank allowNull=1 labeless=@labeless.nullifblank onchange=@onchange.nullifblank readOnly=@readOnly.nullifblank disabled=@disabled.nullifblank/>
+</ec:function>
+
+
+<ec:function xInput_dateRange1>
+    <ec:param fieldValue1 fieldValue2 id class name title hintContent require containerStyle allowNull labeless onchange readOnly disabled/>
+    <ec:case if=@not(@allowNull)>
+        <div class="formfield daterange1" @containerStyle.with(style="|")>
+            <label @if(@labeless.alt(0)|style="display:none;") for="daterange_@id">
+                @title.alt(Date Range)
+                <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+            </label><br @if(@labeless.alt(0)|style="display:none;")/>
+            
+            <ec:var fieldValue1 = @today  if=@all(@nv(@fieldValue1.nullifblank)|@not(@allowNull.alt(0)))/>
+            <ec:var fieldValue2 = @today  if=@all(@nv(@fieldValue2.nullifblank)|@not(@allowNull.alt(0)))/>
+            <ec:var textValue/><ec:set textValue="@fieldValue1().asDate.formatDate(mm/dd/yyyy)&nbsp;&nbsp;-&nbsp;&nbsp;@fieldValue2().asDate.formatDate(mm/dd/yyyy)" if=@any(@iv(@fieldValue1.nullifblank)|@iv(@fieldValue2.nullifblank))/>
+
+            <input type="hidden" id="date_@id()_start" name="@name.alt(daterange)_start" class="daterangeinput1 daterangeinput1_start" autocomplete="off" @if(@allowNull.alt(0)|@fieldValue1.asDate.formatDate(mm/dd/yyyy).with(value="|")|@fieldValue1.asDate.alt(@today).formatDate(mm/dd/yyyy).with(value="|"))  @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+            <input type="hidden" id="date_@id()_end" name="@name.alt(daterange)_end" class="daterangeinput1 daterangeinput1_end" autocomplete="off"  @if(@allowNull.alt(0)|@fieldValue2.asDate.formatDate(mm/dd/yyyy).with(value="|")|@fieldValue2.asDate.alt(@today).formatDate(mm/dd/yyyy).with(value="|")) @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+            <input type="text" id="daterange_@id()" name="@name.alt(daterange)_text" class="daterangeinput1 daterangeinput1_text @class()" autocomplete="off" onchange="if($('#daterange_@id()').val().length === 0){$('#date_@id()_start').val(''); $('#date_@id()_end').val('');}; @onchange()" readOnly value="" @textValue.with(placeholder="|")/>
+        </div>
+    
+        <style>
+            .ui-state-active, .ui-widget-content .ui-state-active, .ui-widget-header .ui-state-active, a.ui-button:active, .ui-button:active, .ui-button.ui-state-active:hover {background:#4dade3; border:1px solid #3b84ad; color:#fff;}
+            .dp-highlight .ui-state-default {background:#4dade3; border:1px solid #3b84ad; color: #fff;}
+            /*.ui-datepicker.ui-datepicker-multi {float:none;}
+            #date_@id() {height:300px; overflow-x:scroll;}
+            .ui-widget {font-size: 100%;}*/
+        </style>
+    
+        <ec:script if=@not(@readOnly.alt(0))>
+            $('#daterange_@id()').datepicker({
+                numberOfMonths: [1,1],
+                beforeShowDay: function(date) {
+                    var date1 = $.datepicker.parseDate($.datepicker._defaults.dateFormat, $('#date_@id()_start').val());
+                    var date2 = $.datepicker.parseDate($.datepicker._defaults.dateFormat, $('#date_@id()_end').val());
+                    return [true, date1 && ((date.getTime() == date1.getTime()) || (date2 && date >= date1 && date <= date2)) ? 'dp-highlight': ''];
+                },
+            
+                onSelect: function(dateText, inst) {
+                    var date1 = $.datepicker.parseDate($.datepicker._defaults.dateFormat, $('#date_@id()_start').val());
+	    			var date2 = $.datepicker.parseDate($.datepicker._defaults.dateFormat, $('#date_@id()_end').val());
+                    var selectedDate = $.datepicker.parseDate($.datepicker._defaults.dateFormat, dateText);
+                
+                    $(this).data('datepicker').inline = true;
+                
+                    if (!date1 || date2) {
+                        $('#date_@id()_start').val(dateText);
+                        $('#date_@id()_end').val('');
+
+                        $(this).attr('placeholder', ' ' + $('#date_@id()_start').val() + '  -  ' + $('#date_@id()_end').val());
+                        $(this).addClass('placeHolderLeft');
+                        $(this).removeClass('placeHolderCenter');
+                        $(this).datepicker();
+                    } else if (selectedDate < date1) {
+                        $('#date_@id()_end').val($('#date_@id()_start').val());
+                        $('#date_@id()_start').val(dateText);
+
+                        $(this).attr('placeholder', $('#date_@id()_start').val() + '  -  ' + $('#date_@id()_end').val());
+                        $(this).removeClass('placeHolderLeft');
+                        $(this).addClass('placeHolderCenter');
+                        $(this).datepicker();
+                    } else {
+                        $('#date_@id()_end').val(dateText);
+                        
+                        $(this).attr('placeholder', $('#date_@id()_start').val() + '  -  ' + $('#date_@id()_end').val());
+                        $(this).removeClass('placeHolderLeft');
+                        $(this).addClass('placeHolderCenter');
+                        $(this).datepicker();
+                    }
+                
+                    $(this).val('');
+                },
+            
+                onClose: function(dateText, inst) {
+                    $(this).data('datepicker').inline = false;
+                    $(this).val('');
+                }
+            });
+        </ec:script>
+    </ec:case>
+</ec:function>
+
+
+<ec:function xInput_dateRange2>
+    <ec:param fieldValue1 fieldValue2 id class name title hintContent require containerStyle allowNull labeless onchange readOnly disabled/>
+    <div class="formfield daterange2" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="daterange_@id()_start">
+            @title.alt(Date Range)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+
+        <ec:var fieldValue1 = @today  if=@all(@nv(@fieldValue1.nullifblank)|@not(@allowNull.alt(0)))/>
+        <ec:var fieldValue2 = @today  if=@all(@nv(@fieldValue2.nullifblank)|@not(@allowNull.alt(0)))/>
+
+        <input type="text" id="date_@id()_start" name="@name.alt(daterange)_start" class="daterangeinput2 daterangeinput2_start" autocomplete="off" onchange="validateDateRange(); @onchange()" @if(@allowNull.alt(0)|@fieldValue1.asDate.formatDate(mm/dd/yyyy).with(value="|")|@fieldValue1.asDate.alt(@today).formatDate(mm/dd/yyyy).with(value="|")) @if(@readOnly.alt(0)|readonly) @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+        <span id="date_@id()_thru" class="thru-mark @if(@svr[request/userAgent].contains(iPhone|iPad|iPod|Macintosh)|safari-thru-mark)">-</span>
+        <input type="text" id="date_@id()_end" name="@name.alt(daterange)_end" class="daterangeinput2 daterangeinput2_end" autocomplete="off" onchange="validateDateRange(); @onchange()" @if(@allowNull.alt(0)|@fieldValue2.asDate.formatDate(mm/dd/yyyy).with(value="|")|@fieldValue2.asDate.alt(@today).formatDate(mm/dd/yyyy).with(value="|")) @if(@readOnly.alt(0)|readonly) @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+
+    <style>
+        .ui-state-active, .ui-widget-content .ui-state-active, .ui-widget-header .ui-state-active, a.ui-button:active, .ui-button:active, .ui-button.ui-state-active:hover {background:#4dade3; border:1px solid #3b84ad; color:#fff;}
+    </style>
+    <ec:script if=@not(@readOnly.alt(0))>
+        $("#date_@id()_start").datepicker();
+        $("#date_@id()_end").datepicker();
+
+        window.validateDateRange = validateDateRange;
+        function validateDateRange() {
+            const startDateField = $('#date_@id()_start');
+            const endDateField = $('#date_@id()_end');
+
+            if (startDateField.val().length === 0 && endDateField.val().length === 0) {return} //only need to validate the date order if both dates are supplied
+            else {
+                let startDate = startDateField.val();
+                let endDate = endDateField.val();
+
+                if (Date.parse(startDate) > Date.parse(endDate)) {
+                    //flip order
+                    startDateField.val(endDate);
+                    endDateField.val(startDate);
+                }
+            }
+        }
+    </ec:script>
+</ec:function>
+
+
+<ec:function xInput_dateTime>
+    <ec:param fieldValue id class name title hintContent require containerStyle labeless onchange disabled allowNull/>
+    <ec:set fieldValue=@now if=@all(@nv(@fieldValue.nullifblank)|@not(@allowNull.alt(0)))/>
+
+    <div class="formfield datetime" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="date_@id">
+            @title.alt(Date/Time)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input type="text" id="date_@id" name="@name.alt(date)" autocomplete="off" @class.with(class="|") @fieldValue.asDate.formatDate(mm/dd/yyyy hh:nn am/pm).upper.with(value="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+    <ec:script>$("#date_@id").datetimepicker({timeFormat: "hh:mm tt"});</ec:script>
+</ec:function>
+
+
+<ec:function xInput_email>
+    <ec:param fieldValue id class name placeholder title hintContent require maxlength containerStyle labeless onchange disabled/>
+    <div class="formfield email" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="email_@id">
+            @title.alt(Email)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input type="email" inputmode="email" id="email_@id" name="@name.alt(email)" @maxlength.with(maxlength="|") @class.with(class="|") @placeholder.with(placeholder="|") @fieldValue.with(value="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_file>
+    <ec:param fieldValue id style class labelStyle labelClass name title hintContent onchange multiple accept require containerStyle loader labeless disabled/>
+    <div class="formfield file" id="file_@id()_container" @containerStyle.with(style="|")>
+        <label @labelClass.with(class="|") @labelStyle.with(style="@if(@labeless.alt(0)|display:none; )|") for="file_@id">
+            @title.alt(Upload)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label>
+        <input autocomplete="off" type="file" id="file_@id" name="@name.alt(file)" @loader.with(loader="|") @class.with(class="|") @style.with(style="|") @fieldValue.alt().with(value="|") @onchange.with(onchange="|") @if(@multiple.alt(0)|multiple) @accept.alt(*/*).with(accept="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_hidden>
+    <ec:param fieldValue id class name containerStyle onchange disabled/>
+    <div class="formfield hidden" @containerStyle.with(style="|")>
+        <input style="display:none;" type="hidden" id="hidden_@id" name="@name.alt(hidden)" @class.with(class="|") @fieldValue.alt().with(value="|") @onchange.with(onchange="|") @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_month>
+    <ec:param fieldValue id class name title hintContent multiple require containerStyle allowNull labeless onchange disabled/>
+    <div class="formfield month" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="month_@id">
+            @title.alt(Month)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label>
+        <select autocomplete="off" name="@name.alt(month)" id="month_@id" @class.with(class="|") @if(@multiple.alt(0)|multiple) @if(@require.alt(0)|required) @onchange.with(onchange="|") @if(@disabled.alt(0)|disabled)>
+            <option @if(@nv(@fieldValue.nullifblank)|selected) @if(@allowNull.alt(0)||disabled)>=@if(@allowNull.alt(0)|Any|Choose)=</option>
+            <option value="Jan" @if(@fieldValue.is(Jan|January)|selected)>1 - January</option>
+            <option value="Feb" @if(@fieldValue.is(Feb|February)|selected)>2 - February</option>
+            <option value="Mar" @if(@fieldValue.is(Mar|March)|selected)>3 - March</option>
+            <option value="Apr" @if(@fieldValue.is(Apr|April)|selected)>4 - April</option>
+            <option value="May" @if(@fieldValue.is(May)|selected)>5 - May</option>
+            <option value="Jun" @if(@fieldValue.is(Jun|June)|selected)>6 - June</option>
+            <option value="Jul" @if(@fieldValue.is(Jul|Jul)|selected)>7 - July</option>
+            <option value="Aug" @if(@fieldValue.is(Aug|August)|selected)>8 - August</option>
+            <option value="Sep" @if(@fieldValue.is(Sep|Sept|September)|selected)>9 - September</option>
+            <option value="Oct" @if(@fieldValue.is(Oct|October)|selected)>10 - October</option>
+            <option value="Nov" @if(@fieldValue.is(Nov|November)|selected)>11 - November</option>
+            <option value="Dec" @if(@fieldValue.is(Dec|December)|selected)>12 - December</option>
+        </select>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_money>
+    <ec:param fieldValue id class name title hintContent require style min max step placeholder containerStyle inline labeless onchange disabled/>
+    <div class="formfield money" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="number_@id">
+            @title.alt(Value)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label>
+        @if(@not(@inline.alt(0))|@br())
+        <input type="number" inputmode="decimal" id="number_@id" name="@name.alt(number)" @style.with(style="|") @if(@inline.alt(0)|height="21px") @min.alt(-1000000.00).with(min="|") @max.alt(1000000.00).with(max="|") @step.alt(.01).with(step="|") @placeholder.alt($0.00).with(placeholder="|") @class.with(class="|") @fieldValue.with(value="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_number>
+    <ec:param fieldValue id class name title hintContent require style min max step placeholder pattern containerStyle inline onchange labeless disabled/>
+    <div class="formfield number" @containerStyle.with(style="|")>
+        <label style="@if(@labeless.alt(0)|display:none;) @if(@iv(@hintContent)|padding-right:22px;)" for="number_@id">
+            @title.alt(Number)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label>
+        @if(@not(@inline.alt(0))|@br())
+        <input type="number" inputmode="numeric" id="number_@id" name="@name.alt(number)" @style.with(style="|") @min.alt(-1000000).with(min="|") @max.alt(1000000).with(max="|") @step.alt(1).with(step="|") @pattern.with(pattern="|") @placeholder.with(placeholder="|") @class.with(class="|") @fieldValue.with(value="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_numberRange>
+    <ec:param fieldValue1 fieldValue2 id class name title hintContent require containerStyle min max step numberFormat labeless onchange readOnly disabled/>
+    <div class="formfield numberRange" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="numberRange_@id()_start">
+            @title.alt(Number Range)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label>@if(@not(@inline.alt(0))|@br())
+
+        <input type="text" inputmode="numeric" id="number_@id()_lower" name="@name.alt(numberRange)_lower" class="numberRangeInput numberRangeInput_lower" autocomplete="off" @fieldValue1.formatNumber(@numberFormat.alt(0.00)).with(value="|") onchange="validateNumberRange(); @onchange()" @min.with(min="|") @max.with(max="|") @step.alt(1).with(step="|") @if(@readOnly.alt(0)|readonly) @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+        <span id="number_@id()_thru" class="thru-mark @if(@svr[request/userAgent].contains(iPhone|iPad|iPod|Macintosh)|safari-thru-mark)">-</span>
+        <input type="text" inputmode="numeric" id="number_@id()_upper" name="@name.alt(numberRange)_upper" class="numberRangeInput numberRangeInput_upper" autocomplete="off" @fieldValue2.formatNumber(@numberFormat.alt(0.00)).with(value="|") onchange="validateNumberRange(); @onchange()" @min.with(min="|") @max.with(max="|") @step.alt(1).with(step="|") @if(@readOnly.alt(0)|readonly) @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+
+    <ec:script>
+        window.validateNumberRange = validateNumberRange;
+        function validateNumberRange() {
+            const lowerNumberField = $('#number_@id()_lower');
+            const upperNumberField = $('#number_@id()_upper');
+
+            if (lowerNumberField.val().length === 0 || upperNumberField.val().length === 0) {return} //only need to validate the range order if both bounds are supplied
+            else {
+                let lowerNumber = lowerNumberField.val().replace(/[^\d.-]/g, '');
+                let upperNumber = upperNumberField.val().replace(/[^\d.-]/g, '');
+
+                if (parseFloat(lowerNumber) > parseFloat(upperNumber)) {
+                    //flip order, numbers only
+                    lowerNumberField.val(upperNumber);
+                    upperNumberField.val(lowerNumber);
+                } else {
+                    //kep order, numbers only
+                    lowerNumberField.val(lowerNumber);
+                    upperNumberField.val(upperNumber);
+                }
+            }
+        }
+    </ec:script>
+</ec:function>
+
+
+<ec:function xInput_password>
+    <ec:param id class name title hintContent require minlength maxlength containerStyle labeless onchange disabled/>
+    <div class="formfield password" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="password_@id">
+            @title.alt(Password)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input autocomplete="off" type="password" id="password_@id" name="@name.alt(password)" @minlength.with(minlength="|") @maxlength.with(maxlength="|") @class.with(class="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_range>
+    <ec:param fieldValue id class name title hintContent min max step require labeless onchange disabled/>
+    <div class="formfield range" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="range_@id">
+            @title.alt(Value)&nbsp;
+        </label><span style="display:inline-block;" id="range_@id_value">@fieldValue.alt(50)</span>
+        <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        <input type="range" id="range_@id" name="@name.alt(range)" oninput="document.getElementById('range_@id_value').innerHTML = this.value;" @class.with(class="|") min="@min.alt(0)" max="@max.alt(99)" step="@step.alt(1)" @fieldValue.alt(50).with(value="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_reset>
+    <ec:param id class title style hintContent/>
+    <button type="reset" id="rest_@id" class="reset-btn btn btn-danger @class" @style.with(style="|")>
+        @title.alt(Reset)
+        <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+    </button>
+</ec:function>
+
+
+<ec:function xInput_search>
+    <ec:param fieldValue id class name require placeholder maxlength hintContent style containerStyle labeless onchange disabled/>
+    <div class="formfield search" @containerStyle.with(style="|")>
+        <input type="search" inputmode="search" id="search_@id.alt(search)" name="@name.alt(search)" @style.with(style="|")  @maxlength.with(maxlength="|") @class.with(class="|") @fieldValue.alt().with(value="|") @placeholder.alt(Search...).with(placeholder="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_select>
+    <ec:param title hintContent id name class require fieldValue containerStyle allowNull labeless loader onchange disabled/>
+    <ec:param options asReference/>
+
+    <div class="formfield select" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="select_@id">
+            @title.alt(Select)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <select autocomplete="off" name="@name.alt(select)" id="select_@id" @class.with(class="|") @if(@iv(@onchange.nullifblank)|@onchange.with(onchange="|")) @if(@iv(@loader.nullifblank)|@loader.with(loader="|")) @if(@disabled.alt(0)|disabled) @if(@require.alt(0)|required)>
+            <option value="" @if(@nv(@fieldValue.nullifblank)|selected) @if(@allowNull.alt(0)||disabled)>=@if(@allowNull.alt(0)|Any|Choose)=</option>
+            <ec:loop data=@options>
+                <option value="@rs[1]" @if(@rs[1].is(@fieldValue.nullifblank)|selected)>@rs[2]</option>
+            </ec:loop>
+        </select>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_ssn>
+    <ec:param fieldValue id class name title hintContent require placeholder pattern containerStyle labeless onchange disabled/>
+    <div class="formfield ssn" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="ssn_@id">
+            @title.alt(Social Security Number)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input type="tel" inputmode="numeric" id="ssn_@id" name="@name.alt(ssn)" autocomplete="off" onkeyup="ssnFormatter();" minlength="9" maxlength="11" @class.with(class="|") @fieldValue.with(value="|") @placeholder.alt(123-45-6789).with(placeholder="|") @pattern.alt([0-9]{3}-[0-9]{2}-[0-9]{4}).with(pattern="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+
+    <ec:script>
+        window.ssnFormatter = ssnFormatter;
+        function ssnFormatter() {
+            const inputField = document.getElementById('ssn_@id');
+            const formattedInputValue = formatSSN(inputField.value);
+            inputField.value = formattedInputValue;
+        }
+
+        window.formatSSN = formatSSN;
+        function formatSSN(value) {
+            if(!value) return value;
+            const ssn = value.replace(/[^\d]/g, '');
+            const ssnLength = ssn.length;
+            if (ssnLength < 4) return ssn;
+            if (ssnLength < 6) {return `${ssn.slice(0,3)}-${ssn.slice(3)}`;}
+            return `${ssn.slice(0,3)}-${ssn.slice(3,5)}-${ssn.slice(5,9)}`;
+        }
+    </ec:script>
+</ec:function>
+
+
+<ec:function xInput_submit>
+    <ec:param id class title style hintContent/>
+    <button type="submit" id="submit_@id" class="submit-btn btn btn-info @class" @style.with(style="|")>
+        @title.alt(Submit)
+        <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+    </button>
+</ec:function>
+
+
+<ec:function xInput_tel>
+    <ec:param fieldValue id class name title hintContent require placeholder pattern containerStyle labeless onchange disabled/>
+    <div class="formfield tel" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="tel_@id">
+            @title.alt(Phone Number)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input type="tel" inputmode="tel" id="tel_@id" name="@name.alt(tel)" onkeyup="phoneFormatter();" minlength="7" maxlength="17" @class.with(class="|") @fieldValue.with(value="|") @placeholder.alt(@chr(40)123@chr(41) 456-7890).with(placeholder="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled) @pattern.alt([0-9]{10,11}@chr(124)[0-9]{7}@chr(124)[0-9]{3}[\s]{1}[0-9]{3}[\s]{1}[0-9]{4}@chr(124)[0-9]{1}[\s]{1}[0-9]{3}[\s]{1}[0-9]{3}[\s]{1}[0-9]{4}@chr(124)[+]{1}[0-9]{1}[\s]{1}[0-9]{3}[\s]{1}[0-9]{3}[\s]{1}[0-9]{4}@chr(124)[0-9]{1}.[0-9]{3}.[0-9]{3}.[0-9]{4}@chr(124)[0-9]{1}[\s]{1}[0-9]{3}.[0-9]{3}\.[0-9]{4}@chr(124)[+]{1}[0-9]{1}.[0-9]{3}.[0-9]{3}.[0-9]{4}@chr(124)[+]{1}[0-9]{1}[\s]{1}[0-9]{3}.[0-9]{3}.[0-9]{4}@chr(124)[0-9]{1}-[0-9]{3}-[0-9]{3}-[0-9]{4}@chr(124)[0-9]{1}[\s]{1}[0-9]{3}[\-]{1}[0-9]{3}[\-]{1}[0-9]{4}@chr(124)[+]{1}[0-9]{1}[\-]{1}[0-9]{3}[\-]{1}[0-9]{3}[\-]{1}[0-9]{4}@chr(124)[+]{1}[0-9]{1}[\s]{1}[0-9]{3}[\-]{1}[0-9]{3}[\-]{1}[0-9]{4}@chr(124)[0-9]{1}[\s]{1}\([0-9]{3}\)[\s]{1}[0-9]{3}.[0-9]{4}@chr(124)[+]{1}[0-9]{1}[\s]{1}\([0-9]{3}\)[\s]{1}[0-9]{3}.[0-9]{4}@chr(124)[0-9]{1}[\s]{1}\([0-9]{3}\)[\s]{1}[0-9]{3}[\-]{1}[0-9]{4}@chr(124)[+]{1}[0-9]{1}[\s]{1}\([0-9]{3}\)[\s]{1}[0-9]{3}[\-]{1}[0-9]{4}@chr(124)[0-9]{3}.[0-9]{3}.[0-9]{4}@chr(124)\([0-9]{3}\)[\s]{1}[0-9]{3}.[0-9]{4}@chr(124)[0-9]{3}[\-]{1}[0-9]{3}[\-]{1}[0-9]{4}@chr(124)\([0-9]{3}\)[\s]{1}[0-9]{3}[\-]{1}[0-9]{4}@chr(124)[0-9]{3}.[0-9]{4}@chr(124)[0-9]{3}[\-]{1}[0-9]{4}@chr(124)[0-9]{3}\s[0-9]{4}@chr(124)).with(pattern="|")/>
+    </div>
+
+    <ec:script>
+        window.phoneFormatter = phoneFormatter;
+        function phoneFormatter() {
+            const inputField = document.getElementById('tel_@id');
+            const formattedInputValue = formatPhone(inputField.value);
+            inputField.value = formattedInputValue;
+        }
+
+        window.formatPhone = formatPhone;
+        function formatPhone(value) {
+            if(!value) return value;
+            const tel = value.replace(/[^\d]/g, '');
+            const telLength = tel.length;
+            if (telLength < 4) return tel;
+            if (telLength < 8) {return `${tel.slice(0,3)}-${tel.slice(3)}`;}
+            if (telLength < 11) {return `(${tel.slice(0,3)}) ${tel.slice(3,6)}-${tel.slice(6,10)}`;}
+            return `+${tel.slice(0,1)} (${tel.slice(1,4)}) ${tel.slice(4,7)}-${tel.slice(7,11)}`;
+        }
+    </ec:script>
+</ec:function>
+
+
+<ec:function xInput_text>
+    <ec:param fieldValue id class name title hintContent require maxlength placeholder containerStyle style labeless onchange readOnly disabled/>
+    <div class="formfield text" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="text_@id">
+            @title.alt(Description)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input @style.with(style="|") type="text" id="text_@id" name="@name.alt(text)" @if(@readOnly.alt(0)|readonly) @placeholder.with(placeholder="|") @maxlength.with(maxlength="|") @class.with(class="|") @fieldValue.alt().with(value="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_textArea>
+    <ec:param fieldValue id class name title hintContent require manxLength placeholder containerStyle style readOnly rows cols wrap labeless onchange disabled/>
+    <br/><div class="formfield textArea" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="textarea_@id">
+            @title.alt(Description)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label>
+        <textarea @style.with(style="|") id="textarea_@id" name="@name.alt(textarea)" class="input_textArea@class.with( |)" @if(@readOnly.alt(0)|readonly) @placeholder.with(placeholder="|") @maxlength.with(maxlength="|") @rows.alt(9).with(rows="|") @cols.alt(80).with(cols="|") @wrap.with(wrap="|") @class.with(class="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)>@fieldValue.nullifblank</textarea>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_textField>
+    <ec:param title hintContent fieldValue id name class style containerStyle placeholder require readOnly onchange labeless/>
+
+    <script id="removeOldTMCE">tinymce.remove('#textField_@id'); document.getElementById('removeOldTMCE').remove();</script>
+
+    <div class="formfield textField" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="textField_@id">
+            @title.alt(Content)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label>
+        <input name="@name" id="textField_@id" class="input_textField@class.with( |)" type="textarea" @style.with(style="|") @if(@require.alt(0)|required) @onchange.with(onchange="|") @fieldValue.with(value="|")/>
+    </div>
+
+    <ec:var skin="oxide" contentMode="default"/>
+    <ec:set skin="oxide-dark" contentMode="default-dark" if=@userSettings[theme].is(dark)/>
+
+    <script id="intNewTMCE">
+        // https://www.tiny.cloud/docs-3x/reference/Configuration3x/
+        tinymce.init({
+            selector: '#textField_@id',
+            height: '56vh', max_height: 686, resize: true,
+            skin: "@skin",
+            content_css: ['@contentMode', '/js/tinymce/tinymce-scrollbars.css'],
+            // skin: (window.matchMedia("(prefers-color-scheme:dark)").matches ? "oxide-dark" : "oxide"),  // this was used previously to determine light or dark mode
+            // content_css: [(window.matchMedia("(prefers-color-scheme:dark)").matches ? "writer-dark" : "writer"), '/js/tinymce/tinymce-scrollbars.css'], // this was used previously to determine light or dark mode
+            plugins: 'code preview importcss searchreplace autolink directionality visualblocks visualchars image link media codesample table charmap pagebreak nonbreaking anchor insertdatetime advlist lists wordcount help charmap emoticons',
+            toolbar: 'undo redo | bold italic underline strikethrough | numlist bullist | fontsize blocks | alignleft aligncenter alignright alignjustify outdent indent | charmap emoticons | media link codesample print',
+            browser_spellcheck: true,
+            force_br_newlines: true,            //use <br> for new lines
+            force_p_newlines: false,            //don't use <p> for new lines
+            forced_root_block: false,           //disabled automatic <p> wrapping
+            valid_elements: '*[*]',             //allow all elements
+            extended_valid_elements: '*[*]',    //including ECPages
+            verify_html: false,                 //disable verification
+            paste_data_images:false,            //allowing true causes severe render issues due to TCP and QUIC being unable to properly transfer blobs sometimes
+            @if(@readOnly.alt(0)|readonly: 1,)
+            setup: function(editor){
+                editor.on('change', function(){
+                    editor.save();
+                });
+            }
+        });
+    </script>
+</ec:function>
+
+
+<ec:function xInput_time>
+    <ec:param fieldValue id class name title hintContent require containerStyle labeless onchange disabled/>
+    <div class="formfield time" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="time_@id">
+            @title.alt(Time)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input type="time" id="time_@id" name="@name.alt(time)" @class.with(class="|") @fieldValue.alt(@now.formatDate(hh:nn)).with(value="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_trueFalse>
+    <ec:param title hintContent id name class require fieldValue containerStyle onchange allowNull labeless disabled/>
+
+    <div class="formfield select" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="@select_@id">
+            @title.alt(Select)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <select autocomplete="off" name="@name.alt(select)" id="select_@id" @class.with(class="|") @if(@iv(@onchange.nullifblank)|@onchange.with(onchange="|")) @if(@disabled.alt(0)|disabled) @if(@require.alt(0)|required)>
+            <option value="" @if(@nv(@fieldValue.nullifblank)|selected) @if(@allowNull.alt(0)||disabled)>=T/F=</option>
+            <option value="true" @if(@fieldValue.is(true|1)|selected)>True</option>
+            <option value="false"@if(@fieldValue.is(false|0)|selected)>False</option>
+        </select>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_url>
+    <ec:param fieldValue id class name title hintContent require style maxlength containerStyle pattern placeholder onchange labeless disabled/>
+    <div class="formfield url" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="url_@id">
+            @title.alt(URL)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input type="url" inputmode="url" id="url_@id" name="@name.alt(url)" autocomplete="off" @style.with(style="|") @maxlength.alt(2048).with(maxlength="|") @class.with(class="|") @fieldValue.with(value="|") @pattern.alt(.*\\..*).with(pattern="|") @placeholder.with(placeholder="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_week>
+    <ec:param fieldValue id class name title hintContent require containerStyle labeless onchange disabled/>
+    <div class="formfield week" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="week_@id">
+            @title.alt(Week)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input type="week" id="week_@id" name="@name.alt(week)" @class.with(class="|") @fieldValue.alt(@today.formatDate(yyyy-'W'@thisWeek)).with(value="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+</ec:function>
+
+
+<ec:function xInput_zipcode>
+    <ec:param fieldValue id class name title hintContent require placeholder pattern containerStyle labeless onchange disabled/>
+    <div class="formfield zipcode" @containerStyle.with(style="|")>
+        <label @if(@labeless.alt(0)|style="display:none;") for="zip_@id">
+            @title.alt(Zip Code)
+            <ec:hint if=@iv(@hintContent)>@hintContent</ec:hint>
+        </label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <input type="tel" inputmode="numeric" id="zip_@id" name="@name.alt(zip)" autocomplete="off" onkeyup="zipFormatter();" minlength="5" maxlength="10" @class.with(class="|") @fieldValue.with(value="|") @placeholder.alt(84321).with(placeholder="|") @pattern.alt([0-9]{5}-[0-9]{4}).with(pattern="|") @onchange.with(onchange="|") @if(@require.alt(0)|required) @if(@disabled.alt(0)|disabled)/>
+    </div>
+
+    <ec:script>
+        window.zipFormatter = zipFormatter;
+        function zipFormatter() {
+            const inputField = document.getElementById('zip_@id');
+            const formattedInputValue = formatZip(inputField.value);
+            inputField.value = formattedInputValue;
+        }
+
+        window.formatZip = formatZip;
+        function formatZip(value) {
+            if(!value) return value;
+            const zip = value.replace(/[^\d]/g, '');
+            const zipLength = zip.length;
+            if (zipLength < 6) return zip;
+            return `${zip.slice(0,5)}-${zip.slice(5,9)}`;
+        }
+    </ec:script>
+</ec:function>
+
+
+
+
+
+
+
+<ec:function xLoader_circle>
+    <ec:param size color time/>
+    <ec:set size="90px" if=@nv(@size.nullifblank)/>
+    <ec:set color="var(--link-color)" if=@nv(@color.nullifblank)/>
+    <ec:set time=1.5 if=@nv(@time.nullifblank)/>
+
+    <div class="loader-circle" style="width:@size(); height:@size(); border-top:12px solid @color; animation-duration:@time()s;"></div>
+</ec:function>
+
+
+
+
+
+
+
+<ec:function xNotification>
+    <ec:param msg=@sender.execute seconds loader/><ec:set seconds=@seconds.nullifblank.alt(10) rem="time is in seconds, not ms"/>
+    <ec:var id/><ec:set id = "notification_@id.nodeID"/>
+    <ec:script>playNotification('@jesc(@msg.nullifblank)', @seconds, '@id', @loader.alt(0), '@requestType');</ec:script>
+</ec:function>
+
+
+
+
+
+
+
+<ec:function xQuantityBadge>
+    <ec:param qty showZero=1/>
+    <ec:param class id style/>
+    <ec:var qty = @qty.alt(0)/>
+
+    <div class="quantityBadge @class" @id.with(id="|") style="@if(@all(@showZero.isnot(1|true)|@qty.is(0))|display:none;) @style">@qty</div>
+</ec:function>
+
+
+
+
+
+
+
+<ec:function xTitleBox>
+    <ec:param title options style contentStyle class id dark hintContent/>
+    <div class="titlebox@if(@dark.alt(0)|@chr(32)dark)@class.with(@chr(32)|)" id="@id.nullifblank.alt(tb_@stripSpecialCharacters(@title).lower)" @style.with(style="|")>
+        <ec:case if=@any(@iv(@title)|@iv(@options.nullifblank))>
+            <div class="titlebox_titlebar">
+                <div class="titlebox_titlebar_title">@title()@if(@iv(@hintContent.nullifblank)|&nbsp;@hint(@hintContent))</div>
+                <div class="titlebox_titlebar_options">@options</div>
+            </div>
+        </ec:case>
+        <div class="titlebox_content" @contentStyle.with(style="|")>
+            @sender.execute
+        </div>
+    </div>
+</ec:function>
+
+
+
+
+
+
+
+<ec:function xUploadForm rem="button mode uploads a file with submitted form ... dragDrop mode uploads and return via ajax">
+    <ec:param ecid/>
+    <ec:param fieldValue id class name title hintContent multiple accept require containerStyle loader labeless disabled/>
+
+    <ec:case if=@nv(@ecid) rem="dragDrop requires an ecid">
+        @logError(xUploadForm Warning|xUploadForm was called without an ecid from the /@app page|49)
+    </ec:case>
+    
+    <form id="frm-drop-area-@id()" enctype="multipart/form-data">
+        <style>
+            .drop-area {
+                border: 2px dashed #ccc;
+                border-radius: 10px;
+                width: 100%;
+                margin: 7px auto;
+                padding: 20px;
+
+                &.highlight {border-color:var(--link-color-hover);}
+            }
+        </style>
+
+
+        <div id="drop-area-@id()" class="drop-area" @ecid.with(ecid="|") @act.with(act="|") @loader.with(loader="|")>
+            <ec:input_file labelClass="btn btn-sml" onchange="handleFiles(this.files);" style="display:none;" fieldValue=@fieldValue.nullifblank  id=@id.nullifblank  class=@class.nullifblank  name=@name.nullifblank  title=@title.nullifblank  hintContent=@hintContent.nullifblank  multiple=@multiple.nullifblank  accept=@accept.nullifblank  require=@require.nullifblank  containerStyle=@containerStyle.nullifblank  labeless=@labeless.nullifblank  disabled=@disabled.nullifblank/>
+        </div>
+
+        <ec:script>
+            if (typeof dropArea === 'undefined') {var dropArea = document.getElementById('drop-area-@id()')};
+
+            window.dropAreaConfig = dropAreaConfig;
+            function dropAreaConfig(){
+                dropArea.addEventListener('drop', handleDrop, false);
+                
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                    dropArea.addEventListener(eventName, preventDefaults, false);
+                });
+    
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    dropArea.addEventListener(eventName, highlightUpload, false);
+                });
+    
+                ['dragleave', 'drop'].forEach(eventName => {
+                    dropArea.addEventListener(eventName, unhighlightUpload, false);
+                });
+            } dropAreaConfig();
+
+            window.highlightUpload = highlightUpload;
+            function highlightUpload(){
+                dropArea.classList.add('highlight');
+            }
+
+            window.unhighlightUpload = unhighlightUpload;
+            function unhighlightUpload(){
+                dropArea.classList.remove('highlight');
+            }
+
+            window.preventDefaults = preventDefaults;
+            function preventDefaults(e){
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            window.handleDrop = handleDrop;
+            function handleDrop(e){
+                let dt = e.dataTransfer;
+                let files = dt.files;
+                handleFiles(files);
+            }
+
+            window.handleFiles = handleFiles;
+            function handleFiles(files){
+                ([...files]).forEach(uploadFile);
+            }
+
+            window.uploadFile = uploadFile;
+            function uploadFile(file) {
+                //set up payload and variables
+                let send_data = new FormData();
+                let act = dropArea.getAttribute('act');
+                let ecid = dropArea.getAttribute('ecid');
+                let loader = dropArea.getAttribute('loader');
+
+                //add data to payload
+                send_data.append('act', act);
+                send_data.append('ecid', ecid);
+                send_data.append('ecAct', 'respond');
+                send_data.append('loader', loader);
+                send_data.append('file', file);
+
+                //add stored information to payload
+                let DOMStorage=$.data($('#responderScripts')[0]);
+                if(DOMStorage) {
+                    for (aval in DOMStorage){
+                        send_data.append(aval, DOMStorage[aval]);
+                    };
+                }
+
+                //send ajax request to server
+                $.ajax({
+                    type: 'POST',
+                    url: document.URL,
+                    async: true,
+                    contentType: false,
+                    processData: false,
+                    cache: false,
+                    beforeSend: addLoader(ecid, loader),
+                    success: showResponse,
+                    data: send_data
+                });
+            }
+        </ec:script>
+    </form>
+</ec:function>
+
+
+
+
+
+
+
+<ec:function xBottombar>
+    <ec:style>
+        #ect_bottombar {
+            display:block;
+            width:100%;
+            min-height:200px;
+            background-color:#2d2d2d;
+            color:white;
+            z-index:995;
+            padding:27px;
+            position:relative;
+        }
+
+        #primaryContent:has(+ #ect_bottombar) {
+            min-height:calc(100dvh - 144px);
+        }
+    </ec:style>
+
+    <div id="ect_bottombar">
+        <h4 style="margin-left:27px;">@siteDescription.alt(@host) &copy; @today.formatDate(yyyy)</h4><br/>
+
+        <div style="margin-left:27px;">
+
+            <style>
+                #ect_bottombar_menus {
+                    display:flex;
+                    flex-wrap:wrap;
+                    justify-content:flex-start;
+                    width:100%; height:100%;
+                }
+
+                .ect_bottombar_menu {
+                    margin:13px 27px;
+                
+                    & ul {
+                        font-family:calibri;
+                        list-style-type:none;
+                        & a {color:#dadada;}
+                    }
+                }
+            </style>
+
+            @siteSettings[bottombarContent]
+        </div>
+    </div>
+</ec:function>
+
+
+
+
+
+
+
+<ec:function xTopbar>
+    <ec:param lMenuContent lMenuIcon rMenuContent rMenuIcon bannerIcon searchAction searchPlaceholder/>
+    @comment(be sure to include a div.primaryContent following the genericTopbar. that div is where to put page-content)
+    <ec:style>
+        :root {--ec_topbar_height: 54px; --leftNavMenu-width: 240px;}
+
+        #ect_topbar {
+            width:100vw;
+            width:100dvw;
+            height:var(--ec_topbar_height);
+            box-shadow:0px 3px 3px rgba(0,0,0,.15);
+            background-color:#2d2d2d;
+            position:fixed;
+            top:0;
+            z-index:997;
+        }
+
+        .ect_topbar_grid {display:grid; grid-template-columns:96px auto 96px; column-gap:30px; padding:2px 30px;}
+        .ect_topbar_child_container {display:inline-block; height:var(--ec_topbar_height); line-height:var(--ec_topbar_height);}
+                
+        #ect_nav_logo {height:58px; transform:translateY(4px); &:hover{cursor:pointer;}}
+        #blueBar {position:fixed; height:26px; background-color:lightslategrey; width:100vw; width:100dvw; margin-top:calc(var(--ec_topbar_height) - 9px); z-index:995;}
+        #primaryContent {width:95%; margin:auto; /*margin-top:2vh;*/}
+
+        #topbarSearchFormDesktop {margin:0px auto; max-width:982px;}
+        #topbarSearchFormMobile {
+            width:85%;
+            padding:5px 7px 5px 19px;
+            border-radius: 0px 0px 7px 7px;
+            background-color:#2d2d2d;
+
+            position:fixed;
+            top:0; left:50%;
+            z-index:996;
+            transform: translate(-50%, 0px);
+            transition: transform .3s;
+
+            &.opened {transform: translate(-50%, 54px);}
+        }
+
+        #rightNavMenu {z-index:11; transform:translateY(9px);}
+
+        #leftNavMenu {
+            width: var(--leftNavMenu-width);
+            height: 100vh;
+            height: 100dvh;
+            position:fixed;
+            top:var(--ec_topbar_height);
+            left:0;
+            margin:0;
+            padding:0;
+            z-index:10;
+            transition: transform .3s;
+            transform: translateX(calc(var(--leftNavMenu-width) * -1));
+        
+            &.opened {transform:translateX(0px);}
+        }
+        
+        #leftNavMenuHeader{width:92%; margin:auto;}
+        
+        <ec:case if=@userSettings[theme].is(light)>
+            #leftNavMenu {background-color:#f8f8f8;}
+            #leftNavMenu {border-right:1px solid #e5e5e5;}
+            #leftNavMenuHeader {border-bottom:1px solid #444; & a {color:#444 !important;}}
+        </ec:case>
+
+        <ec:case if=@userSettings[theme].is(dark)>
+            #leftNavMenu {background-color:#313131;}
+            #leftNavMenu {border-right:1px solid #45484a;}
+            #leftNavMenuHeader {border-bottom:1px solid #dfdfdf; & a {color:#dfdfdf !important;}}
+        </ec:case>
+    
+        /*hide in desktop mode*/
+        @media screen and (min-width: 982px){
+            #leftNavMenu {transform: translateX(calc(var(--leftNavMenu-width) * -1)) !important;}
+        }
+
+
+        #searchBox {
+
+        }
+    </ec:style>
+    <nav id="ect_topbar">
+        <div grid class="ect_topbar_grid">
+
+            <!-- left side options and menu -->
+            <div class="ect_topbar_child_container">
+                <a href="/@rootApp"><img @if(@iv(@lMenuContent.nullifblank)|desktop inline|) class="shadowOnHover" id="ect_nav_logo" src="@bannerIcon" style="filter:drop-shadow(3px 3px 3px #000);" alt="Return Home" title="Return to page home"/></a>
+                <ec:case if=@iv(@lMenuContent.nullifblank)>
+                    <a mobile href="javascript:void(0)" rel="nofollow">
+                        <ec:icon title="Navigation" icon="menu-hamburger" size="xlrg" direction="left" style="transform:translate(5px, 12px);" onclick="toggleOpen('leftNavMenu');"/>
+                    </a>
+                </ec:case>
+
+                <div id="leftNavMenu">
+                    <table id="leftNavMenuHeader">
+                        <tr><th><a href="/@rootApp"><img class="shadowOnHover" id="ect_nav_logo" src="@bannerIcon" style="filter:drop-shadow(3px 3px 3px #000);" alt="Return Home" title="Return to page home"/></a></th><th>&nbsp;</th></tr>
+                    </table>
+                    
+                    <ul>
+                        @lMenuContent
+                    </ul>
+                </div>
+            </div>
+
+            <!-- center content, i.e. search -->
+            <div class="ect_topbar_child_container">
+                <ec:case if=@iv(@searchAction.nullifblank)>
+                    <form desktop method="GET" action="@searchAction.alt(/@app/)" id="topbarSearchFormDesktop">
+                        <ec:input_search name="search" id="search" placeholder="@searchPlaceholder.nullifblank.alt(Search...)" fieldValue="@svr[param/search]" containerStyle="width:calc(100% - 50px);" style="width:100%; height:32px;"/>
+                        <button type="submit" style="width:34px; transform:translateY(4px); margin:0;"><ec:icon title="" icon="search" direction="center" size="med" color="#dfdfdf"/></button>
+                    </form>
+                </ec:case>
+                <ec:case if=@else>
+                    &nbsp;
+                </ec:case>
+            </div>
+
+            <!-- right side options and menu -->
+            <div class="ect_topbar_child_container">
+                <div class="dropdown" id="rightNavMenu">
+                    <ec:case if=@iv(@rMenuContent.nullifblank)>
+                        <a href="javascript:void(0)" rel="nofollow"><ec:icon title="" icon="@rMenuIcon.nullifblank.alt(option-horizontal)" size="xxlrg" direction="right"/></a>
+                        <div class="dropdown-content">
+                            <ul>
+                                @rMenuContent
+                            </ul>
+                        </div>
+                    </ec:case>
+                </div>
+
+                <ec:case if=@iv(@searchAction.nullifblank)><a href="javascript:void(0)" rel="nofollow" mobile onclick="toggleOpen('topbarSearchFormMobile');"><ec:icon title="" icon="search" size="xlrg" direction="right" style="transform:translate(-6px, 12px);"/></a></ec:case>
+            </div>
+        </div>
+    </nav>
+
+    <ec:case if=@iv(@searchAction.nullifblank)>
+        <form mobile method="GET" action="@searchAction.alt(/@app/)" id="topbarSearchFormMobile">
+            <ec:input_search name="search" id="search" placeholder="@searchPlaceholder.nullifblank.alt(Search...)" fieldValue="@svr[param/search]" containerStyle="width:calc(100% - 50px);" style="width:100%; height:32px;"/>
+            <button type="submit" style="width:34px; transform:translateY(4px); margin:0;"><ec:icon title="" icon="search" direction="center" size="med" color="#dfdfdf"/></button>
+        </form>
+    </ec:case>
+
+    <div id="blueBar">&nbsp;</div>
+    <div style="height:calc(var(--ec_topbar_height) + 9px + 2vh);">&nbsp;</div>
+</ec:function>

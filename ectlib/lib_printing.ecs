@@ -1,0 +1,209 @@
+@share
+
+<ec:case if=@nv(@lib_printingCalled)>
+    <ec:var lib_printingCalled=1 global/>
+    <ec:var label = @xLabel.asReference global/>
+    <ec:var printPage = @xPrintPage.asReference global/>
+
+    <ec:script if=@requestType.is(regular) rem="handle print click">
+        $(document).on('click', '.printDialog', openPrintDialog);
+
+        window.openPrintDialog = openPrintDialog;
+        function openPrintDialog(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var send_data = forwardParams(e);
+            send_data['ecAct'] = 'print';
+            if (send_data['blankLabels'] == undefined) send_data['blankLabels'] = prompt('How many labels have been used?', 0);
+
+            var argString = $.param(send_data);
+            var windowFeatures = 'toolbar=1,scrollbars=1,location=0,statusbar=0,menubar=1,resizable=1,innerWidth=1024,innerHeight=640,left=48,top=88';
+            printWindow = window.open('@canonical&print=1' + argString, 'printDialog', windowFeatures);
+
+            if (send_data['callback_ecid'] != undefined) {
+                $(printWindow.window).on('afterprint', function(){
+                    send_data['ecid'] = send_data['callback_ecid'];
+                    send_data['ecAct'] = 'refresh';
+                    send_data['loader'] = undefined;
+                    addLoader(send_data['callback_ecid'], send_data['loader']); // force loader for callback component
+
+                    $.ajax({
+                        type: 'POST',
+                        url: document.URL,
+                        async: true,
+                        success: showResponse,
+                        data: send_data
+                    });
+                });
+            }
+        }
+    </ec:script>
+</ec:case>
+
+
+
+
+
+<ec:type tPrintDialog>
+    <ec:var name/>
+    <ec:var state/>
+    <ec:var objectBody/>
+    
+    <ec:var blankLabels offsetX offsetY/>
+    <ec:var pageType='letter' pageSize pageWidth pageHeight orientation marginTop marginRight marginBottom marginLeft columnGutter rowGutter/>
+    <ec:var labelType labelRows labelColumns labelWidth labelHeight labelPadding/>
+
+    <ec:function initialize>
+        <ec:param name = @self.objectName/>         @self.name.setValue(@name)
+        <ec:param blankLabels/>                     @self.blankLabels.setValue(@blankLabels)
+        <ec:param offsetX/>                         @self.offsetX.setValue(@offsetX)
+        <ec:param offsetY/>                         @self.offsetY.setValue(@offsetY)
+        <ec:param pageType/>                        @self.pageType.setValue(@pageType)
+        <ec:param pageSize/>                        @self.pageSize.setValue(@pageSize)
+        <ec:param pageWidth/>                       @self.pageWidth.setValue(@pageWidth)
+        <ec:param pageHeight/>                      @self.pageHeight.setValue(@pageHeight)
+        <ec:param orientation/>                     @self.orientation.setValue(@orientation)
+        <ec:param marginTop/>                       @self.marginTop.setValue(@marginTop)
+        <ec:param marginRight/>                     @self.marginRight.setValue(@marginRight)
+        <ec:param marginBottom/>                    @self.marginBottom.setValue(@marginBottom)
+        <ec:param marginLeft/>                      @self.marginLeft.setValue(@marginLeft)
+        <ec:param columnGutter/>                    @self.columnGutter.setValue(@columnGutter)
+        <ec:param rowGutter/>                       @self.rowGutter.setValue(@rowGutter)
+        <ec:param labelType/>                       @self.labelType.setValue(@labelType)
+        <ec:param labelRows/>                       @self.labelRows.setValue(@labelRows)
+        <ec:param labelColumns/>                    @self.labelColumns.setValue(@labelColumns)
+        <ec:param labelWidth/>                      @self.labelWidth.setValue(@labelWidth)
+        <ec:param labelHeight/>                     @self.labelHeight.setValue(@labelHeight)
+        <ec:param labelPadding/>                    @self.labelPadding.setValue(@labelPadding)
+        <ec:set objectBody=@sender.asReference/>
+
+        <ec:case if=@all(@name.is(@svr[param/ecid])|@nv(@responder.actionObject))>
+            @state.setValue(respond)
+            @responder.actionObject.setReference(@self.asReference)
+        </ec:case>
+    </ec:function>
+
+
+    <ec:function render_component>
+        <ec:var printContent/>
+        <ec:printContent if=@iv(@objectBody)>
+            <ec:var bodyExecuted = @objectBody.execute/>
+            <ec:printPage pageType=@pageType pageSize=@pageSize pageWidth=@pageWidth pageHeight=@pageHeight orientation=@orientation marginTop=@marginTop marginRight=@marginRight marginBottom=@marginBottom marginLeft=@marginLeft columnGutter=@columnGutter rowGutter=@rowGutter labelType=@labelType labelRows=@labelRows labelColumns=@labelColumns labelWidth=@labelWidth labelHeight=@labelHeight labelPadding=@labelPadding>
+                @bodyExecuted()
+            </ec:printPage>
+        </ec:printContent>
+
+        @response_contentType(text/html; charset=utf-8)
+        <ec:output>@printContent()</ec:output>
+        @stop()
+    </ec:function>
+</ec:type>
+
+
+
+
+
+<ec:function xPrintPage>
+    <ec:param pageType='letter' pageSize pageWidth pageHeight orientation marginTop marginRight marginBottom marginLeft columnGutter rowGutter/>
+    <ec:param labelType labelRows labelColumns labelWidth labelHeight labelPadding/>
+
+    <ec:set if=@pageType.is(letter-portrait|letter) pageSize="Letter Portrait !important" pageWidth="8.5in" pageHeight="11in"/>
+    <ec:set if=@pageType.is(letter-landscape) pageSize="Letter Landscape !important" pageWidth="11in" pageHeight="8.5in"/>
+
+    <ec:set if=@labelType.is(Avery5167) rem="80/page" pageWidth="8.5in" pageHeight="11in" labelWidth="1.75in" labelHeight="0.5in" labelColumns="4" labelRows="20" columnGutter="0.285in" rowGutter="0" marginTop="0.5in" marginRight="0" marginBottom="0.5in" marginLeft="0.34in"/>
+    <ec:set if=@labelType.is(Avery5160) rem="30/page" pageWidth="8.5in" pageHeight="11in" labelWidth="2.6in" labelHeight="1in" labelColumns="3" labelRows="10" columnGutter="0.1675in" rowGutter="0" marginTop="0.5in" marginRight="0" marginBottom="0.5in" marginLeft="0.1902in"/>
+
+    <!doctype html>
+    <html lang="en">
+        <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+            <title>Print Dialog</title>
+            <script src="/js/jquery/jquery.js"></script>
+            <script src="/js/barcode-generator/bcGen.js"></script>
+            <script src="/index-js"></script>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function(){
+                    addLoader(undefined, 'body');
+                    
+                    document.addEventListener('jsBarcodesReloaded', function() {
+                        $('#load-undefined-body').remove();
+                        window.print();
+                    });
+                });
+
+                console.log('@paramList.json');
+            </script>
+
+            <style>
+                .ecloader {
+                    opacity:0; transition: opacity .25s;
+                    position: absolute;
+                    z-index: 1000;
+                    top: 0;
+                    left: 0;
+                    width:100%;
+                    height:100%;
+                    border-radius:5px;
+                    cursor:wait;
+                    background:rgba(0,0,0,.2);
+
+                    &.opened {opacity:1;}
+                    &.bigLoader {position:fixed; z-index:997;}
+                }
+
+                @chr(64)page {
+                    @if(@nv(@pageSize)|size: @pageWidth() @pageHeight() !important; @orientation().with(size:| !important;))
+                    @if(@iv(@pageSize)|size: @pageSize() !important;)
+                    margin:0; padding:0;
+                    @marginTop.with(padding-top:| !important;)
+                    @marginRight.with(padding-right:| !important;)
+                    @marginBottom.with(padding-bottom:| !important;)
+                    @marginLeft.with(padding-left:| !important;)
+                }
+
+                * {margin:0; padding:0; box-sizing: border-box; -webkit-box-sizing: border-box;}
+                body, #printContent {background: #fff; color: #000; @pageWidth.with(width:|;) @pageHeight.with(height:|;)}
+                #printContent {padding:@marginTop().alt(0) @marginRight().alt(0) @marginBottom().alt(0) @marginLeft().alt(0); font-size:0;}
+                #header, #footer, #nav {display: none;}
+
+                .label {
+                    outline: 1px dotted #ccc;
+                    display:inline-block;
+                    width: @labelWidth();
+                    height: @labelHeight();
+                    padding:7px;
+                    overflow: hidden; contain:strict;
+                    page-break-inside: avoid; page-break-after: avoid;
+                    margin-bottom: @rowGutter.alt(0);
+
+                    &:not(:nth-of-type(@labelColumns()n)) {margin-right: @columnGutter.alt(0)}
+                    &:nth-of-type(@calc(1 + (@labelColumns * @labelRows))n) {page-break-before: always;}
+                    &:nth-of-type(@calc(@labelColumns * @labelRows)n) {page-break-after: avoid;}
+
+                    @media print {
+                        & {outline:none;}
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div id="printContent">
+                <ec:loop count=@svr[param/blankLabels].alt(0)>
+                    <ec:label isBlank/>
+                </ec:loop>
+                @sender.execute()
+            </div>
+        </body>
+    </html>
+</ec:function>
+
+
+
+
+
+<ec:function xLabel>
+    <ec:param isBlank=0 class/>
+    <div class="label @class" @id.with(id="|")>@if(@not(@isBlank)|@sender.execute()|&nbsp;)</div>
+</ec:function>

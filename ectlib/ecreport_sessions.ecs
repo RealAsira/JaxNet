@@ -1,0 +1,249 @@
+@share
+@pageTitle.setValue(Web Sessions Report)
+
+<ec:var fsessionType = @svr[param/fsessionType].nullifblank/>
+<ec:var floggedIn = @svr[param/floggedIn].nullifblank/>
+<ec:var fexpired = @svr[param/fexpired].nullifblank/>
+<ec:var floginAttempts = @svr[param/floginAttempts].nullifblank/>
+<ec:var fipaddress = @svr[param/fipaddress].nullifblank/>
+
+
+<ec:object dt_sessions page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>sessionID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@recordID)>
+            SELECT sessionType, sessionID, ownerID, expires, dbo.fn_IPAddress_toString(ipv4) AS ipv4, dbo.fn_IPAddress_toString(ipv6) AS ipv6, loginAttempts, cookie, firstName, lastName, aclScore
+            FROM vw_sessionsAndACL
+            WHERE 1=1
+
+            <ec:case if=@iv(@fsessionType) rem="filters for sessionType (regular vs acl)">
+                <ec:case if=@fsessionType.is(ACL)>
+                    AND ((sessionType = @sqlstr(@fsessionType)) OR (sessionType = 'Regular' AND aclScore != 0))
+                </ec:case>
+                <ec:case if=@else>
+                    AND sessionType = @sqlstr(@fsessionType)
+                </ec:case>
+            </ec:case>
+
+            @if(@iv(@fipaddress)|AND (ipv4 = dbo.fn_IPAddress_toBinary(@fipaddress.trim.with('|')) OR ipv6 = dbo.fn_IPAddress_toBinary(@fipaddress.trim.with('|'))))
+            @if(@iv(@floggedIn)|@if(@floggedIn.is(true)|AND ownerID IS NOT NULL|AND ownerID IS NULL))
+            @if(@iv(@floginAttempts)|AND loginAttempts = @floginAttempts)
+            @if(@iv(@fexpired)|@if(@fexpired.is(true)|AND expires @chr(60) GETDATE()| AND expires @chr(62) GETDATE()))
+        </ec:case>
+
+
+        <ec:case if=@iv(@recordID)>
+            SELECT sessions.sessionID, sessions.ownerID, sessions.expires, sessions.persist, dbo.fn_IPAddress_toString(sessions.ipv4) AS ipv4, dbo.fn_IPAddress_toString(sessions.ipv6) AS ipv6, sessions.loginAttempts, sessions.cookie, sessions.browserString, sessions.firstName, sessions.lastName, sessions.aclScore, sessions.websiteID, websites.description AS siteDescription, websites.websiteURL
+            FROM vw_sessions sessions
+            LEFT JOIN websites ON sessions.websiteID = websites.websiteID
+            WHERE sessionID = @recordID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort>@if(@nv(@recordID)|sessionType ASC,) expires DESC</sort>
+</ec:object>
+<ec:object obj_sessions_pageNavigator dataObj=@dt_sessions type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_sessionControls type="tComponent">                      
+    <ec:case if=@act.is(endSession)>
+        <ec:data xx procedure="pr_sessions_endSession" connection=@connection>   
+            <sessionCookie>@svr[param/scookie].replace({|).replace(}|).with({|})</sessionCookie>
+            <sessionID>@svr[param/sid].asInt</sessionID>
+        </ec:data>
+        @logAction(5|||Employee terminated sessionID: @svr[param/sid])
+        @if(@user.sessionID.is(@svr[param/sid])|@reload)
+        @dt_sessions.refresh()
+        @obj_reportSessions.refresh()
+    </ec:case>
+
+
+    <ec:case if=@act.is(endAllUserSessions)>
+        @user.endAllUserSessions(@svr[param/targetUserID].alt(0))
+        @logAction(5|||Employee terminated all sessions for userID: @svr[param/targetUserID].alt(0))
+        @if(@user.userID.is(@svr[param/targetUserID].alt(0))|@reload)
+        @notification(All sessions for this user were terminated.)
+    </ec:case>
+
+
+    <ec:case if=@act.is(endAllSessions)>
+        <ec:data xx procedure="pr_sessions_endAllSessions" connection=@connection></ec:data>
+        @logAction(5|||Employee terminated all sessions)
+        @var(returnto|/console?ltid=105&xid=6) @var(returnto|@returnto.urlencode) @redirect(/login?returnto=@returnto|1)
+        @notification(All sessions were terminated.)
+    </ec:case>
+    
+
+    <ec:case if=@act.is(endFailedLoginSessions)>
+        <ec:data xx procedure="pr_sessions_endFailedLoginSessions" connection=@connection></ec:data>
+        @logAction(5|||Employee terminated all failed login sessions)
+        @dt_sessions.refresh()
+        @obj_reportSessions.refresh()
+        @notification(Ended failed login sessions.)
+    </ec:case>
+    
+    <ec:case if=@act.is(endExpiredSessions)>
+        <ec:data xx procedure="pr_sessions_endExpiredSessions" connection=@connection></ec:data>
+        @logAction(5|||Employee terminated expired sessions)
+        @dt_sessions.refresh()
+        @obj_reportSessions.refresh()
+        @notification(Ended expired sessions.)
+    </ec:case>
+
+    <ec:case if=@act.is(resetACL)>
+        <ec:data xx procedure="pr_acl_edit" connection=@connection>
+            <ipAddress>@svr[param/aclIP]</ipAddress>
+            <CAPTCHAScore>0</CAPTCHAScore>
+            <errorScore>0</errorScore>
+            <locationScore>0</locationScore>
+            <riskScore>0</riskScore>
+        </ec:data>
+        @logAction(49|||ACL for @svr[param/aclIP] reset)
+        @dt_sessions.refresh()
+        @obj_reportSessions.refresh()
+    </ec:case>
+
+    <ec:case if=@act.is(purgeACL)>
+        <ec:data xx procedure="pr_acl_purge" connection=@connection></ec:data>
+        @logAction(5|||Employee purged ACL records)
+        @dt_sessions.refresh()
+        @obj_reportSessions.refresh()
+        @notification(Purged all ACL records.)
+    </ec:case>
+
+    <ec:case if=@act.is(blacklistIP)>
+        <ec:data xx procedure="pr_acl_blacklistIP" connection=@connection>
+            <ipAddress>@svr[param/banIP]</ipAddress>
+            <blacklist>1</blacklist>
+        </ec:data>
+        @logAction(49|||Blacklisted @svr[param/banIP] from the website)
+        @if(@ipaddress.is(@svr[param/banIP])|@reload)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_reportSessions dataObj=@dt_sessions type="tComponent">
+    <ec:titlebox title="Web Sessions">
+        <table class="tbl">
+            <tr>
+                <th>sessionID</th>
+                <th>Expiration</th>
+                <th>IP Address</th>
+                <th>Login Attempts</th>
+                <th>Owner</th>
+                <th>ACL Score</th>
+                <th>Options</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <ec:case if=@rs[sessionType].isHeader()>
+                    <ec:case if=@not(@rs.isFirst)>
+                        <tr><td colspan="7">&nbsp;</td></tr>
+                    </ec:case>
+                    <tr>
+                        <td colspan="7" style="text-align:left; font-weight:bold; font-size: 1.05rem;">@rs[sessionType] Sessions @if(@all(@rs[sessionType].is(regular)|@fsessionType.is(ACL))|With ACL Score) @if(@rs[sessionType].is(ACL)|@hint(ACL sessions that aren't bound to a regular session))</td>
+                    </tr>
+                </ec:case>
+                <tr id="session-@rs[sessionID].alt(ACL)">
+                    <td><a title="View this session" href="@if(@iv(@rs[sessionID])|/console?ltid=105&xid=6&recordID=@rs[sessionID]|javascript:void(0))" rel="nofollow">@rs[sessionID]</a></td>
+                    <td>@if(@iv(@rs[expires])|@rs[expires].formatDate(dd mmmm))</td>
+                    <td><a title="View action log for this IP" href="/console?ltid=105&xid=1&fipAddress=@rs[ipv6].replace(:|%3A).alt(@rs[ipv4]).alt(127.0.0.1)">@ipv6_condense(@rs[ipv6]).alt(@rs[ipv4]).alt(127.0.0.1)</a></td>
+                    <td @if(@rs[loginAttempts].alt(0).isgreaterthan(4)|style="background-color:var(--notice-highlight-color); color:black;")>@rs[loginAttempts]</td>
+                    <td><a href="@if(@iv(@rs[ownerID])|/console?ltid=1&xid=@rs[ownerID]|javascript:void(0))" rel="nofollow">@if(@all(@iv(@rs[lastName])|@iv(@rs[firstName]))|@rs[lastName], @rs[firstName])</a></td>
+                    <td><span class="col-left">@rs[aclScore]&nbsp;&nbsp;</span><ec:case if=@rs[aclScore].alt(0).isgreaterthan(0)><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" act="resetACL" aclIP="@rs[ipv6].alt(@rs[ipv4]).alt(127.0.0.1)" confirm="Are you sure you want to reset the ACL Score for this IP Address?"><ec:icon title="Reset ACL Score" icon="repeat" size="tiny" direction="left" style="transform: translateY(3px);"/></a></ec:case></td>
+                    <td><ec:case if=@rs[sessionType].is(regular)><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" act="endSession" loader="#session-@rs[sessionID]" scookie="@rs[cookie]" sid="@rs[sessionID]" confirm="End this session? (SID: @rs[sessionID])"><ec:icon title="Terminate Session" icon="log-out" size="xsml"/></a></ec:case></td>
+                </tr>
+            </ec:loop>
+        </table>
+        @obj_sessions_pageNavigator
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+<ec:object obj_reportSession dataObj=@dt_sessions type="tComponent">
+    <ec:var session=@dataObj.dataDef[data/1]/>
+    <ec:titlebox title="Web Session" options=@defaultRecordOptions()>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:var idContent/><ec:idContent>@session[sessionID] <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" act="endSession" loader="#session-@session[sessionID]" scookie="@session[cookie]" sid="@session[sessionID]" confirm="End this session? (SID: @session[sessionID])"><ec:icon title="Terminate Session" icon="log-out" size="xsml" style="transform:translateY(3px);"/></a></ec:idContent>
+                <ec:displayField title="sessionID" content="@idContent"/>
+                <ec:var ownerLink/><ec:ownerLink><a href="/console?ltid=1&xid=@session[ownerID]" rel="nofollow">@if(@all(@iv(@session[lastName])|@iv(@session[firstName]))|@session[lastName], @session[firstName])</a></ec:ownerLink>
+                <ec:displayField title="Owner" content="@ownerLink"/>
+                <ec:var siteLinks/><ec:siteLinks><a href="/console?ltid=102&xid=@session[websiteID]" rel="nofollow">@session[websiteID] (@session[siteDescription])</a><a href="@protocol()@session[websiteURL]"><ec:icon title="" icon="hyperlink" size="sml" direction="right" style="transform: translate(4px, 4px);"/></a></ec:siteLinks>
+                <ec:displayField title="WebsiteID" content="@siteLinks"/>
+                <ec:displayField title="IPAddress" content="@ipv6_condense(@session[ipv6]).alt(@session[ipv4])"/>
+                <ec:displayField title="Login Attempts" content="@session[loginAttempts].alt(0)" contentStyle="@if(@session[loginAttempts].alt(0).isgreaterthan(4)|background-color:var(--notice-highlight-color); color:black;)"/>
+                <ec:var aclContent/><ec:aclContent>@session[aclScore].alt(0) <ec:case if=@session[aclScore].alt(0).isgreaterthan(0)><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" act="resetACL" aclIP="@session[ipv6].nullifblank.alt(@session[ipv4].nullifblank).alt(127.0.0.1)" confirm="Are you sure you want to reset the ACL Score for this IP Address?"><ec:icon title="Reset ACL Score" icon="repeat" size="xsml" direction="right" style="transform:translateY(3px);"/></a></ec:case></ec:aclContent>
+                <ec:displayField title="ACL Score" content="@aclContent"/>
+                <ec:displayField title="Expires" content="@session[expires].formatDate(dd mmm yyyy)"/>
+                <ec:displayField title="Cookie" content="@session[cookie]"/>
+                <ec:displayField title="Browser String" content="@session[browserString]"/>
+            </div>
+        </div>
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@recordID)>
+        <ec:consoleSearchBox>
+            <ec:data dt_loginAttemptSelect connection=@connection>
+                SELECT 0, 0 UNION SELECT 1, 1 UNION SELECT 2, 2 UNION SELECT 3, 3 UNION SELECT 4, 4 UNION SELECT 5, 5
+            </ec:data>
+
+            <ec:data dt_sessionTypes connection=@connection>
+                SELECT 'ACL', 'ACL' UNION SELECT 'Regular', 'Regular'
+            </ec:data>
+    
+            <ec:input_number title="SessionID" id="recordID" name="recordID" fieldValue=@recordID.nullifblank/>
+            <ec:input_text title="IPAddress" id="fipaddress" name="fipaddress" fieldValue=@fipaddress/>
+            <ec:input_select title="Session Type" id="fsessionType" name="fsessionType" fieldValue=@fsessionType.nullifblank options=@dt_sessionTypes allowNull/>
+            <ec:input_trueFalse title="Logged In?" id="floggedIn" name="floggedIn" fieldValue=@floggedIn.nullifblank/>
+            <ec:input_select title="Login Attempts" id="floginAttempts" name="floginAttempts" fieldValue=@floginAttempts options=@dt_loginAttemptSelect allowNull/>
+            <ec:input_trueFalse title="Expired?" id="fexpired" name="fexpired" fieldValue=@fexpired.nullifblank allowNull/>
+        </ec:consoleSearchBox>
+        @obj_reportSessions
+    </ec:case>
+
+    <ec:case if=@iv(@recordID)>@obj_reportSession</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@nv(@recordID)>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" floggedIn="@floggedIn" fexpired="@fexpired" floginAttempts="@floginAttempts" recordID="@recordID" act="endAllSessions" confirm="This will terminate every session, and every ACL session, for every user (requires everyone to login again). Continue?"><ec:icon title="" icon="remove" size="xsml" color="#bb5555" style="transform:translateY(2px);" direction="left"/>Terminate ALL Sessions</a><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" floggedIn="@floggedIn" fexpired="@fexpired" floginAttempts="@floginAttempts" recordID="@recordID" act="endExpiredSessions" confirm="This will terminate every expired session and its associated ACL session. Continue?"><ec:icon title="" icon="log-out" size="sml" direction="left"/>End Expired Sessions</a><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" floggedIn="@floggedIn" fexpired="@fexpired" floginAttempts="@floginAttempts" recordID="@recordID" act="endFailedLoginSessions" confirm="This will terminate every session, and its associated ACL session, where someone failed 5 login attempts. Continue?"><ec:icon title="" icon="log-out" size="sml" direction="left"/>End Failed Login Sessions</a><br/>
+        <a href="/console?ltid=105&xid=5" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View Blacklisted IPs</a><br/>
+        <ec:case if=@fsessionType.is(ACL|@null|)><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" floggedIn="@floggedIn" fexpired="@fexpired" floginAttempts="@floginAttempts" recordID="@recordID" act="purgeACL" confirm="This will purge all ACL entries. Continue?"><ec:icon title="" icon="grain" size="sml" direction="left"/>Purge Access Control List</a><br/></ec:case>
+        <ec:case if=@else><span style="color:var(--greyed-text-color);"><ec:icon title="" icon="grain" size="sml" direction="left" color="var(--greyed-text-color)"/>Purge Access Control List @hint(Change "Session Type" to ACL or Any to view and purge the ACL list)</span><br/></ec:case>
+    </ec:case>
+
+    <ec:case if=@iv(@recordID)>
+        <ec:data dt_info connection=@connection>
+            SELECT ownerID, dbo.fn_IPAddress_toString(ISNULL(ipv6, ipv4)) AS ipAddress
+            FROM vw_sessions
+            WHERE sessionID = @recordID.asInt
+        </ec:data>
+        
+        <span style="color:var(--link-color);">View</span>
+        <a href="/console?ltid=105&xid=1&fsessionID=@recordID.alt(0)" rel="nofollow">Session</a><span style="color:var(--link-color);"> or </span>
+        <a href="/console?ltid=105&xid=1&fipaddress=@dt_info[1/ipaddress]" rel="nofollow">IP Address</a><span style="color:var(--link-color);"> Activity</span><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" floggedIn="@floggedIn" fexpired="@fexpired" floginAttempts="@floginAttempts" recordID="@recordID" targetUserID="@dt_info[1/ownerID]" act="endAllUserSessions" confirm="This will terminate every session associated with the owner of this session. Continue?">End All User Sessions</a><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessionControls" act="blacklistIP" banIP="@dt_info[1/ipaddress]" confirm="This ban action is intended to be permanent. Only proceed if you understand the implications of banning this IP address.">Blacklist IP Address</a><br/>
+    </ec:case>
+</ec:function>

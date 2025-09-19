@@ -1,0 +1,189 @@
+@share
+<ec:module lib_pageFunctions/>
+
+<ec:case if=@nv(@comp_input_entity_called)>
+    <ec:var comp_input_entity_called = 1 global/>
+    <ec:var input_entity = @xInput_entity.asReference global/>
+</ec:case>
+
+
+
+<ec:style>
+    .entityLabel img {height:20px;}
+
+    .inputEntity .entityLabel {
+        width:auto;
+        min-width:169px;
+        height:24px;
+        padding:1px 7px;
+        margin: 3px 9px 3px 0px;
+        border-radius:5px;
+
+        <ec:case if=@userSettings[theme].is(light)>
+            border:1px solid #f3d8b6;
+            background-color: #fffde8;
+        </ec:case>
+        <ec:case if=@userSettings[theme].is(dark)>
+            background-color: #6d6858; border:1px solid #9d8d78;
+        </ec:case>
+    }
+
+    .xEntityLabel {position: relative;}
+    .xEntityLabel a span {position: relative; top:2px; left:3px; margin-right:19px;}
+
+    .inputEntitySearchBtn {position: absolute; right:-16px; top:-10px;}
+
+    .shortcutEntitySearchList {
+        list-style-type:none;
+        min-height:188px;
+        overflow:auto;
+        
+        & .shortcut {
+            color:var(--link-color);
+            transition: color .25s;
+            &:hover {color:var(--link-color-hover); cursor:pointer;}
+        }
+    }
+</ec:style>
+
+
+
+
+
+<ec:function xInput_entity>
+    <ec:param fieldLTID fieldXID fieldLEID id class name title require hintContent containerStyle style disabled labeless autoSubmit/>
+    <ec:param filterLTID required/>
+
+    <div class="formfield inputEntity" @containerStyle.with(style="|")>
+        <label style="display:@if(@labeless.alt(0)|none|inline-block);" for="inputEntity_@id">@title.alt(Entity) @if(@iv(@hintContent)|@hint(@hintContent))</label><br @if(@labeless.alt(0)|style="display:none;")/>
+        <div class="entityLabel" id="d_@id" @style.with(style="|")>
+            <ec:xEntityLabel el_LTID=@fieldLTID el_XID=@fieldXID el_ID=@id el_filterLTID=@filterLTID disabled=@disabled.alt(0)/>
+        </div>
+        <input id="L_@ID" name="L_@name.alt(L_entity)" type="hidden" value="@fieldLTID"/>
+        <input id="X_@ID" name="X_@name.alt(X_entity)" type="hidden" value="@fieldXID" @if(@autoSubmit.alt(0)|submitOnClick)/>
+        <input id="LEID_@ID" name="LEID_@name.alt(LEID_entity)" type="hidden" value="@fieldLEID"/>
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:function xEntityLabel>
+    <ec:param el_LTID el_XID el_ID el_filterLTID id disabled/>
+    <ec:data xx connection=@connection>
+        SELECT REPLACE(ISNULL(dbo.fn_entityName_public(@el_LTID.asInt.alt(NULL), @el_XID.asInt.alt(NULL)), dbo.fn_entityName(@el_LTID.asInt.alt(NULL), @el_XID.asInt.alt(NULL))), 'Employee Console', '') AS el_name, ISNULL(dbo.fn_entityImage(LE.linkedEntityID, 1), iconURL) AS el_icon, description AS el_entityType
+        FROM vw_linkedTables
+        LEFT JOIN linkedEntities LE on LE.toLTID @el_LTID.asInt.with(= |).alt(IS NULL) AND LE.toXID @el_XID.asInt.with(= |).alt(IS NULL)
+        WHERE 1=1 @el_filterLTID.asInt.nullifblank.with(AND linkedTableID IN @chr(40)|@chr(41)) @el_LTID.asInt.with(AND linkedTableID = |)
+    </ec:data>
+    <ec:var entity = @xx[1]/>
+    
+    <ec:case if=@xx.count.isGreaterThan(1) rem="multiple entity types allowed">
+        <div class="xEntityLabel">
+            <a href="/console?ltid=@el_LTID&xid=@el_XID&xLTID=@LTID&xXID=@XID" rel="nofollow" title="Entity"><span>@entity[el_name]</span></a>
+            <ec:case if=@all(@iv(@entity[el_name].nullifblank)|@not(@disabled.alt(0)))><a href="javascript:void(0)" rel="nofollow" id="deselect_@el_ID" class="ajaxClick btn btn-default btn-sml inputEntitySearchBtn" ecid="obj_entityDeselect" loader="#d_@el_ID" filterLTID="@el_filterLTID" inputID="@el_ID" type="button"><ec:icon title="Deselect entity" icon="remove" size="sml" direction="center" style="margin-right:0px;"/></a></ec:case>
+            <ec:case if=@all(@nv(@entity[el_name].nullifblank)|@not(@disabled.alt(0)))><a href="javascript:void(0)" rel="nofollow" id="searchEntities_@el_ID" class="ajaxClick btn btn-default btn-sml inputEntitySearchBtn" ecid="obj_entityLookup" filterLTID="@el_filterLTID" inputID="@el_ID" type="button"><ec:icon title="Lookup entity" icon="search" size="sml" direction="center" style="margin-right:0px;"/></a></ec:case>
+        </div>
+    </ec:case>
+
+    <ec:case if=@xx.count.is(1) rem="specific entity type">
+        <div class="xEntityLabel">
+            <a href="/console?ltid=@el_LTID.alt(@el_filterLTID)&xid=@el_XID&xLTID=@LTID&xXID=@XID" rel="nofollow" title="@entity[el_entityType]"><img alt="LTID@el_LTID()_img" src="@entity[el_icon]"/><span>@entity[el_name]</span></a>
+            <ec:case if=@all(@iv(@entity[el_name].nullifblank)|@not(@disabled.alt(0)))><a href="javascript:void(0)" rel="nofollow" id="deselect_@el_ID" class="ajaxClick btn btn-default btn-sml inputEntitySearchBtn" ecid="obj_entityDeselect" loader="#d_@el_ID" filterLTID="@el_filterLTID" inputID="@el_ID" type="button"><ec:icon title="Deselect @entity[el_entityType]" icon="remove" size="sml" direction="center" style="margin-right:0px;"/></a></ec:case>
+            <ec:case if=@all(@nv(@entity[el_name].nullifblank)|@not(@disabled.alt(0)))><a href="javascript:void(0)" rel="nofollow" class="ajaxClick btn btn-default btn-sml inputEntitySearchBtn" ecid="obj_entityLookup" filterLTID="@el_filterLTID" inputID="@el_ID" type="button"><ec:icon title="Lookup @entity[el_entityType]" icon="search" size="sml" direction="center" style="margin-right:0px;"/></a></ec:case>
+        </div>
+    </ec:case>
+</ec:function>
+
+
+
+
+
+<ec:object obj_entityLookup title="Entity Lookup" type="tDialogForm" buttonCaption="Search" style="width:45%;" containerStyle="z-index:997;">
+    <ec:var inputID = @svr[param/inputID].nullifblank/>
+    <ec:var fkeywords = @svr[param/fkeywords].nullifblank/>
+    <ec:var filterLTID = @svr[param/filterLTID].nullifblank/>
+    <ec:var targetLTID = @svr[param/targetLTID].nullifblank/>
+    <ec:var targetXID = @svr[param/targetXID].nullifblank/>
+    <ec:var targetLEID = @svr[param/targetLEID].nullifblank/>
+    
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@act.is(pick)>
+            <ec:script if=@iv(@inputID.nullifblank)>
+                document.getElementById('L_@inputID').value = '@targetLTID';
+                document.getElementById('X_@inputID').value = '@targetXID';
+                document.getElementById('LEID_@inputID').value = '@targetLEID';
+            </ec:script>
+            <ec:var aTag="#d_@inputID" aLabel=@xEntityLabel(@targetLTID|@targetXID|@inputID|@filterLTID)/>
+            
+            @responder.update(@aTag|@aLabel)
+            @close()
+
+            @logAction(1|@targetLTID|@targetXID|Selected in in Entity Lookup)
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_entities connection=@connection>
+            <ec:case if=@iv(@fkeywords)>
+                SELECT t1.LTID, t1.XID, t1.LEID, t1.description, t1.iconURL
+                FROM dbo.tb_searchedItems (@sqlstr(@fkeywords), @user.userID.asInt, @user.employeeID.asInt, @websiteID.asInt) t1 
+                WHERE 1=1 @sqlesc(@filterLTID).nullifblank.with(AND LTID IN @chr(40)|@chr(41))
+            </ec:case>
+
+            <ec:case if=@else>                        
+                SELECT LTID, XID, LEID, description, iconURL FROM (
+                    SELECT TOP(25) LTID, XID, LEID, description, iconURL, maxDate, ROW_NUMBER() OVER (ORDER BY maxDate DESC, LTID ASC, XID ASC) AS occurNum FROM (
+                        SELECT AL.LTID, AL.XID, LE.linkedEntityID AS LEID, dbo.fn_entityName(LTID, XID) AS description, dbo.fn_entityImage(LE.linkedEntityID, 1) AS iconURL, MAX(AL.actionDate) AS maxDate
+                        FROM vw_actionLog AL WITH (NOLOCK)
+                        LEFT JOIN linkedEntities LE ON AL.LTID = LE.toLTID AND AL.XID = LE.toXID
+                        
+                        WHERE AL.actionID IN (1,2) AND AL.actionDate > (GETDATE() - 1) AND LE.websiteID = @websiteID.asInt.alt(0) AND AL.userID = @user.userID.asInt.alt(0) AND (
+                            (NOT(AL.LTID = @LTID.asInt.alt(0) AND <ec:case if=@iv(@XID)>AL.XID = @XID.asInt.alt(0)</ec:case><ec:case if=@nv(@XID)>AL.XID IS NULL</ec:case>)) OR 
+                            (AL.LTID = @LTID.asInt.alt(0) AND (NOT(<ec:case if=@iv(@XID)>AL.XID = @XID.asInt.alt(0)</ec:case><ec:case if=@nv(@XID)>AL.XID IS NULL</ec:case>) <ec:case if=@iv(@XID)>OR AL.XID IS NULL</ec:case>))
+                            )
+                            GROUP BY LTID, XID, linkedEntityID
+                    ) aTable WHERE dbo.fn_accessLevel(@user.userID.asInt.alt(NULL), @user.employeeID.asInt.alt(NULL), LTID, XID) >= 1 @sqlesc(@filterLTID).nullifblank.with(AND LTID IN @chr(40)|@chr(41)) AND XID IS NOT NULL
+                ) bTable
+            </ec:case>
+        </ec:data>
+
+        <br/>
+        <input type="hidden" name="inputID" id="inputID" value="@inputID"/>
+        <input type="hidden" name="filterLTID" id="filterLTID" value="@filterLTID"/>
+        <ec:input_text title="Search" name="fkeywords" id="fkeywords" fieldValue="@fkeywords"/><br/><br/>
+        
+        <ul class="shortcutEntitySearchList">
+            <ec:loop data=@dt_entities>
+                <li>
+                    <div class="shortcut shadowOnHover ajaxClick" act="pick" targetLTID="@rs[LTID]" targetXID="@rs[XID]" targetLEID="@rs[LEID]" inputID="@inputID" filterLTID="@filterLTID">
+                        <img src="@rs[iconURL]" alt="@rs[ltid]-img" style="height:24px;"/>
+                        <span>@rs[description]</span> 
+                    </div>
+                </li>
+            </ec:loop>
+
+            <ec:case if=@dt_entities.count.is(0)>
+                <li>@if(@iv(@fkeywords)|No results for this search.|No recently viewed records of this type.)</li>
+            </ec:case>
+        </ul>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_entityDeselect type="tComponent">
+    <ec:var inputID=@svr[param/inputID].nullifblank  filterLTID=@svr[param/filterLTID].nullifblank/>
+    <ec:var selector="#d_@inputID" content=@xEntityLabel(@null|@null|@inputID.nullifblank|@filterLTID.nullifblank)/>
+
+    @responder.update(@selector|@content)
+    <ec:script>
+        document.getElementById('L_@inputID').value = '';
+        document.getElementById('X_@inputID').value = '';
+        document.getElementById('LEID_@inputID').value = '';
+    </ec:script>
+</ec:object>

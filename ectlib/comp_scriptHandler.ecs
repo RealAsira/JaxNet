@@ -1,0 +1,74 @@
+@share
+
+<ec:case if=@nv(@comp_scriptHandlerCalled)>
+    <ec:var comp_scriptHandlerCalled=1 global/>
+    <ec:data dt_plugins format="xml" global/>
+
+    <ec:var pluginAdd = @xPluginAdd.asReference global/>
+    <ec:var pluginRemove = @xPluginRemove.asReference global/>
+    <ec:var pluginsReset = @xPluginsReset.asReference global/>
+    <ec:var runScript = @xRunScript.asReference global/>
+</ec:case>
+
+
+
+<ec:function xPluginAdd rem="pass an .ecs variable/function/object/etc to a stored script (PROTECTED, can't normally access)">
+    <ec:param name/>
+    <ec:var value/>
+    <ec:param function asReference/>
+
+    <ec:case if=@nv(@name) rem="a name is required in order to call an external var/value/function/etc">
+        <ec:set errMsg="A name must be provided for added plugins"/>
+    </ec:case>
+    <ec:case if=@all(@iv(@function.asReference)|@iv(@value)) rem="only one or the other... can't store both">
+        <ec:set errMsg="For added plugins, you can only use one of the following... a function/object reference or variable value but not both"/>
+    </ec:case>
+    <ec:case if=@all(@nv(@function.asReference)|@nv(@value)) rem="have to have at least one of these">
+        <ec:set errMsg="Neither a function/object reference nor variable value was provided to added plugin"/>
+    </ec:case>
+
+    <ec:case if=@iv(@errMsg)>
+        @throw(Add Plugin Error|xPluginAdd Err|@errMsg - Name: @name.alt(missing), Value: @value.alt(none), Function: @function.asReference.key.alt(none)|500|101)
+    </ec:case>
+
+    <ec:var aRecord=@dt_plugins.addRecord(@name)/>
+    <ec:case if=@iv(@value)>@aRecord.setValue(@value)</ec:case>
+    <ec:case if=@iv(@function.asReference)>@aRecord.setReference(@function.asReference)</ec:case>
+</ec:function>
+
+
+
+<ec:function xPluginRemove rem="overwrite current value/function with blank">
+    <ec:param name/>
+    <ec:var aRecord=@dt_plugins.addRecord(@name)/>
+</ec:function>
+
+
+
+<ec:function xPluginsReset rem="removes all plugins added">
+    <ec:data dt_plugins format="xml" global/>
+</ec:function>
+
+
+
+<ec:function xRunScript>
+    <ec:param aScript/>
+    <ec:xRunScriptProtected aScript=@aScript plugins=@dt_plugins/>
+</ec:function>
+
+
+
+<ec:function xRunScriptProtected PROTECTED>
+    <ec:param aScript/>
+    <ec:param plugins/>
+
+    <ec:loop plugins>
+        @var(@plugins[@index].absolute.key|@plugins[@index])    
+    </ec:loop>
+
+    @executeScript(@aScript)
+    <ec:exception>
+        @response_statusCode(500)
+        Error in script content. Failed to render. @error
+    </ec:exception>
+</ec:function>

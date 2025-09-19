@@ -1,0 +1,38 @@
+@share
+
+<ec:type tParam>
+    <ec:function initialize/>
+    <ec:function render/>
+
+    <ec:function as rem="as is used for sql data types">
+        <ec:param fieldType provider/>
+        <ec:var fieldValue = @sqlesc(@self).trim.nullifblank/><ec:set fieldValue = @null  if = @fieldValue.is(NULL|)/>
+        <ec:var result/><ec:set result = @fieldValue.with('|').alt(NULL)  if = @fieldType.is(memo|string|text)/>
+
+        <ec:case if=@fieldType.is(int|integer)>
+            <ec:set result = @calc(round(@fieldValue.replace('|))) if = @iv(@fieldValue)/>
+            <ec:set result = 'NULL' if = @nv(@result.nullifblank)/>
+        </ec:case>
+
+        <ec:set result = @fieldValue.replace('|).asNumber.alt(NULL)  if = @fieldType.is(float|double|number)/>
+        <ec:set result = @fieldValue.replace('|).asMoney.replace($|).alt(NULL)  if = @fieldType.is(money)/>
+
+        <ec:case if=@fieldType.is(bool|boolean|bit)>
+            <ec:set result = @if(@fieldValue.asBoolean.alt(0)|1|0)  if = @iv(@fieldValue)/>
+            <ec:set result = "NULL"  if = @nv(@fieldValue)/>
+        </ec:case>
+
+        <ec:case if=@fieldType.is(date|datetime|time)>
+            <ec:case if=@provider.is(SQL Server|T-SQL)>
+                <ec:set result = @fieldValue.asDate.formatDate(yyyy-mm-dd hh:nn:ss.zzz).with(CONVERT@chr(40)DATETIME, '|', 120@chr(41)).alt(NULL)/>
+            </ec:case>
+            <ec:case if=@provider.is(MySQL)>
+                <ec:set result = @fieldValue.asDate.formatDate(yyyy-mm-dd hh:nn:ss.zzz).with('|').alt(NULL)/>
+            </ec:case>
+            <ec:case if = @provider.isnot(SQL Server|MySQL)>@exception(Invalid Database Provider)</ec:case>
+            <ec:case if = @nv(@provider.nullifblank)>@exception(No provider supplied as argument in tParam.as(date@chr(124)))</ec:case>
+        </ec:case>
+
+        @return(@result.trim())
+    </ec:function>
+</ec:type>

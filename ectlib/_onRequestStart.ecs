@@ -1,0 +1,127 @@
+<ec:case if=@svr[request/application].is(favicon.ico)>@stop</ec:case>
+<ec:case if=@svr[request/application].is(launchpad)><ec:module launchpad/>@stop</ec:case>
+
+<ec:var offlineMode=0 rem="if website needs to be offline for maintenance, set to 1, otherwise 0. Allows index files, console, and status page to remain online with warnings." global/>
+<ec:module page_websiteOffline if=@all(@offlineMode|@svr[request/application].isnot(console|index-css|index-css-dark|index-js|status))/>
+
+<ec:var testServer=0 protocol="https://" rem="set to 1 to log all requests on development environment" global/>
+<ec:set testServer=1 protocol="http://" if=@host.is(asiradevjax)/>
+
+<ec:var requestStartTime=@now global/>
+<ec:var requestTimeStamp="@requestStartTime.formatDate(yyyy-mm-dd_hh.mm.ss.zzz)x@random(9999)" global/>
+
+<ec:var ipAddress=@svr[request/customHeaders/x-forwarded-for].alt(@svr[reqest/customHeaders/cf-connecting-ip]).alt(@svr[request/remoteAddr]) global/>
+<ec:var ipv4=@null global/><ec:ipv4 if=@ipAddress.contains(.)>@ipAddress</ec:ipv4>
+<ec:var ipv6=@null global/><ec:ipv6 if=@ipAddress.contains(:)>@ipAddress</ec:ipv6>
+<ec:case if=@all(@nv(@ipv4)|@nv(@ipv6))><ec:ipv4>127.0.0.1</ec:ipv4></ec:case>
+
+
+
+<ec:var saltKey="@serverSettings[globalVariables/sys/saltKey]" global/>
+<ec:var logDirectory="@serverSettings[globalVariables/sys/logfiles]\ect\@now.formatDate(yyyy-mm-dd)" global/>
+<ec:var uploadDirectory="@serverSettings[globalVariables/sys/uploads]" global/>
+<ec:var uploadDirectoryECT="@serverSettings[globalVariables/sys/uploads]\ect" global/>
+<ec:var fileStore="D:\JaxnetDev\" global rem="default for responses on live server"/>
+<ec:set fileStore="Z:\ecsite\ecroot\" if=@svr[request/host].is(asiradevjax) rem="for responses to test server"/>
+@if(@not(@directoryExists(@logDirecotry))|@makeDir(@logDirectory))
+@if(@not(@directoryExists(@uploadDirectoryECT))|@makeDir(@uploadDirectoryECT))
+
+
+
+<ec:var LTID=@svr[param/LTID].nullifblank global/>
+<ec:var XID=@svr[param/XID].nullifblank global/>
+<ec:var xLTID = @svr[param/xLTID].nullifblank global/>
+<ec:var xXID = @svr[param/xXID].nullifblank global/>
+<ec:var LEID global rem="linkedEntityID"/>
+<ec:var xLEID global rem="linkedEntityID from referring record"/>
+
+<ec:var app=@svr[request/application] global/>
+<ec:set app="home" if=@app.is(@null|)/>
+<ec:var rootApp = @app.copy(1|@app.charIndex(/|2).add(-1)) global rem="gets the root application before additional path.. e.g. /store/tee-shirts becomes /store"/>
+<ec:var potocol=@svr[request/customHeaders/x-forwarded-proto].with(|://).alt(@protocol) global/>
+<ec:var host=@svr[request/host] referer=@svr[param/referer] global/>
+<ec:var canonical='@protocol()@host@svr[request/url]@svr[request/query].nullifblank.with(?|)' global/>
+
+<ec:var perpage=@min(999|@svr[param/perpage].alt(25)) global rem="var page declared in lib_pageFunctions"/>
+<ec:var search=@svr[param/search].nullifblank global/>
+
+<ec:var act=@svr[param/act].nullifblank global/>
+<ec:var cmd=@svr[param/cmd] global/>
+<ec:var opt=@svr[param/opt].nullifblank global/>
+<ec:var ecid=@svr[param/ecid].nullifblank global/>
+<ec:var errMsg=@null global/>
+
+<ec:var returnto=@svr[param/returnto].nullifblank global/>
+<ec:var websiteID=0 siteDescription=@null cookieTag="clientCookie" global/>
+<ec:var connection="ectdb" global/>
+
+
+
+<ec:data dt_websites connection=@connection>
+    SELECT websiteID, parentWebsiteID, websiteURL, cookieTag, description
+    FROM vw_website_idents
+
+    /*
+    1 - jaxnet.dev
+    35 - fullshift
+    */
+</ec:data>
+
+<ec:loop data=@dt_websites>
+    <ec:set websiteID=@rs[parentWebsiteID].alt(@rs[websiteID]).asInt.alt(0) siteDescription=@rs[description] cookieTag=@rs[cookieTag] if=@host.is(@rs[websiteURL])/>
+</ec:loop>
+<ec:var clientCookie=@svr[request/cookiefields/@cookieTag].nullifblank global/>
+
+
+
+<ec:var logRequest=@xLogRequest.asReference global/>
+<ec:function xLogRequest>
+    <ec:var filename="@logDirectory\@requestTimeStamp()_request.txt"/>
+    @svr.XML.saveToFile(@fileName)
+</ec:function>
+
+
+<ec:var logError = @xLogError.asReference global/>
+<ec:function xLogError>
+    <ec:param caption errMsg actionID/>
+    <ec:logRequest/>
+    <ec:var fileName="@logDirectory\@requestTimeStamp()_error.txt"/>
+    <ec:set errMsg = "@error.nullifblank.with(| -) @caption @errMsg.nullifblank.with(- |)"/>
+    @errMsg.saveToFile(@fileName)
+    @logRequest()
+
+    <ec:case if=@iv(@actionID)>
+        <ec:data procedure="pr_actionLog_new" connection=@connection>
+            <userID>@if(@iv(@user.userID)|@user.userID.asInt)</userID>
+            <sessionID>@if(@iv(@user.sessionID)|@user.sessionID.asInt)</sessionID>
+            <actionID>@actionID.alt(47).asInt</actionID>
+            <memo>@errMsg</memo>
+            <requestFile>@requestTimeStamp()</requestFile>
+            <LTID>@LTID.asInt</LTID>
+            <XID>@XID.asInt</XID>
+            <url>@canonical</url>
+            <ipv4>@ipv4.nullifblank</ipv4>
+            <ipv6>@ipv6.nullifblank</ipv6>
+        </ec:data>
+    </ec:case>
+
+    <ec:case if=@iv(@aclProfile.asReference)>
+        @aclProfile.errorScore.setValue(@aclProfile.errorScore.add(1))
+        @aclProfile.storeACLScore()
+    </ec:case>
+</ec:function>
+
+
+<ec:var comment=@xComment.asReference global rem="rem = remark; use ec:comment or @comment for inline comments"/>
+<ec:function xComment/>
+
+<ec:var media=@xMedia.asReference global rem="for use in css styling"/>
+<ec:function media>
+    @return(@chr(64)media)
+</ec:function>
+
+
+
+@if(@all(@app.isnot(index-css|index-css-dark|index-js)|@testServer.is(1))|@logRequest|)
+<ec:module lib_requestProtection if=@app.isnot(index-css|index-js)/>
+<ec:module _dir/>

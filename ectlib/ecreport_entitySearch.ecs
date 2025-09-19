@@ -1,0 +1,76 @@
+@share
+@pageTitle.setValue(Console Entity Search)
+
+
+<ec:style>
+    #resultsContainer {
+        display:flex; flex-wrap:wrap; justify-content:flex-start; width:100%; gap:14px; padding: 9px 5px;
+
+        & .shortcut {
+            max-width:284px; margin: initial;
+            
+            & span {
+                display:inline-block;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+                max-width:calc(98% - 24px);
+                vertical-align: bottom;
+            }
+        }
+    }
+</ec:style>
+
+
+<ec:object obj_reportSearch renderAfterPageLoad type="tComponent">
+    <ec:data dt_searchResults connection=@connection>
+        <ec:case if=@iv(@search)>
+            SELECT t1.LTID, t1.XID, t1.description, t1.iconURL
+            FROM dbo.tb_searchedItems (@sqlstr(@search), @user.userID, @user.employeeID, @websiteID) t1 
+            WHERE 1=1
+        </ec:case>
+
+        <ec:case if=@else>                        
+            SELECT LTID, XID, description, iconURL, maxDate, ROW_NUMBER() OVER (ORDER BY maxDate DESC, LTID ASC, XID ASC) AS occurNum FROM (
+                SELECT AL.LTID, AL.XID, dbo.fn_entityName(LTID, XID) AS description, dbo.fn_entityImage(LE.linkedEntityID, 1) AS iconURL, MAX(AL.actionDate) AS maxDate
+                FROM vw_actionLog AL WITH (NOLOCK)
+                LEFT JOIN linkedEntities LE ON AL.LTID = LE.toLTID AND AL.XID = LE.toXID
+                
+                WHERE AL.actionID IN (1,2) AND AL.actionDate > (GETDATE() - 1) AND LE.websiteID = @websiteID.asInt.alt(0) AND AL.userID = @user.userID.asInt.alt(0) AND (
+                    (NOT(AL.LTID = @LTID.asInt.alt(0) AND <ec:case if=@iv(@XID)>AL.XID = @XID.asInt.alt(0)</ec:case><ec:case if=@nv(@XID)>AL.XID IS NULL</ec:case>)) OR 
+                    (AL.LTID = @LTID.asInt.alt(0) AND (NOT(<ec:case if=@iv(@XID)>AL.XID = @XID.asInt.alt(0)</ec:case><ec:case if=@nv(@XID)>AL.XID IS NULL</ec:case>) <ec:case if=@iv(@XID)>OR AL.XID IS NULL</ec:case>))
+                )
+                GROUP BY LTID, XID, linkedEntityID
+            ) aTable WHERE dbo.fn_accessLevel(@user.userID.asInt.alt(NULL), @user.employeeID.asInt.alt(NULL), LTID, XID) >= 1
+        </ec:case>
+    </ec:data>
+
+
+    <ec:var aTitle = "Recently Viewed"/>
+    <ec:set aTitle = "Results for @chr(34)@upperFirst(@search)@chr(34)" if=@iv(@search)/>
+
+    <ec:titlebox title=@aTitle>
+        <div id="resultsContainer">
+            <ec:loop data=@dt_searchResults>
+                <div class="shortcut shadowOnHover anchorify" href="console?ltid=@rs[LTID]&xid=@rs[XID]">
+                    <img src="@rs[iconURL]" alt="@rs[LTID]-img" style="height:24px;"/>
+                    <span>@rs[description]</span>
+                </div>
+            </ec:loop>
+        </div>
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    @obj_reportSearch
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

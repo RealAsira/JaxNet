@@ -1,0 +1,570 @@
+@share
+
+<ec:var ffolderName = @svr[param/ffolderName].nullifblank/>
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+<ec:var ftableID = @svr[param/ftableID].nullifblank/>
+<ec:var fincludeSubDir = @svr[param/fincludeSubDir].alt(0)/>
+
+<ec:case if=@iv(@XID) rem="check to see if the phyiscal directory for this fileFolder actually exists. If it doesn't, then create it">
+    <ec:data dt_fileFolderPath connection=@connection>
+        SELECT dbo.fn_fileFolderPath_fromID(@XID.asInt) AS fileFolderPath
+    </ec:data>
+    
+    <ec:var fileFolderPath = @dt_fileFolderPath[1/fileFolderPath]/>
+    <ec:case if=@fileFolderPath.left(1).is(\)><ec:set fileFolderpath = @fileFolderPath.right(@calc(@fileFolderPath.length - 1))/></ec:case>
+    <ec:var folderDirectory="@fileStore\files\@fileFolderPath"/>
+    @if(@not(@directoryExists(@folderDirectory))|@makeDir(@folderDirectory)|)
+</ec:case>
+
+
+
+
+<ec:data dt_originTableSelect connection=@connection>
+    SELECT linkedTableID = 0, folderType = '=No Root='
+    UNION
+    SELECT linkedTableID, CONCAT(description, ' (', tableTag, ')') AS folderType
+    FROM linkedTables
+    WHERE 1=1
+    AND linkedTableID NOT IN(7, 11, 12, 13)
+    ORDER BY folderType
+</ec:data>
+
+
+
+
+
+<ec:style>
+    :root {--leftFolderMenuExplorerWidth: 156px;}
+
+    label[for="select_ftableID"], #select_ftableID {
+        display:inline-block;
+    
+        @media screen and (min-width:1040px){& {display:none;}}
+    }
+    
+    #leftFolderExplorerMenu{
+        display:none;
+        width:var(--leftFolderMenuExplorerWidth);
+        min-height:100px;
+    
+        & ul span li {background-color:inherit;}
+    }
+    
+    #folderExplorerContent{
+        display:inline-block;
+        width:calc(100% - 24px);
+        margin:0 auto;
+        min-height:100px;
+        color:white;
+    }
+    
+    @media screen and (min-width:1040px){
+        #leftFolderExplorerMenu {display:inline-block;}
+        #folderExplorerContent {width:calc(100% - var(--leftFolderMenuExplorerWidth));}
+    }
+    
+    
+    
+    #folderFilesListContainer:hover, #fileFoldersListContainer:hover {cursor:pointer; user-select: none;}
+    
+    #folderFilesList, #fileFoldersList {
+        overflow:hidden;
+        &:hover {cursor:default;}
+    }
+    
+    .fileFolderListItem {color:white;}
+    
+    .itemsTable{
+        &, & tr {width:100%; min-width:235px;}
+    
+        & tr {
+            & td:nth-child(n+2){text-align:right; width:82px;}
+            & td:nth-child(3){width:82px;}
+        }
+    }
+</ec:style>
+
+
+
+
+
+<ec:object obj_fileFolders type="tComponent">
+    <ec:case if=@act.is(dragDrop)>
+        <ec:var fromLTID = @svr[param/fromLTID].nullifblank/>
+        <ec:var fromXID = @svr[param/fromLTID].nullifblank/>
+        <ec:var toLTID = @svr[param/toLTID].nullifblank/>
+        <ec:var toXID = @svr[param/toLTID].nullifblank/>
+
+        DRAG DROP: 
+        <ec:case if=@fromLTID.is(12) rem="a folder">
+            <ec:case if=@toLTID.is(12) rem="to a folder">
+                transfer a folder to another folder
+                <!-- use renameFile expression to move the folder to the other folder.  make sure to reflect the change in the database too -->
+            </ec:case>
+            <ec:case if=@toLTID.is(100) rem="to a linked table dir">
+                transfer a folder to a linked table directory
+                <!-- use renameFIle expression to move the folder to the lt directory. make sure to reflect the change in the database too -->
+            </ec:case>
+        </ec:case>
+        <ec:case if=@fromLTID.is(13) rem="a file">
+            <ec:case if=@toLTID.is(12) rem="to a folder">
+                transfer a file to a folder
+                <!-- use copyFile to copy the file to the other folder, then delete the original -->
+            </ec:case>
+            <ec:case if=@toLTID.is(100) rem="to a linked table dir">
+                <!-- transfer a file to a linked table directory. this is not allowed. -->
+                @notification(Files cannot be stored directly in a Linked Table Directory. This operation has been canceled.)
+            </ec:case>
+        </ec:case>
+        
+        <br/>
+        fromLTID: @fromLTID<br/>
+        fromXID: @fromXID<br/>
+        toLTID: @toLTID<br/>
+        toXID: @toXID<br/>
+    </ec:case>
+
+
+    <ec:case if=@act.is(deleteFolder)>
+        <ec:data dt_folderPath connection=@connection>
+            SELECT dbo.fn_fileFolderPath_fromID(@svr[param/fileFolderID].asInt.alt(0)) AS folderPath
+        </ec:data>
+        @delete_folder(@fileStore()\files@dt_folderPath[1/folderPath])
+
+        <ec:data xx procedure="pr_fileFolder_delete" connection=@connection>
+            <fileFolderID>@svr[param/fileFolderID].asInt.alt(0)</fileFolderID>
+        </ec:data>
+    </ec:case>
+
+
+
+    <ec:case if=@act.is(deleteFile)>
+        <ec:data dt_filePath connection=@connection>
+            SELECT CONCAT(dbo.fn_fileFolderPath_fromID(fileFolderID), fileName) AS filePath
+            FROM files
+            WHERE fileID = @svr[param/fileID].asInt.alt(0)
+        </ec:data>
+        @deleteFile(@fileStore()\files@dt_filePath[1/filePath])
+
+        <ec:data xx procedure="pr_file_delete" connection=@connection>
+            <fileID>@svr[param/fileID].asInt.alt(0)</fileID>
+        </ec:data>
+    </ec:case>
+
+
+
+    <ec:data dt_folderExplorer connection=@connection>
+        SELECT fl.fileFolderID, fl.folderName, fl.date, COALESCE(dbo.fn_fileFolder_oldestAncestor(fileFolderID), parentFileFolderID, fileFolderID) oldestAncestor, fl.originLTID, linkedTables.tableTag
+        FROM fileFolders AS fl
+        LEFT JOIN linkedTables ON fl.originLTID = linkedTables.linkedTableID
+        WHERE 1=1
+        <ec:case if=@iv(@XID)>AND fl.parentFileFolderID = @XID.asInt</ec:case>
+        <ec:case if=@all(@nv(@XID)|@nv(@ffolderName)|@nv(@fdate_start)|@nv(@fdate_end))>AND fl.parentFileFolderID IS NULL</ec:case>
+
+        @if(@iv(@ffolderName)|AND fl.folderName LIKE @sqlstr(%@ffolderName%))
+        @if(@iv(@fdate_start)|AND CAST(fl.date AS DATE) @chr(62)= @sqlstr(@fdate_start.formatdate(yyyy-mm-dd)))
+        @if(@iv(@fdate_end)|AND CAST(fl.date AS DATE) @chr(60)= @sqlstr(@fdate_end.formatdate(yyyy-mm-dd)))
+        
+        @if(@fincludeSubDir.is(true|1)|) /*query returns sub-dir items as well if it isn't further limited, therefore this doesn't need to do anything else*/
+        @if(@fincludeSubDir.is(false|0)|AND (fl.parentFileFolderID = @XID.asInt.alt(0) @if(@ftableID.asInt.alt(0).is(0)|OR fl.originLTID IS NULL) @if(@ftableID.asInt.alt(0).isnot(0)|OR fl.originLTID = @ftableID.asInt)))
+
+        <ec:case if=@iv(@ftableID)>
+            <ec:case if=@all(@nv(@ffolderName)|@nv(@fdate_start)|@nv(@fdate_end))>@if(@ftableID.is(0)|AND fl.originLTID IS NULL)</ec:case>
+            @if(@ftableID.isnot(0)|AND fl.originLTID = @ftableID.asInt)
+        </ec:case>
+
+        /*ORDER BY fl.originLTID, fl.date, fl.folderName ASC*/
+        ORDER BY (CASE
+            WHEN ISNULL(fl.originLTID, 0) = 0 THEN 1
+            ELSE 0 END
+        ), fl.originLTID, fl.date, fl.folderName ASC
+    </ec:data>
+    
+    <ec:data dt_folderTableSelect connection=@connection>
+        SELECT linkedTableID = 0, description = '=No Root='
+        UNION
+        SELECT linkedTableID, CONCAT(description, 's') AS description
+        FROM linkedTables
+        WHERE 1=1
+        AND linkedTableID NOT IN(7, 11, 12, 13)
+        ORDER BY description
+    </ec:data>
+
+    <ec:data dt_folderFilesList connection=@connection>
+        SELECT fileID, fileName, date
+        FROM files
+        WHERE 1=1
+        @if(@iv(@XID)|AND fileFolderID = @XID.asInt|AND 1=2)
+        ORDER BY date, fileName ASC
+    </ec:data>
+
+
+
+    <ec:titlebox title="File Explorer" style="background-color:#202020;" dark contentStyle="padding:0;">
+        <ec:xBreadCrumbs fileFolderID=@XID width="100%" style="margin-top:13px; margin-bottom:0; min-height:26px; background-color:#2C2C2C; border-color:#2C2C2C;"/><br/>
+        <div style="display:flex; flex-wrap:wrap; border-radius:0px 0px 5px 5px; min-height:460px;">
+            <div id="leftFolderExplorerMenu">
+                <ul style="padding:0px 10% 13px 10%; list-style-type:none;">
+                    <span @if(@nv(@ftableID)|style="background-color:#333333;")><li class="anchorify" href="/console?ltid=12&xLTID=@LTID&xXID=@XID&fincludeSubDir=@fincludeSubDir.alt(1)" onclick="fileFolderNavigate(this);">Home <ec:icon title="" icon="home" size="sml" direction="left"/></li></span>
+                    <hr style="margin:5px 0px;"/>
+                    <ec:loop data=@dt_folderTableSelect>
+                        <span @if(@rs[linkedTableID].alt(0).is(@ftableID)|style="background-color:#333333;")><li class="anchorify dragTarget" toLTID="100" toXID="@rs[linkedTableID]" href="/console?ltid=12&ftableID=@rs[linkedTableID]&fincludeSubDir=@fincludeSubDir.alt(1)" onclick="fileFolderNavigate(this);">@rs[description].left(11)@if(@rs[description].length.isgreaterthan(11)|...) <ec:icon title="Navigate to @rs[description]" icon="folder-closed" size="sml" color="#ffd91a" direction="left" style="transform:translateY(3px);"/></li></span>
+                    </ec:loop>
+                </ul>
+            </div>
+
+
+            <div id="folderExplorerContent">
+                <div id="fileFoldersListContainer" style="display:inline-block;" onclick="toggleDropdown('fileFoldersList', this);">
+                    <span>Folders </span><b class="caret"></b><span>&nbsp;&nbsp;&nbsp;</span>
+                </div>
+                <a href="javascript:void(0)" rel="nofollow" style="display:inline-block;" class="ajaxClick" ecid="obj_newFolder_dialog" parentFolderID="@XID" originLTID="@ftableID"><ec:icon title="Create a new folder" icon="plus" size="xsml"/></a>
+                <div id="fileFoldersList" style="height: max-content;">
+                    <table class="itemsTable">
+                        <ec:loop data=@dt_folderExplorer>
+                            <tr>
+                                <td class="draggable dragTarget" fromLTID="12" fromXID="@rs[fileFolderID]" toLTID="12" toXID="@rs[fileFolderID]" ecid="obj_fileFolders"><span class="fileFolderListItem anchorify" href="/console?ltid=12&xid=@rs[fileFolderID]&xLTID=@LTID&xXID=@XID&ftableID=@rs[originLTID].alt(0)&fincludeSubDir=@fincludeSubDir.alt(1)" onclick="fileFolderNavigate(this);">@if(@all(@nv(@ftableID)|@nv(@XID))|@rs[tableTag]/|)@rs[folderName] <ec:icon title="" icon="folder-closed" size="sml" color="#ffd91a" direction="left" style="transform:translateY(3px);"/></span></td>
+                                <td>@rs[date].formatdate(mm.dd.yyyy)</td>
+                                <td>
+                                    <a href="javascript:void(0)" rel="nofollow" style="display:inline-block;" class="ajaxClick" ecid="obj_fileFolders" fileFolderID="@rs[fileFolderID]" act="deleteFolder" confirm="Are you sure you want to delete this folder, all sub-folders, and all files contained? This action cannot be undone."><ec:icon title="Delete Folder" icon="remove" size="xsml"/></a>
+                                    <a href="javascript:void(0)" rel="nofollow" style="display:inline-block;" class="ajaxClick" ecid="obj_editFolder_dialog" fileFolderID="@rs[fileFolderID]"><ec:icon title="Rename folder" icon="pencil" size="xsml"/></a>
+                                    <ec:downloadLink style="display:inline-block;" fileFolderID="@rs[fileFolderID]"><ec:icon title="Download Folder" icon="save" size="sml" direction="right"/></ec:downloadLink> 
+                                </td>
+                            </tr>
+                        </ec:loop>
+                    </table>
+                </div>
+
+                <br/><hr desktop style="margin:5px 15px 5px 0px;"/><hr mobile style="margin:5px 0px;"/><br/>
+
+                <ec:case if=@iv(@XID)>
+                    <div id="folderFilesListContainer" style="display:inline-block;" onclick="toggleDropdown('folderFilesList', this);">
+                        <span>Files </span><b class="caret"></b><span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+                    </div>
+                    <a href="javascript:void(0)" rel="nofollow" style="display:inline-block;" class="ajaxClick" ecid="obj_uploadFile_dialog" parentFolderID="@XID"><ec:icon title="Upload file(s)" icon="open" size="sml"/></a>
+                    <div id="folderFilesList" style="height: max-content;">
+                        <table class="itemsTable">
+                            <ec:loop data=@dt_folderFilesList>
+                                <tr>
+                                    <td class="draggable" fromLTID="13" fromXID=@rs[fileID] ecid="obj_fileFolders">
+                                        <ec:downloadLink class="fileFolderListItem" fileID=@rs[fileID] mode="view">@rs[fileName].alt(here) <ec:icon title="" icon="file" size="sml" color="#f0fffd" direction="left" style="transform:translateY(3px);"/></ec:downloadLink>
+                                    </td>
+                                    <td>@rs[date].formatdate(mm.dd.yyyy)</td>
+                                    <td>
+                                        <a href="javascript:void(0)" rel="nofollow" style="display:inline-block;" class="ajaxClick" ecid="obj_fileFolders" fileID=@rs[fileID] act="deleteFile" confirm="Are you sure you want to delete this file? This action cannot be undone."><ec:icon title="Delete File" icon="remove" size="xsml" direction="right"/></a>
+                                        <a href="javascript:void(0)" rel="nofollow" style="display:inline-block;" class="ajaxClick" ecid="obj_editFile_dialog" fileID=@rs[fileID]><ec:icon title="Rename File" icon="pencil" size="xsml" direction="right"/></a>
+                                        <ec:downloadLink style="display:inline-block;" fileID=@rs[fileID]><ec:icon title="Download File" icon="save" size="sml" direction="right"/></ec:downloadLink>    
+                                    </td>
+                                </tr>
+                            </ec:loop>
+                        </table>
+                    </div>
+                </ec:case>
+            </div>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:function xBreadCrumbs>
+    <ec:param fileFolderID=0 width noMargin style/>
+    <ec:data xx connection=@connection>
+        SELECT fl.fileFolderID, fl.originLTID, linkedTables.tableTag, dbo.fn_fileFolderTag(fl.fileFolderID, 0) AS description
+        FROM fileFolders AS fl
+        LEFT JOIN linkedTables ON fl.originLTID = linkedTables.linkedTableID
+        INNER JOIN dbo.tb_fileFolderAncestors(@fileFolderID.asInt) ON fl.fileFolderID = dbo.tb_fileFolderAncestors.fileFolderID
+    </ec:data>
+
+    <ec:data dt_originTag connection=@connection>
+        SELECT tableTag
+        FROM linkedTables
+        WHERE 1=1
+        @if(@iv(@ftableID)|AND linkedTableID = @ftableID.asInt)
+    </ec:data>
+
+    <ul class="breadcrumb collapseBreadCrumbLI @if(@noMargin.alt(0)|noMarginBreadcrumb)" @width.with(width="|") @style.with(style="|")>
+        <ec:case if=@iv(@xx[1/tableTag].nullifblank)><li><a class="dragTarget" toLTID="100" toXID="@xx[1/originLTID].alt(@ftableID)" onclick="addLoader('obj_fileFolders', '#obj_fileFolders');" href="/console?ltid=@LTID&xid=&ffolderName=@ffolderName&fdate_start=@fdate_start&fdate_end=@fdate_end&ftableID=@xx[1/originLTID].alt(@ftableID)" rel="nofollow">@xx[1/tableTag]@chr(92)</a></li></ec:case>
+        <ec:case if=@all(@nv(@xx[1/tableTag].nullifblank)|@iv(@ftableID))><li style="color: var(--link-color);"><strong>@dt_originTag[1/tableTag]</strong></li></ec:case>
+        <ec:loop data=@xx DESC>
+            <ec:case if=@rs[fileFolderID].isnot(@fileFolderID)>
+                <li><a class="dragTarget" toLTID="12" toXID="@rs[fileFolderID]" onclick="addLoader('obj_fileFolders', '#obj_fileFolders');" href="/console?ltid=@LTID&xid=@rs[fileFolderID]&xLTID=@LTID&fincludeSubDir=@fincludeSubDir.alt(1)" rel="nofollow">@rs[description]<strong>@chr(92)</strong></a></li>      
+            </ec:case>
+            <ec:case if=@else>
+                <li style="color: var(--link-color-hover);"><strong>@rs[description]@chr(92)</strong></li>      
+            </ec:case>
+        </ec:loop>
+    </ul>
+
+    <ec:include if=@xx.count.isGreaterThan(1) group="headerInclude">
+        <script type="application/ld+json">
+            {
+                "@chr(64)context": "@protocol()@host@svr[request/url]",
+                "@chr(64)type": "BreadcrumbList",
+                "itemListElement": [          
+                    <ec:loop data=@xx DESC>
+                        {
+                            "@chr(64)type": "ListItem",
+                            "position": @index(),
+                            "name": "@rs[description]",
+                            "item": "@protocol()@host()@svr[request/url]?ltid=@LTID&xid=@rs[fileFolderID]&xLTID=@LTID&fincludeSubDir=@fincludeSubDir.alt(1)"
+                        }@if(@not(@rs.isFirst)|,|)
+                    </ec:loop>
+                ]
+            }
+        </script>
+    </ec:include>
+</ec:function>
+
+
+
+
+
+<ec:function delete_folder>
+  <ec:param delPath required/>
+  <ec:loop data = @fileList(@delPath)>
+    <ec:case if = @rs[attributes].isblank() rem="is a file">
+      @deleteFile(@rs[fullPath])
+    </ec:case>
+    <ec:case if = @rs[attributes].is(Directory) rem="is a sub-dir">
+      @delete_folder(@rs[path])
+    </ec:case>
+    @removeDir(@delPath)
+  </ec:loop>
+</ec:function>
+
+
+
+
+
+<ec:object obj_newFolder_dialog title="New Folder" type="tDialogForm">
+    <ec:var folderName = @svr[param/folderName].nullifblank/>
+    <ec:var folderPath = @svr[param/folderPath].nullifblank/>
+    @comment(originLTID assignment methods differ because different data is needed depending if an XID (parentFolderID) is present or not)
+    <ec:var originLTID = @svr[param/originLTID].alt(@LTID) if=@iv(@XID)/>
+    <ec:var originLTID = @svr[param/originLTID].nullifblank if=@nv(@XID)/>
+    
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@folderName)|@any(@iv(@originLTID)|@iv(@folderPath)))>  
+            <ec:data xx procedure="pr_fileFolder_new" connection=@connection>
+                <folderName>@folderName.replace(/|).replace(\|)</folderName>
+                <folderPath>@folderPath</folderPath>
+                <originLTID>@originLTID.alt(@LTID).asInt</originLTID>
+                <parentFileFolderID>@XID.asInt</parentFileFolderID>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newFileFolderID = @xx[newFileFolderID].nullifblank/>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+            <ec:case if=@iv(@errMsg)>
+                @logError(error|obj_newFolder_dialog unknown SQL error|101)
+            </ec:case>
+            
+            <ec:case if=@all(@iv(@newFileFolderID)|@nv(@errMsg)) rem="fileFolder was successfully created successfully">
+                <ec:data dt_fileFolderPath connection=@connection>
+                    SELECT dbo.fn_fileFolderPath_fromID(@newFileFolderID.asInt) AS fileFolderPath
+                </ec:data>
+                <ec:var fileFolderPath = @dt_fileFolderPath[1/fileFolderPath]/>
+                <ec:var folderDirectory="@fileStore\files\@fileFolderPath"/>
+                @if(@not(@directoryExists(@folderDirectory))|@makeDir(@folderDirectory)|)
+                
+                @logAction(2|@LTID|@newFileFolderID)
+                @obj_fileFolders.refresh()
+                @close()
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg="A name and parent folder (or folder path) are required for the folder"/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Folder Name" id="folderName" name="folderName" fieldValue=@folderName hintContent="Name the folder to be added to the current directory or the directory specificed under advanced. Do not include the folder path here."/>
+        <ec:case if=@iv(@XID)><br/><br/></ec:case>
+        <ec:case if=@nv(@XID)>
+            <ec:input_select title="Parent Folder" id="originLTID" name="originLTID" options=@dt_originTableSelect fieldValue=@originLTID hintContent="If you choose =No Root= you must input a folder path in the advanced menu"/><br/><br/>
+        </ec:case>
+        
+        <ul class="nav navmenu">
+            <li class="dropdown @if(@iv(@folderPath)|open|)">
+                <a href="javascript:void(0)" rel="nofollow" style="padding:0;" class="dropdown-toggle" onclick="toggleSubMenu(this);">Advanced <b class="caret"></b></a>
+                <ul class="dropdown-menu navmenu-nav">
+                    <li style="padding-left:15px;">
+                        <ec:input_text title="Folder Path" id="folderPath" name="folderPath" fieldValue=@folderPath placeholder="/path/goes/here/" hintContent="It is recommended to NOT use this feature. File and folder paths are automatically generated and are stored as sub-folders. This option overrides this behavior and may produce issues."/>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_editFolder_dialog title="Edit Document" type="tDialogForm">
+    <ec:var fileFolderID = @svr[param/fileFolderID].nullifblank/>
+    <ec:var folderName = @svr[param/folderName].replace(\|).replace(/|).nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@folderName)>
+            <ec:data dt_folderPath connection=@connection>
+                SELECT dbo.fn_fileFolderPath_fromID(@fileFolderID.asInt) AS folderPath
+            </ec:data>
+
+            <ec:var folderPath = "@fileStore()\files@dt_folderPath[1/folderPath]" rem="use fileFolderID to get OLD file path"/>
+            <ec:case if=@not(@directoryExists(@folderPath)) rem="check if old path exists. if not, error (should exist already)">
+                <ec:errMsg>
+                    The folder being renamed does not exist in the physical directory. Please contact a website technician.
+                </ec:errMsg>
+                @logError(Non-existant Folder Error|obj_editFolder_dialog. The folder being renamed does not exist in the physical directory. Culprit folder: @folderPath @chr(124) SQL fileFolderID: @fileFolderID|79)
+            </ec:case>
+
+            <ec:var newPath = @folderPath/>
+            <ec:set newPath = @folderPath.left(@calc(@folderPath.length - 1))  if=@folderPath.right(1).is(\)/>
+            <ec:set newPath = "@newPath.copy(0|@charIndexRight(@newPath|\).add(-1))@folderName()\"/>
+            <ec:case if=@directoryExists(@newPath) rem="check if path, using new name, exists. if yes, error (shouldn't exist yet)">
+                <ec:errMsg>
+                    The new folder name for @folderPath is already reserved. Reserved name: @folderName
+                </ec:errMsg>    
+                @logError(Reservered Folder Name Error|obj_editFolder_dialog. The new folder name for @folderPath is already reserved. Reserved name: @folderName @chr(124) SQL fileFolderID: @fileFolderID|409)
+            </ec:case>
+
+            <ec:case if = @all(@directoryExists(@folderPath)|@not(@directoryExists(@newPath))) rem="if old path exists and new path doesn't: rename old path">
+                @renameFile(@folderPath|@newPath)
+                <ec:data xx procedure="pr_fileFolder_edit" connection=@connection>
+                    <fileFolderID>@fileFolderID.asInt</fileFolderID>
+                    <folderName>@folderName.replace(/|).replace(\|)</folderName>
+                </ec:data>
+                
+                @obj_fileFolders.refresh()
+                @close()
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg="A name is required for the folder"/>
+        </ec:case>
+    </ec:case>
+    
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_thisFolder connection=@connection>
+            SELECT folderName
+            FROM fileFolders
+            WHERE fileFolderID = @fileFolderID.asInt
+        </ec:data>
+        
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <input type="hidden" id="fileFolderID" name="fileFolderID" value="@fileFolderID"/>
+        <ec:input_text title="Folder Name" id="folderName" name="folderName" fieldValue=@folderName.alt(@dt_thisFolder[1/folderName]) hintContent="Do not include the folder directory with the folder name"/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_editFile_dialog title="Rename File" type="tDialogForm">
+    <ec:var fileID = @svr[param/fileID]/>
+    <ec:var fileName = @svr[param/fileName].replace(\|).replace(/|).replace(:|).nullifblank/>
+    <ec:var bypassExtensionWarning = @svr[param/bypassExtensionWarning].alt(0)/>
+    
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@fileName)>
+            <ec:data dt_filePath connection=@connection>
+                SELECT CONCAT(dbo.fn_fileFolderPath_fromID(fileFolderID), fileName) AS oldFullPath, dbo.fn_fileFolderPath_fromID(fileFolderID) AS path, fileName AS oldName
+                FROM files
+                WHERE fileID = @fileID.asInt
+            </ec:data>
+            <ec:var oldFullPath = "@fileStore()\files@dt_filePath[1/oldFullPath]" rem="old path"/>
+            <ec:var path = @dt_filePath[1/path]  oldName = @dt_filePath[1/oldName]/>
+            
+            <ec:case if = @not(@fileExists(@oldFullPath)) rem="chek if old path exists. if not, error (should exist already)">
+                <ec:errMsg>
+                    The file being renamed does not exist in the physical directory. Pleaes contact a website technician.
+                </ec:errMsg>
+                @logError(Non-existant File Error|obj_editFile_dialog. The file being renamed does not exist in the physical directory. Culprit file: @filePath @chr(124) SQL fileID: @fileID|79)
+            </ec:case>
+
+            <ec:var newFullPath = "@fileStore()\files@path()@fileName()"/>
+            <ec:case if = @fileExists(@newFullPath) rem="check if path, using new name, exists. if yes, error (shouldn't exist yet)">
+                <ec:errMsg>
+                    The new file name for @oldName() is already reserved. Reserved name: @fileName()
+                </ec:errMsg>
+                @logError(Reserved File Name Error|obj_editFile_dialog. The new file name for @dt_filePath[1/oldFullPath] is already reserved. Reserved name: @fileName @chr(124) SQL fileID: @fileID|409)
+            </ec:case>
+
+            <ec:case if = @all(@fileExists(@oldFullPath)|@not(@fileExists(@newFullPath))) rem="if old path exists and new path doesn't: rename file">
+                <ec:var oldExtension = @oldName.copy(@calc(@charIndexRight(@oldName|.) + 1)|@oldName.length())/>
+                <ec:var newExtension = @fileName.copy(@calc(@charIndexRight(@fileName|.) + 1)|@fileName.length())/>
+
+                <ec:case if=@newExtension.isNot(@oldExtension))>
+                    <ec:set errMsg = "The file name extension has been changed and this may cause the file to become unusable. Are you sure you want to continue?"/>
+                </ec:case>
+
+                <ec:case if=@bypassExtensionWarning.is(1)>
+                    @renameFile(@oldFullPath|@newFullPath)
+                    <ec:data xx procedure="pr_file_edit" connection=@connection>
+                        <fileID>@fileID.asInt</fileID>
+                        <fileName>@fileName</fileName>
+                    </ec:data>
+                    
+                    @obj_fileFolders.refresh()
+                    @close()
+                </ec:case>
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg="A name is required for the file"/>
+            @logError(File Requires Name|@errMsg|75)
+        </ec:case>
+    </ec:case>
+    
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_thisFile connection=@connection>
+            SELECT fileName
+            FROM files
+            WHERE fileID = @fileID.asInt
+        </ec:data>
+    
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <input type="hidden" id="fileID" name="fileID" value="@fileID"/>
+        <ec:input_text title="File Name & Extension" id="fileName" name="fileName" fieldValue=@fileName.alt(@dt_thisFile[1/fileName]) hintContent="Be sure to include file extension. E.g.: example.txt"/>
+        <ec:case if=@errMsg.is(The file name extension has been changed and this may cause the file to become unusable. Are you sure you want to continue?)>
+            <ec:input_checkbox title="Bypass Extension Warning" id="bypassExtensionWarning" name="bypassExtensionWarning" fieldValue=@if(@bypassExtensionWarning.is(true|1)|1)/>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:consoleSearchBox>
+        <ec:input_text title="Folder Name" id="ffolderName" name="ffolderName" fieldValue=@ffolderName/>
+        <ec:input_dateRange title="Date Range" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+        <ec:input_select title="Root Directory" id="ftableID" name="ftableID" options=@dt_originTableSelect fieldValue=@ftableID allowNull hintContent="&#34;=No Root=&#34; to filter for manually defined folder-paths."/>
+        <ec:input_checkbox title="Search in Sub-Directories" id="fincludeSubDir" name="fincludeSubDir" fieldValue=@if(@fincludeSubDir.is(true|1)|1) containerStyle="margin-top:26px;"/><br/><br/>
+    </ec:consoleSearchBox>
+
+    @obj_fileFolders
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

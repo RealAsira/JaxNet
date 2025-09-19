@@ -1,0 +1,424 @@
+@share
+
+<ec:type tACL_Profile>
+  <ec:var ACLRisk previousACLRisk spider CAPTCHAScore errorScore locationScore/>
+  <ec:var requestType/>
+
+
+  <ec:function initialize>
+    <ec:set ACLRisk=0 previousACLRisk=0 spider=0 CAPTCHAScore=0 errorScore=0 locationScore=0/>
+    @if(@iv(@svr[param/ecid].nullifblank)|@requestType.set(ajax)|@requestType.set(regular))
+
+    <ec:set spider=@detectSpider(@svr[request/userAgent]|@ipAddress).alt(0)/>
+    <ec:case if=@spider.isGreaterThan(3)>
+      <ec:case if=@spider.isLessThan(5)>
+        @RESPONSE_STATUSCODE(403)
+        @logError(Denied Spider|Level @spider() spider denied|78)
+      </ec:case>
+
+      <ec:page_banned reason="UserAgent" if=@spider.isGreaterThan(4) rem="level 5 or greater is for banned, malicious bots"/>
+      @stop()
+    </ec:case>
+
+    <ec:var ipValidated=@validateIP(@ipAddress)/>
+    <ec:case if=@ipValidated.is(0) rem="ipaddress is not a valid ip">
+      @page_malformedIP()
+      @stop()
+    </ec:case>
+
+    @aclData()
+    @banCheck()
+    @if(@app.is(letmein)|@letmein)
+
+    <ec:case>
+      <ec:verifyCAPTCHA if=@svr[param/doVerify].asInt.is(1)/>
+      <ec:page_reCAPTCHA if=@app.is(reCAPTCHA)/>
+      <ec:assessRisk if=@else/>
+    </ec:case>
+
+    <ec:case if=@any(@previousACLRisk.isGreatAs(10)|@ACLRisk.isGreatAs(10)|@errorScore.isGreatAs(15)|@locationScore.isGreaterThan(0))>
+      <ec:page_reCAPTCHA if=@websiteID.isnot(0) rem="in _onRequestStart, all allowed websites are looped through and a non-zero value is assigned"/>
+      <ec:page_forbidden if=@else/>
+    </ec:case>
+  </ec:function>
+
+
+
+
+
+  <ec:function aclData>
+    <ec:data xx connection=@connection>
+      SELECT previousACLRisk, CAPTCHAScore, errorScore, locationScore
+      FROM dbo.tb_acl_getData(dbo.fn_IPAddress_toBinary(@ipAddress.alt(0).replace('|'').nullifblank.with('|').alt(NULL).trim))
+    </ec:data>
+
+    @previousACLRisk.setValue(@xx[1/previousACLRisk].alt(0))
+    @CAPTCHAScore.setValue(@xx[1/CAPTCHAScore].alt(0))
+    @errorScore.setValue(@xx[1/errorScore].alt(0))
+    @locationScore.setValue(@xx[1/locationScore].alt(0))
+  </ec:function>
+
+
+
+
+
+  <ec:function assessRisk>
+    <ec:var bypass=0/>
+    <ec:set bypass=1 if=@app.is(console|status) rem="don't bypass beta since that is such a good page to test things like lib_requestProtection from"/>
+    <ec:set bypass=1 if=@host.is(ecCommander) disable rem="ecCommander is not currently used"/>
+    <ec:set bypass=1 if=@app.is(api)/> 
+
+    <ec:case if=@not(@bypass)>
+      <ec:set ACLRisk=@ACLRisk.add(50) if=@app.is(HACKER) rem='TEST PARAM'/>
+      <ec:set ACLRisk=@ACLRisk.add(-5) if=@ipAddress.contains(173.10.24.)/>
+      <ec:set ACLRisk=@ACLRisk.add(-5) if=@ipAddress.contains(192.168.1.)/>
+      <ec:set ACLRisk=@ACLRisk.add(-2) if=@svr[request/userAgent].contains(bingbot)/>
+      <ec:set ACLRisk=@ACLRisk.add(-2) if=@svr[request/from].contains(googlebot)/>
+      <ec:set ACLRisk=@ACLRisk.add(-2) if=@svr[request/userAgent].contains(googlebot)/>
+      <ec:set ACLRisk=@ACLRisk.add(-2) if=@svr[request/userAgent].contains(msnbot)/>
+      <ec:set ACLRisk=@ACLRisk.add(25) if=@svr[request/userAgent].contains(mozlila|moblie|bulid)/>
+      <ec:set ACLRisk=@ACLRisk.add(10) if=@nv(@svr[request/userAgent])/>
+      <ec:set ACLRisk=@ACLRisk.add(-4) if=@iv(@svr[param/ecid])/>
+
+      <ec:loop data=@svr[param]>
+        <ec:case if=@rs.key.isnot(href|class|style|returnto)>
+          <ec:set ACLRisk=@ACLRisk.add(1)  if=@rs.length.isGreaterThan(50)/>
+          <ec:set ACLRisk=@ACLRisk.add(7)  if=@rs.contains(CONCAT@CHR(40))/>
+          <ec:set ACLRisk=@ACLRisk.add(3)  if=@rs.contains(SCHEMA@chr(32))/>
+          <ec:set ACLRisk=@ACLRisk.add(2)  if=@rs.contains(SELECT)/>
+          <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(etc/)/>
+          <ec:set ACLRisk=@ACLRisk.add(1)  if=@rs.contains(@chr(40))/>
+          <ec:set ACLRisk=@ACLRisk.add(1)  if=@rs.contains(&gt;)/>
+        </ec:case>
+
+        <ec:set ACLRisk=@ACLRisk.add(10) if=@rs.contains(etc/passwd)/>
+        <ec:set ACLRisk=@ACLRisk.add(10) if=@rs.contains(RAND@CHR(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(win.ini)/>
+        <ec:set ACLRisk=@ACLRisk.add(7)  if=@rs.contains(COLLATIONS@CHR(32)BY)/>
+        <ec:set ACLRisk=@ACLRisk.add(7)  if=@rs.contains(error_log)/>
+        <ec:set ACLRisk=@ACLRisk.add(6)  if=@rs.contains(alert@CHR(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(6)  if=@rs.contains(fromCharCode@CHR(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(3)  if=@rs.contains(GROUP@CHR(32)BY)/>
+        <ec:set ACLRisk=@ACLRisk.add(3)  if=@rs.contains(CHAR@CHR(40))/>
+
+        <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(ajax@chr(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(16) if=@rs.contains(atob@chr(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(document.write@chr(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(document.writeln@chr(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(16) if=@rs.contains(eval@chr(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(16) if=@rs.contains(fetch@chr(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(innerHTML@chr(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(16) if=@rs.contains(localstorage)/>
+        <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(onclick)/>
+        <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(onerror)/>
+        <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(onload)/>
+        <ec:set ACLRisk=@ACLRisk.add(8)  if=@rs.contains(onMouseOver)/>
+        <ec:set ACLRisk=@ACLRisk.add(16) if=@rs.contains(@chr(60)script)/>
+        <ec:set ACLRisk=@ACLRisk.add(16) if=@rs.contains(sessionStorage)/>
+        <ec:set ACLRisk=@ACLRisk.add(16) if=@rs.contains(window.location@chr(40))/>
+        <ec:set ACLRisk=@ACLRisk.add(16) if=@rs.contains(XMLHttpRequest)/>
+      </ec:loop>
+
+      
+      <ec:var isMalicious=@isMaliciousApp() rem="store return instead of reprocessing"/>
+      
+      @comment(Add risk depending on app)
+      <ec:set ACLRisk=@ACLRisk.add(10) if=@isMalicious()/>
+      <ec:case if=@ACLRisk.isGreaterThan(2)>
+        @violation()
+      </ec:case>
+
+      <ec:case if=@isMalicious()>
+        <ec:output>@RESPONSE_STATUSCODE(410)<h3>Page not found!</h3></ec:output>
+        @stop()
+      </ec:case>
+    </ec:case>
+  </ec:function>
+
+
+
+
+
+  <ec:function isMaliciousApp>
+    <ec:var result=0  rem="1 or 0, true or false"/>
+    <ec:var bypass=0  rem="some apps are bypassed... eg, docs"/>
+
+    <ec:set bypass=1 if=@app.left(4).is(doc/)/>
+    <ec:set bypass=1 if=@app.left(6).is(store/)/>
+
+    <ec:case if=@not(@bypass)>
+      @comment(might use amfeed (like a google feed), cms (content-management-system), portal in the future ... don't block)
+      <ec:set result=1 if=@app.contains(_all_dbs|app|app1|app2|api2|admin|application|backend|backup|bak|bala|bc|bkp|bk|cache|chosen|controller|core|credential|debug|default|demo|dev|enhancecp|extension|files|fresh|_ignition|infos|laravel|mailman|main|manager|new|newsite|OAS|old|old1|old2|old_|oldsite|oldwebsite|php|server|server-status|shell|simpla|site|staging|test|testing|tmp|upload|used|wp|wordpress|v1|v2|var|var/cache|web)/>
+      <ec:set result=1 if=@app.left(6).is(portal|vendor) rem="may use this in the future for vendors, etc... WILL USE DISABLE AT THAT POINT IN TIME"/>
+    </ec:case>
+
+    @return(@result.alt(0))
+  </ec:function>
+
+
+
+
+
+  <ec:function banCheck>
+    <ec:var banStatus=0/>
+
+    <ec:data xx connection=@connection>
+      SELECT blacklistedIP
+      FROM vw_aclSessions
+      WHERE ipAddress = dbo.fn_IPAddress_toBinary(dbo.fn_stripForIP(@ipaddress.alt(0).replace('|'').with('|'))) AND blacklistedIP = 1
+    </ec:data>
+    <ec:set banStatus=1 if=@xx[1/blacklistedIP].alt(0).is(1|true)/>
+    
+    <ec:page_banned reason="IP" if=@banStatus.is(1)/>
+  </ec:function>
+
+
+
+
+
+  <ec:function detectSpider rem="level 1 - good bot, 2 - okay bot, 3 - neutral bot, 4 - block bot, 5 - malicious bot">
+    <ec:param browser ipAddress/>
+
+    <ec:var level=0/>
+    <ec:set level=5   if=@ipAddress.is(87.121.52.123)             rem="bulgarian spider" DISABLE/>
+    <ec:set level=3   if=@browser.contains(addthis.com)           rem="social bookmarking service by oracle"/>
+    <ec:set level=3   if=@browser.contains(ahrefsbot)             rem="SEO platform ... known for overwhelming websites"/>
+    <ec:set level=4   if=@browser.contains(baidu)                 rem="chinese search engine"/>
+    <ec:set level=1   if=@browser.contains(bingbot)               rem="mircosoft search engine"/>
+    <ec:set level=4   if=@browser.contains(bytespider)            rem="east-asian bot that does not respect robots.txt"/>
+    <ec:set level=3   if=@browser.contains(changedetection)       rem="change detection service"/>
+    <ec:set level=3   if=@browser.contains(dnyzbot)               rem="unknown crawler"/>
+    <ec:set level=3   if=@browser.contains(dotbot)                rem="moz.com"/>
+    <ec:set level=4   if=@browser.contains(easouspider)           rem="easou.com (chinese bot)"/>
+    <ec:set level=3   if=@browser.contains(ezooms)                rem="wowrack.com"/>
+    <ec:set level=3   if=@browser.contains(fatbot)                rem="known to attempt to bypass filters"/>
+    <ec:set level=3   if=@browser.contains(genieo)                rem="genieo develops various web crawlers"/>
+    <ec:set level=1   if=@browser.contains(googlebot)             rem="google search engine"/>
+    <ec:set level=3   if=@browser.contains(go-http-client/2.0)    rem="developed by google for open source bots"/>
+    <ec:set level=5   if=@browser.contains(go.mail.ru)            rem="known mail.ru virus"/>
+    <ec:set level=2   if=@browser.contains(hosttracker)           rem="host-tracker.com"/>
+    <ec:set level=3   if=@browser.contains(majestic12)            rem="UK SEO specialist"/>
+    <ec:set level=3   if=@browser.contains(megaindex)             rem="library used for HTTP requests"/>
+    <ec:set level=5   if=@browser.contains(mozlila|bulid|moblie)  rem="known fake of mozilla"/>
+    <ec:set level=2   if=@browser.contains(msnbot)                rem="microsoft network feed"/>
+    <ec:set level=5   if=@browser.contains(niki-bot)              rem="known to be malicious"/>
+    <ec:set level=3   if=@browser.contains(pinterestbot)          rem="pinterest.com"/>
+    <ec:set level=3   if=@browser.contains(proximic)              rem="library used for HTTP requests"/>
+    <ec:set level=3   if=@browser.contains(python-requests)       rem="python web crawler library"/>
+    <ec:set level=5   if=@browser.contains(scrapy)                rem="python web crawler library"/>
+    <ec:set level=5   if=@browser.contains(seekport.com)          rem="seekport.com ... known for overwhelming websites"/>
+    <ec:set level=4   if=@browser.contains(semirush)              rem="not semrush?"/>
+    <ec:set level=3   if=@browser.contains(semrush)               rem="semrush.com"/>
+    <ec:set level=3   if=@browser.contains(shopwiki)              rem="shopwiki.com"/>
+    <ec:set level=1   if=@browser.contains(slurp)                 rem="yahoo search engine"/>
+    <ec:set level=3   if=@browser.contains(synapse)               rem="library used for HTTP requests"/>
+    <ec:set level=3   if=@browser.contains(thefind)               rem="thefind.com"/>
+    <ec:set level=5   if=@browser.contains(voilaBot)              rem="known spambot"/>
+    <ec:set level=4   if=@browser.contains(yandex.com)            rem="russian version of google search engine"/>
+
+    @return(@level)
+  </ec:function>
+
+
+
+
+
+  <ec:function storeACLScore>
+    <ec:data xx procedure="pr_acl_edit" connection=@connection>
+      <ipAddress>@ipAddress</ipAddress>
+      <CAPTCHAScore>@CAPTCHAScore.asInt.alt(0)</CAPTCHAScore>
+      <errorScore>@errorScore.asInt.alt(0)</errorScore>
+      <locationScore>@locationScore.asInt.alt(0)</locationScore>
+      <riskScore>@ACLRisk.asInt.alt(0)</riskScore>
+    </ec:data>
+  </ec:function>
+
+
+
+
+
+  <ec:function letmein>
+    <ec:data xx procedure="pr_acl_edit" connection=@connection>
+      <ipAddress>@ipAddress</ipAddress>
+      <CAPTCHAScore>0</CAPTCHAScore>
+      <errorScore>0</errorScore>
+      <locationScore>-100</locationScore>
+      <riskScore>0</riskScore>
+    </ec:data>
+
+    <ec:output>
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <title>Welcome Back!</title>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="8; url=/home"/>
+        </head>
+        <body>
+          <p>Access granted. You should be allowed for future visits.</p>
+        </body>
+      </html>
+    </ec:output>
+
+    @stop()
+  </ec:function>
+
+
+
+
+
+  <ec:function page_malformedIP>
+    <ec:param caption/>
+    @RESPONSE_STATUSCODE(400)
+    @logError(Malformed IP||75)
+
+    <ec:output>
+      <!DOCTYPE html>
+      <head>
+        <title>Bad Request</title>
+        <meta charset="utf-8">
+      </head>
+      <body>
+        <p>Bad Request.</p>
+      </body>
+    </ec:output>
+
+    @stop()
+  </ec:function>
+
+
+
+
+
+  <ec:function page_banned>
+    <ec:param reason="IP or UserAgent"/>
+    @RESPONSE_STATUSCODE(403)
+    @logError(Banned @reason Access Attempt||78)
+
+    <ec:output>
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <title>Banned From Website</title>
+          <meta charset="UTF-8">
+        </head>
+        <body>
+          <p>You have been banned from the website and this action is currently irreversible.</p>
+        </body>
+      </html>
+    </ec:output>
+
+    @stop()
+  </ec:function>
+
+  
+
+
+
+  <ec:function page_reCAPTCHA>
+    <ec:var requestedURL="http@if(@svr[request/serverport].is(443)|s)://@svr[request/host]@svr[request/URL]@svr[request/Query].nullifblank.with(?|)"/>
+    <ec:case if=@requestType.is(regular) rem="finish ajax request the require CAPTCHA on next regular request">
+      @logError(Sent to CAPTCHA @chr(40)Previous Risk: @previousACLRisk(), Risk: @ACLRisk(), Error: @errorScore(), Location: @locationScore()@chr(41)||75)
+      
+      <ec:output>
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Please Verify Request</title>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+            <script language="JavaScript" src="//code.jquery.com/jquery-1.10.2.js"></script>
+            <script language="JavaScript" src="https://www.google.com/recaptcha/api.js" async defer></script>
+          </head>
+
+          <body style="font-family:arial">
+            <script language="JavaScript">window.submitForm = function (){$("#reCAPTCHA-form").submit();}</script>
+            <h3>Strange requests detected from you or your network</h3>
+            <p style="font-size:.98rem;">To continue access, please verify that you are a <span style="font-weight:bold;color:green;">NICE HUMAN</span> rather than a <span style="font-weight:bold;color:red;">MEAN HACKER-BOT</span>.<br/>If you keep getting this page, or the "BAD REQUEST" page please contact customer support.</p>
+          
+            <form id="reCAPTCHA-form" method="post">
+              <div class="g-recaptcha" data-sitekey="6LcrUt8hAAAAADsD4nPT25TOq46D6xQMG4Q2rYKJ" data-callback="submitForm"></div>
+              <input type="hidden" name="doVerify" value="1"/>
+              <input type="hidden" name="returnto" value="@requestedURL.urlencode()"/>
+            </form>
+
+            <div style="position:absolute;bottom:1px">Code: P.@previousACLRisk() R.@ACLRisk()</div>
+          </body>
+        </html>
+      </ec:output>
+      @stop()
+    </ec:case>
+  </ec:function>
+
+
+
+
+
+  <ec:function verifyCAPTCHA>
+    <ec:data reCAPTCHA_param format="xml">
+      <secret>6LcrUt8hAAAAAEdJsAkv7vJ2PWKiD2n2m-dSC7n3</secret>
+      <response>@svr[param/g-recaptcha-response]</response>
+    </ec:data>
+
+    <ec:data CAPTCHA_json format="json">
+      @httpPOST(https://www.google.com/recaptcha/api/siteverify|@reCAPTCHA_param)
+    </ec:data>
+
+    <ec:case>
+      <ec:case if=@CAPTCHA_json[success].is(true)>
+        <ec:set CAPTCHAScore='-50' errorScore="0"/>
+        @storeACLScore()
+        @RESPONSE_REDIRECT(@svr[param/returnto].alt(/home).urldecode)
+        @stop()
+      </ec:case>
+
+      <ec:page_reCAPTCHA if=@else/>
+    </ec:case>
+  </ec:function>
+
+
+
+
+
+  <ec:function validateIP>
+    <ec:param ip/><ec:var ip=@ip.replace(@chr(32)|)/>
+    <ec:var valid=1/>
+
+    <ec:var invalidChars = "`,~,!,@chr(64),#,$,%,^,&,*,-,_,+,=,[,],{,},\,@chr(124),;,',@chr(34),@chr(44),@chr(60),@chr(62),/,?,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z"/>
+    <ec:loop data=@list(@invalidChars)>
+      <ec:set valid=0 if=@ip.contains(@rs[])/>
+    </ec:loop>
+
+    <ec:set valid=0 if=@not(@ip.length.isbetween(7|39))/>
+
+    @return(@valid)
+  </ec:function>
+
+
+
+
+
+  <ec:function violation>
+    @storeACLScore()
+
+    <ec:case if=@ACLRisk.isGreaterThan(15)>
+      <ec:data procedure="pr_actionLog_new" connection=@connection>
+        <userID>@NULL</userID>
+        <sessionID>@NULL</sessionID>
+        <actionID>49</actionID>
+        <memo>Risk Violation: @ipAddress</memo>
+        <requestFile>@requestTimeStamp()</requestFile>
+        <LTID>@NULL</LTID>
+        <XID>@NULL</XID>
+        <url>@svr[request/url]@svr[request/query].nullifblank.with(?|)</url>
+        <ipv4>@ipv4.nullifblank</ipv4>
+        <ipv6>@ipv6.nullifblank</ipv6>
+      </ec:data>
+    </ec:case>
+  </ec:function>
+</ec:type>
+
+
+
+
+
+<ec:object aclProfile if=@nv(@aclProfile) type="tACL_Profile" global/>

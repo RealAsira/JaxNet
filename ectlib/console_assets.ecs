@@ -1,0 +1,322 @@
+@share
+
+<ec:var fdescription = @svr[param/fdescription].nullifblank/>
+<ec:var faquisitionDate = @svr[param/faquisitionDate].nullifblank/>
+<ec:var forganizationID = @svr[param/forganizationID].nullifblank/>
+<ec:var fassetTypeID = @svr[param/fassetTypeID].nullifblank/>
+<ec:var freferenceNumber = @svr[param/freferenceNumber].nullifblank/>
+<ec:var famount = @svr[param/famount].nullifblank/>
+
+<ec:object dt_assets page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>assetID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT assetID, assetDescription, aquisitionDate, aquisitionPrice, referenceNumber, assetTypeDescription, organizationName
+            FROM vw_assets
+            WHERE 1=1 AND websiteID = @websiteID.asInt
+            
+            @if(@iv(@fdescription)|AND assetDescription LIKE @sqlstr(%@fdescription%))
+            @if(@iv(@faquisitionDate)|AND CAST(aquisitionDate AS DATE) = CAST(@sqlstr(@faquisitionDate) AS DATE))
+            @if(@iv(@forganizationID)|AND aquiredFromOrganizationID = @forganizationID.asInt)
+            @if(@iv(@fassetTypeID)|AND assetTypeID = @fassetTypeID.asInt)
+            @if(@iv(@freferenceNumber)|AND referenceNumber = @sqlstr(@freferenceNumber))
+            @if(@iv(@famount)|AND aquisitionPrice = @sqlstr(@fAmount.asInt))
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT assetDescription, aquisitionDate, aquisitionPrice, referenceNumber, locationLTID, locationXID, inventoriedDate, assetMemo, assetTypeDescription, organizationName, organizationID, locationTag, iconURL, iconDescription
+            FROM vw_asset
+            WHERE 1=1 AND websiteID = @websiteID.asInt
+            AND assetID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">assetID</sort>
+</ec:object>
+<ec:object obj_assets_pageNavigator dataObj=@dt_assets type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_assets dataObj=@dt_assets type="tComponent">
+    <ec:titlebox title="Assets"  options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>AT#</th>
+                <th>Description</th>
+                <th>Asset Type</th>
+                <th>Reference</th>
+                <th>Amount</th>
+                <th>Date</th>
+                <th>Organization</th>
+                <th>Linked To</th>
+            </tr>
+
+
+            <ec:loop data=@dataObj.dataDef[data]>
+                <ec:data dt_assetShortcuts connection=@connection>
+                    SELECT dest_shortcutID, dest_ltid, dest_xid, dest_description, dest_iconURL, readOnly FROM (
+                        SELECT dest_shortcutID, dest_ltid, dest_xid, dest_description, dest_iconURL, readOnly = 0 FROM dbo.tb_shortcuts(dbo.fn_linkedEntity_getID(@LTID.asInt.alt(0), @rs[assetID].asInt.alt(NULL))) ts1
+                    ) t
+
+                    WHERE dbo.fn_accessLevel(@user.userID.asInt.alt(NULL), @user.employeeID.asInt.alt(NULL), dest_ltid, dest_xid) >= 1 --only show if employee has at least view access
+            
+                    ORDER BY (CASE
+                    WHEN t.dest_ltid = 7 AND t.readOnly = 0 THEN 6
+                    WHEN t.dest_ltid = 11 AND t.readOnly = 0 THEN 5
+                    WHEN (t.dest_ltid != 7 OR t.dest_ltid != 11) AND t.readOnly = 0 THEN 4
+            
+                    WHEN t.dest_ltid = 7 AND t.readOnly = 1 THEN 3 --notes are at bottom
+                    WHEN t.dest_ltid = 11 AND t.readOnly = 1 THEN 2 --external links are just above notes
+                    ELSE 1 END --regular console links appear first
+                    ), t.dest_ltid
+                </ec:data>
+
+
+                <tr class="anchorify" href="/console?ltid=6&xid=@rs[assetID]">
+                    <td>AT@rs[assetID]</td>
+                    <td>@rs[assetDescription]</td>
+                    <td>@rs[assetTypeDescription]</td>
+                    <td>@rs[referenceNumber]</td>
+                    <td>@rs[aquisitionPrice].formatnumber($0.00)</td>
+                    <td>@rs[aquisitionDate].formatdate(dd MMM yyyy)</td>
+                    <td>@rs[organizationName]</td>
+                    <td>
+                        <ec:var currentAssetID = @rs[assetID]/>
+                        <ec:loop data=@dt_assetShortcuts>
+                            <ec:case if=@rs[dest_ltid].is(7) rem="note">
+                                <ec:data dt_note connection=@connection>
+                                    SELECT dbo.fn_stripTags(noteContent) AS content FROM notes WHERE noteID = @rs[dest_xid].asInt
+                                </ec:data>
+                                <img title="@dt_note[1/content]" src="@rs[dest_iconURL]" height="24px" alt="@dt_note[1/content]"/>
+                            </ec:case>
+                            <ec:case if=@rs[dest_ltid].is(11) rem="external link">
+                                <ec:data dt_externalURL connection=@connection>
+                                    SELECT externalLinkDescription, externalLinkURL FROM externalLinks WHERE externalLinkID = @rs[dest_xid].asInt
+                                </ec:data>
+                                <a href="@dt_externalURL[1/externalLinkURL].urldecode" rel="nofollow"><img src="@rs[dest_iconURL]" height="28px" alt="external link" title="@rs[dest_description]"/></a>
+                            </ec:case>
+                            <ec:case if=@rs[dest_ltid].isnot(11|7) rem="everything else"><a href="/console?ltid=@rs[dest_ltid]&xid=@rs[dest_xid]&xltid=@LTID&xxid=@currentAssetID" rel="nofollow"><img class="anchorify" src="@rs[dest_iconURL]" height="28px" alt="@rs[dest_ltid]-img" title="@rs[dest_description]"/></a></ec:case>
+                        </ec:loop>
+                    </td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_assets_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_asset dataObj=@dt_assets type="tComponent">
+    <ec:var asset=@dataObj.dataDef[data/1]/>
+    <ec:var locationOptions/>
+    <ec:locationOptions>
+        <a href="javascript:void(0)" rel="nofollow"><ec:icon title="Move to different location" icon="random" size="med" style="transform:translateY(1px);"/></a>&nbsp;
+        <a href="javascript:void(0)" rel="nofollow"><ec:icon title="Scan to different location" icon="barcode" size="med" style="transform:translateY(1px);"/></a>
+    </ec:locationOptions>
+
+    <ec:titlebox title="Asset" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@asset[iconURL]" alt="@asset[iconDescription]"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="AT@XID"/>
+                <ec:displayField title="Aquisition Date" content="@asset[aquisitionDate].formatdate(dd MMM yyyy)"/>
+                <ec:var orgLink/><ec:orgLink><a href="/console?ltid=4&xid=@asset[organizationID]&xLTID=@LTID&xXID=@XID" rel="nofollow">@asset[organizationName]</a></ec:orgLink>
+                <ec:displayField title="Organization" content="@orgLink"/>
+                <ec:displayField title="Type (Category)" content="@asset[assetTypeDescription]"/>
+                <ec:displayField title="Description" content="@asset[assetDescription]"/>
+                <ec:displayField title="Reference No." content="@asset[referenceNumber]"/>
+                <ec:displayField title="Amount" content="@asset[aquisitionPrice].formatnumber($0.00)"/>
+                <ec:displayField title="Inventoried" content="@asset[inventoriedDate].formatdate(dd MMM yyyy).alt(@chr(60)i@chr(62)Never@chr(60)/i@chr(62))"/>
+                <ec:displayField title="Location Tag" content="@asset[locationTag].nullifblank.alt()&nbsp;&nbsp;@locationOptions"/>
+            </div>
+        </div>
+
+
+
+        <ec:case if=@iv(@asset[assetMemo].nullifblank)>
+            <br/><br/><hr/><br/>
+            <span>@asset[assetMemo].decode</span>
+        </ec:case>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Asset" type="tDialogRecordForm">
+    <ec:var assetOrganizationID = @svr[param/assetOrganizationID].nullifblank/>
+    <ec:var assetAssetTypeID = @svr[param/assetAssetTypeID].nullifblank/>
+    <ec:var assetDescription = @svr[param/assetDescription].nullifblank/>
+    <ec:var assetReference = @svr[param/assetReference].nullifblank/>
+    <ec:var assetAmount = @svr[param/assetAmount].nullifblank/>
+    <ec:var assetDate = @svr[param/assetDate].asDate.nullifblank/>
+    <ec:var assetMemo = @svr[param/assetMemo].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@assetOrganizationID)|@iv(@assetAssetTypeID)|@iv(@assetDescription))> 
+            <ec:data xx procedure="pr_asset_new" connection=@connection>    
+                <organizationID>@assetOrganizationID.asInt</organizationID>
+                <assetTypeID>@assetAssetTypeID.asInt</assetTypeID>
+                <description>@assetDescription</description>
+                <referenceNumber>@assetReference</referenceNumber>
+                <aquisitionPrice>@assetAmount.asFloat</aquisitionPrice>
+                <aquisitionDate>@assetDate.asDate</aquisitionDate>
+                <memo>@assetMemo.encode</memo>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newAssetID = @xx[newAssetID].nullifblank/>
+
+            <ec:case if=@iv(@newAssetID)>
+                @logAction(2|@LTID|@newAssetID)
+                @notification(Asset AT-@newAssetID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@newAssetID)
+                @close()
+            </ec:case>
+            <ec:case if=@else>
+                <ec:set errMsg = "An error occurred. Please contact a system administrator."/>
+                @logError(error|obj_newAsset_dialog unknown SQL error|101)
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "Organization, asset type, and a description are all required to add a new asset."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_assetTypesSelect connection=@connection>
+            SELECT assetTypeID, assetTypeDescription FROM assetTypes
+        </ec:data>
+        <ec:data dt_organizationsSelect connection=@connection>
+            SELECT organizationID, name
+            FROM vw_organizations
+            WHERE websiteID = @websiteID.asInt
+        </ec:data>
+
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Description" id="assetDescription" name="assetDescription" fieldValue=@assetDescription/>
+        <ec:input_select title="Asset Type" id="assetAssetTypeID" name="assetAssetTypeID" fieldValue=@assetAssetTypeID options=@dt_assetTypesSelect/>
+        <ec:input_select title="Organization" id="assetOrganizationID" name="assetOrganizationID" fieldValue=@assetOrganizationID options=@dt_organizationsSelect/><br/><br/>
+
+        <ec:input_text title="Reference Number" id="assetReference" name="assetReference" fieldValue=@assetReference/>
+        <ec:input_date title="Aquisition Date" id="assetDate" name="assetDate" fieldValue=@assetDate/>
+        <ec:input_money title="Amount" id="assetAmount" name="assetAmount" fieldValue=@assetAmount/><br/><br/>
+        <ec:input_textField title="Memo" id="assetMemo" name="assetMemo" fieldValue=@assetMemo/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Asset" type="tDialogRecordForm">
+    <ec:var assetOrganizationID = @svr[param/assetOrganizationID].nullifblank/>
+    <ec:var assetAssetTypeID = @svr[param/assetAssetTypeID].nullifblank/>
+    <ec:var assetDescription = @svr[param/assetDescription].nullifblank/>
+    <ec:var assetReference = @svr[param/assetReference].nullifblank/>
+    <ec:var assetAmount = @svr[param/assetAmount].nullifblank/>
+    <ec:var assetDate = @svr[param/assetDate].asDate.nullifblank/>
+    <ec:var assetMemo = @svr[param/assetMemo].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@assetOrganizationID)|@iv(@assetAssetTypeID)|@iv(@assetDescription))>  
+            <ec:data xx procedure="pr_asset_edit" connection=@connection>    
+                <assetID>@XID.asInt</assetID>
+                <aquiredFromOrganizationID>@assetOrganizationID.asInt</aquiredFromOrganizationID>
+                <assetTypeID>@assetAssetTypeID.asInt</assetTypeID>
+                <assetDescription>@assetDescription</assetDescription>
+                <referenceNumber>@assetReference</referenceNumber>
+                <aquisitionPrice>@assetAmount.asFloat</aquisitionPrice>
+                <aquisitionDate>@assetDate.asDate</aquisitionDate>
+                <assetMemo>@assetMemo.encode</assetMemo>
+            </ec:data>
+            
+            @logAction(3|@LTID|@XID|Edited asset)
+            @dt_assets.refresh()
+            @obj_asset.refresh()
+            @close()
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "Organization, asset type, and a description are all required to edit an asset."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_asset connection=@connection>
+            SELECT assetDescription, assetTypeID, aquisitionDate, aquisitionPrice, referenceNumber, organizationID, assetMemo
+            FROM vw_asset 
+            WHERE assetID = @XID.asInt
+        </ec:data>
+        <ec:var AT = @dt_asset[1]/>
+
+        <ec:data dt_assetTypesSelect connection=@connection>
+            SELECT assetTypeID, assetTypeDescription FROM assetTypes
+        </ec:data>
+        <ec:data dt_organizationsSelect connection=@connection>
+            SELECT organizationID, name
+            FROM vw_organizations
+            WHERE websiteID = @websiteID.asInt
+        </ec:data>
+
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_select title="Organization" id="assetOrganizationID" name="assetOrganizationID" fieldValue=@assetOrganizationID.alt(@AT[organizationID]) options=@dt_organizationsSelect/>
+        <ec:input_select title="Asset Type" id="assetAssetTypeID" name="assetAssetTypeID" fieldValue=@assetAssetTypeID.alt(@AT[assetTypeID]) options=@dt_assetTypesSelect/>@comment(see input_ledgerAccount for inspiration on how to make this dropdown better)
+        <ec:input_text title="Description" id="assetDescription" name="assetDescription" fieldValue=@assetDescription.alt(@AT[assetDescription])/><br/><br/>
+
+        <ec:input_text title="Reference Number" id="assetReference" name="assetReference" fieldValue=@assetReference.alt(@AT[assetReference])/>
+        <ec:input_date title="Aquisition Date" id="assetDate" name="assetDate" fieldValue=@assetDate.alt(@AT[aquisitionDate].formatdate(mm/dd/yyyy))/>
+        <ec:input_money title="Amount" id="assetAmount" name="assetAmount" fieldValue=@assetAmount.alt(@AT[aquisitionPrice].formatnumber($0.00))/><br/><br/>
+        <ec:input_textField title="Memo" id="assetMemo" name="assetMemo" fieldValue=@assetMemo.alt(@AT[assetMemo])/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:data dt_assetTypesSelect connection=@connection>
+                SELECT assetTypeID, assetTypeDescription FROM assetTypes
+            </ec:data>
+            <ec:data dt_organizationsSelect connection=@connection>
+                SELECT organizationID, name
+                FROM vw_organizations
+                WHERE websiteID = @websiteID.asInt
+            </ec:data>
+
+
+            <ec:input_text title="Description" id="fdescription" name="fdescription" fieldValue=@fdescription/>
+            <ec:input_text title="Reference" id="freferenceNumber" name="freferenceNumber" fieldValue=@freferenceNumber/>
+            <ec:input_money title="Amount" id="famount" name="famount" fieldValue=@famount.formatnumber(0.00)/>
+            <ec:input_date title="Aquisition Date" id="faquisitionDate" name="faquisitionDate" fieldValue=@faquisitionDate allowNull/>
+            
+            <br/><div>
+                <ec:input_select title="Asset Type" id="fassetTypeID" name="fassetTypeID" fieldValue=@fassetTypeID options=@dt_assetTypesSelect allowNull/>
+                <ec:input_select title="Organization" id="forganizationID" name="forganizationID" fieldValue=@forganizationID options=@dt_organizationsSelect allowNull/>
+            </div>
+        </ec:consoleSearchBox>
+
+        @obj_assets()
+    </ec:case>
+    <ec:case if=@iv(@XID)>@obj_asset()</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

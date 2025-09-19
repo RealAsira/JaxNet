@@ -1,0 +1,106 @@
+@share
+@pageTitle.setValue(User Account Risk)
+
+<ec:var fuserID = @svr[param/fuserID].nullifblank/>
+
+
+<ec:object obj_riskAssessment type="tComponent">
+    <ec:case if=@iv(@fuserID)>
+        <ec:data dt_userData connection=@connection>
+            SELECT userID, firstName, lastName, email, emailValidated, registrationDate, inActive, isBanned, accountRisk
+            FROM vw_user
+            WHERE userID = @fuserID.alt(0).asInt
+        </ec:data>
+        <ec:var usr = @dt_userData[1]/>
+
+        <ec:data dt_riskAssessment connection=@connection>
+            SELECT score, note FROM (
+                SELECT dbo.fn_userAccount_riskScore(@fuserID.asInt) AS score, 'TOTAL SCORE' AS note
+                UNION
+                SELECT score, note FROM dbo.tb_user_riskAssessment(@fuserID.asInt)
+            ) t1
+            ORDER BY CASE
+                WHEN note = 'TOTAL SCORE' THEN 2
+                ELSE 1
+            END, note, score
+        </ec:data>
+
+
+        <ec:titlebox title=@pageTitle>
+            <ec:var userLink/><ec:userLink><a rel="nofollow" href="/console?ltid=1&xid=@usr[userID]" title="Return to user account">@usr[firstName] @usr[lastName]</a></ec:userLink>
+            <ec:var emailTitle/><ec:emailTitle>
+                Email
+                <ec:icon if=@usr[emailValidated].is(true) title="Email is validated" icon="check-sign" color="green" size="sml"/>
+                <ec:icon if=@usr[emailValidated].is(false) title="Email is not validated" icon="remove-sign" color="red" size="sml"/>
+            </ec:emailTitle>
+
+            <div class="displayFields" style="width:96%; margin-left:2%;">
+                <ec:displayField title="ID" content="@usr[userID]"/>
+                <ec:displayField title="Name" content=@userLink/>
+                <ec:displayField title=@emailTitle content="@usr[email]"/>
+                <ec:displayField title="Registered On" content="@usr[registrationDate].formatDate(dd mmmm yyyy)"/>
+                <ec:case if=@usr[isBanned].is(true)>
+                    <ec:displayField title="Ban Status" content="User banned, account is inactive, and risk level is @usr[accountRisk]!" style="color:red;"/>
+                </ec:case>
+                <ec:case if=@usr[isBanned].is(false)>
+                    <ec:displayField title="Inactive" content="@usr[inActive]"  style="@if(@usr[inActive].is(true)|color:#f0b624;)"/>
+                    <ec:displayField title="Stored Risk Score" content="@usr[accountRisk] @hint(The currently stored and used risk score for this account. This can be changed in the edit user dialog.)" style="@if(@usr[accountRisk].isGreaterThan(99)|color:#f0b624;)"/>
+                </ec:case>
+            </div>
+            
+            <table class="tbl">
+                <tr>
+                    <th>Note</th>
+                    <th>Score Change</th>
+                </tr>
+
+                <ec:loop data=@dt_riskAssessment>
+                    <ec:case if=@not(@rs[].isLast)>
+                        <tr>
+                            <td>@rs[note]</td>
+                            <td style="@if(@rs[score].isLessThan(0)|color:green;)@if(@rs[score].isGreaterThan(0)|color:red;)">@rs[score].asInt</td>
+                        </tr>
+                    </ec:case>
+                    <ec:case if=@rs[].isLast>
+                        <tr style="border-top:1px solid grey; @if(@rs[score].isLessThan(21)|color:green;)@if(@rs[score].isBetween(21|50)|color:yellow;)@if(@rs[score].isBetween(51|80)|color:orange;)@if(@rs[score].isGreaterThan(80)|color:red;)">
+                            <th colspan="2" style="text-align: right;">@rs[note]:&nbsp;&nbsp;@rs[score].asInt @hint(Minimum score: 0@br()Maximum score: 255)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</th>
+                        </tr>
+                    </ec:case>
+                </ec:loop>
+
+            </table>
+        </ec:titlebox>
+    </ec:case>
+
+
+
+    <ec:case if=@nv(@fuserID)>
+        <ec:titlebox title=@pageTitle>
+            No userID provided. Please contact a website technician.
+        </ec:titlebox>
+    </ec:case>
+</ec:object> 
+
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    @obj_riskAssessment()
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:data dt_contactInformation connection=@connection>
+        SELECT dbo.fn_phoneNumber_formatted(phoneNumber) AS phoneNumber
+        FROM vw_users t1
+        WHERE userID = @fuserID.alt(0).asInt
+    </ec:data>
+    <ec:var aRec = @dt_contactInformation[1]/>
+
+    <a href="https://www.searchpeoplefree.com/phone-lookup/@aRec[phoneNumber].replace(@chr(40)|).replace(@chr(41)|).replace(@chr(32)|).replace(+|).replace(-|).formatNumber(000-000-0000).right(12).replace(000-)" target="_blank" rel="nofollow">Look Up Phone Records</a><br/>
+</ec:function>

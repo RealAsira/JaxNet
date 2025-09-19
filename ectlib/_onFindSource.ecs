@@ -1,0 +1,88 @@
+<ec:var logRequest=@xLogRequest.asReference global/>
+<ec:function xLogRequest>
+    <ec:var filename="@logDirectory\@requestTimeStamp()_request.txt"/>
+    @svr.XML.saveToFile(@fileName)
+</ec:function>
+
+
+
+<ec:var logError = @xLogError.asReference global/>
+<ec:function xLogError>
+    <ec:param caption errMsg actionID/>
+    <ec:logRequest/>
+    <ec:var fileName="@logDirectory\@requestTimeStamp()_error.txt"/>
+    <ec:set errMsg = "@error.nullifblank.with(| -) @caption @errMsg.nullifblank.with(- |)"/>
+    @errMsg.saveToFile(@fileName)
+    @logRequest()
+
+    <ec:case if=@iv(@actionID)>
+        <ec:data procedure="pr_actionLog_new" connection=@connection>
+            <userID>@if(@iv(@user.userID)|@user.userID.asInt)</userID>
+            <sessionID>@if(@iv(@user.sessionID)|@user.sessionID.asInt)</sessionID>
+            <actionID>@actionID.alt(47).asInt</actionID>
+            <memo>@errMsg</memo>
+            <requestFile>@requestTimeStamp()</requestFile>
+            <LTID>@LTID.asInt</LTID>
+            <XID>@XID.asInt</XID>
+            <url>@canonical</url>
+            <ipv4>@ipv4.nullifblank</ipv4>
+            <ipv6>@ipv6.nullifblank</ipv6>
+        </ec:data>
+    </ec:case>
+
+    <ec:case if=@iv(@aclProfile.asReference)>
+        @aclProfile.errorScore.setValue(@aclProfile.errorScore.add(1))
+        @aclProfile.storeACLScore()
+    </ec:case>
+</ec:function>
+
+
+
+<ec:var throw=@xThrow.asReference global/>
+<ec:function xThrow rem="force an exception to be thrown and return an output to the client">
+    <ec:param title caption errMsg required/>
+    <ec:param statusCode=500 actionID=101/>
+    <ec:var logErrorCaption = "@caption.left(1).lower()@caption.right(@calc(@caption.length - 1)).replace(@char(32)|)"/>
+    @logError(@logErrorCaption|@errMsg.nullifblank|@actionID)
+
+    <ec:output>
+        <ec:exception>
+            <head>
+                <title>@title()</title>
+                <style>
+                    * {box-sizing:border-box; -webkit-box-sizing: border-box;}
+                    body{
+                        background-color:#181818;
+                        color:#ffffff;
+                        text-wrap:wrap;
+                        overflow-wrap:break-word;
+                    }
+                    @media (prefers-color-scheme:light){
+                        body{
+                            background-color:white;
+                            color:#333;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div style="display:block; width:100%; min-height:108px; font-size:1.3rem; text-align:center; color:white; font-weight:bold; background-color:rgb(0, 66, 110);">
+                    <br/><span>@caption()</span><br/><br/>
+                    <span style="font-weight:normal; font-size:1.2rem;">
+                        @errMsg.alt(An error has occurred on the page and a website technician has been notified. If you typed the link @chr(40)URL@chr(41) into your browser directly, please check it for accuracy.)
+                    </span>
+                </div>
+                
+                <h4>Please share the following with us if you need immediate assistance:</h4>
+                <strong>URL: </strong>@canonical()
+                <br/><strong>Reference: </strong>@requestTimeStamp()
+            </body>
+        </ec:exception>
+        
+        @response_statusCode(@statusCode)
+        @exception(@error - @errMsg)
+    </ec:output>
+    @stop()
+</ec:function>
+
+@throw(Missing Module|Missing Module|The .ecs module requested could not be found. A website technician has been notified.|404|79)

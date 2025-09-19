@@ -1,0 +1,268 @@
+@share
+<ec:module comp_input_entity/>
+
+<ec:var fgroupName = @svr[param/fgroupName].nullifblank/>
+
+<ec:object dt_userGroups page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>userGroupID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT userGroupID, groupName
+            FROM vw_userGroups
+            WHERE websiteID = @websiteID.asInt
+
+            @if(@iv(@fgroupName)|AND groupName LIKE @sqlstr(%@fgroupName%))
+        </ec:case>
+            
+        <ec:case if=@iv(@XID)>
+            SELECT memberCount, groupName, iconURL, iconDescription
+            FROM vw_userGroup
+            WHERE websiteID = @websiteID.asInt AND userGroupID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">groupName</sort>
+</ec:object>
+<ec:object obj_userGroup_pageNavigator dataObj=@dt_userGroups type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_userGroups dataObj=@dt_userGroups type="tComponent">
+    <ec:titlebox title="User Groups (Memberships)" options=@defaultListOptions()>
+        <table class="tbl">
+            <tr style="background-color:transparent;">
+                <th style="text-align: left;">User Group Name</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=3&xid=@rs[userGroupID]">
+                    <td style="text-align: left;">@rs[groupName]</td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_userGroup_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_userGroup dataObj=@dt_userGroups type="tComponent">
+    <ec:var grp=@dataObj.dataDef[data/1]/>
+    <ec:titlebox title="User Group (Membership)" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@grp[iconURL]" alt="@grp[iconDescription]-img"/>
+        <div id="recordFields">    
+            <div class="displayFields">
+                <ec:displayField title="ID" content=@XID.asInt/>
+                <ec:displayField title="Name" content=@grp[groupName]/>
+            </div>
+        </div>
+    </ec:titlebox>
+
+    @obj_userGroupMembers
+</ec:object>
+
+
+
+
+
+<ec:object dt_groupMembers page=@page limit="50" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>userGroupMembershipID</primaryKey>
+    <sqlSelect>
+        SELECT userGroupMembershipID, userGroupID, memberLTID, memberXID, firstName, lastName
+        FROM dbo.tb_userGroupMembers()
+        WHERE userGroupID = @XID.asInt
+    </sqlSelect>
+    <sort>memberLTID DESC, lastName ASC, firstName ASC</sort>
+</ec:object>
+<ec:object obj_groupMembers_pageNavigator dataObj=@dt_groupMembers type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_userGroupMembers if=@iv(@XID) dataObj=@dt_groupMembers type="tComponent" style="width:auto;">
+    <ec:var options/>
+    <ec:options>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_newGroupmember_dialog"><ec:icon title="Add new group member" icon="plus"/></a>
+    </ec:options>
+
+    <ec:titlebox title="Group Members (@dt_userGroups.dataDef[data/1/memberCount].alt(0))" options=@options>
+        <ec:loop data=@dataObj.dataDef[data]>
+            <ec:case if=@rs[memberLTID].isheader>
+                <table class="tbl" id="@if(@rs[memberLTID].is(1)|userMembers)@if(@rs[memberLTID].is(2)|employeeMembers)@if(@rs[memberLTID].isnot(1|2)|entityMembers)">
+                    <tr><th style="text-align:left;" colspan="2">@if(@rs[memberLTID].is(1)|Users)@if(@rs[memberLTID].is(2)|Employees)@if(@rs[memberLTID].isnot(1|2)|Other Entities)</th></tr>
+            </ec:case>
+
+                    <tr class="anchorify" id="member@rs[memberLTID]-@rs[memberXID]" href="/console?ltid=@rs[memberLTID]&xid=@rs[memberXID]">
+                        <td>@rs[firstName] @rs[lastName]</td>
+                        <td><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" loader="#@if(@rs[memberLTID].is(1)|userMembers)@if(@rs[memberLTID].is(2)|employeeMembers)@if(@rs[memberLTID].isnot(1|2)|entityMembers)" ecid="obj_removeMember" memberLTID="@rs[memberLTID]" memberXID="@rs[memberXID]" confirm="Are you sure you want to remove @rs[firstName] @rs[lastName] from this user group?"><ec:icon title="Remove @rs[firstName] @rs[lastName] from user group" icon="remove" size="xsml"/></a></td>
+                    </tr>
+
+            <ec:case if=@rs[memberLTID].isfooter>
+                </table>
+            </ec:case>
+        </ec:loop>
+
+        @obj_groupMembers_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+<ec:object obj_newGroupMember_dialog if=@iv(@XID) title="Add Member to Group" type="tDialogForm">
+    <ec:var eLTID=@svr[param/L_entity].nullifblank  eXID=@svr[param/X_entity].nullifblank  userGroupID=@XID.nullifblank/>
+    
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@userGroupID)|@iv(@eLTID)|@iv(@eXID))>
+            <ec:data xx procedure="pr_userGroupMember_add" connection=@connection>
+                <userGroupID>@userGroupID.asInt</userGroupID>
+                <memberLTID>@eLTID.asInt</memberLTID>
+                <memberXID>@eXID.asInt</memberXID>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+            <ec:case if=@iv(@errMsg)>
+                @notification(@errMsg)
+            </ec:case>
+            <ec:case if=@else>
+                @close()
+                @logAction(21|@LTID|@XID|@eLTID/@eXID added to user group)
+                @dt_userGroups.refresh()
+                @dt_groupMembers.refresh()
+                @obj_userGroupMembers.refresh()
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            @notification(No entity was selected to add to the user group)
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <br/>
+        <ec:input_entity title="User / Employee" id="entity" name="entity" fieldLTID=@eLTID fieldXID=@eXID filterLTID="1,2"/>
+
+        <ec:script if=@all(@state.is(refresh)|@nv(@message.nullifblank))>
+            //auto-click entitySearch
+            document.getElementById('searchEntities_entity').click();
+        </ec:script>
+    </ec:case>
+</ec:object>
+
+
+
+
+<ec:object obj_removeMember type="tComponent">
+    <ec:var eLTID=@svr[param/memberLTID].nullifblank  eXID=@svr[param/memberXID].nullifblank/>
+
+    <ec:case if=@iv(@eLTID|@eXID)>
+        <ec:data xx procedure="pr_userGroupMember_remove" connection=@connection>
+            <userGroupID>@XID.asInt</userGroupID>
+            <memberLTID>@eLTID.asInt</memberLTID>
+            <memberXID>@eXID.asInt</memberXID>
+        </ec:data>
+        @logAction(22|@LTID|@XID|@eLTID/@eXID removed from user group)
+        @dt_groupMembers.refresh()
+
+        <ec:var selector="#member@eLTID-@eXID" content/>
+        <ec:content><tr><td colspan="2">&nbsp;</td></tr></ec:content>
+        @repsonder.update(@selector|@content)
+    </ec:case>
+    
+    <ec:case if=@else>
+        @notification(Cannot remove unknown entity from user group. Please refresh page or contact a system administrator)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New User Group" type="tDialogRecordForm">
+    <ec:var groupName = @svr[param/groupName].nullifblank/>
+    
+    <ec:case if=@all(@state.is(respond)|@iv(@groupName))>
+        <ec:data xx procedure="pr_userGroup_new" connection=@connection>
+            <groupName>@groupName</groupName>
+            <websiteID>@websiteID.asInt</websiteID>
+        </ec:data>
+        <ec:var newGroupID = @xx[newUserGroupID]/>
+
+        <ec:case if=@iv(@newGroupID)>
+            @logAction(2|@LTID|@newGroupID)
+            @notification(User Group USG-@newGroupID() created successfully||1)
+            @redirect(/console?ltid=3&xid=@newGroupID)
+            @close()
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "An error occurred. Please contact a system administrator"/>
+            @logError(error|obj_newUserGroup_dialog unknown SQL error|101)
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>     
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Group Name" id="groupName" name="groupName" fieldValue=@groupName placeholder="Group Name"/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit User Group Information" type="tDialogRecordForm">
+    <ec:var groupName = @svr[param/groupName].nullifblank/>
+
+    <ec:case if=@all(@state.is(respond)|@iv(@groupName))>
+        <ec:data xx procedure="pr_userGroup_edit" connection=@connection>
+            <userGroupID>@XID.asInt</userGroupID>
+            <groupName>@groupName</groupName>
+        </ec:data>
+
+        @logAction(3|@LTID|@XID|Edited user group)
+        @dt_userGroups.refresh()
+        @obj_userGroup.refresh()
+        @close()
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_userGroup connection=@connection>
+            SELECT groupName
+            FROM vw_userGroups
+            WHERE websiteID = @websiteID.asInt AND userGroupID = @XID.asInt
+        </ec:data>
+        <ec:var grp = @dt_userGroup[1]/>
+        
+        <br/><ec:input_text title="Group Name" id="groupName" name="groupName" fieldValue=@grp[groupName].alt(@groupName) placeholder="Group Name"/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="Group Name" id="fgroupName" name="fgroupName" fieldValue=@fgroupName placeholder=""/>
+        </ec:consoleSearchBox>
+
+        @obj_userGroups
+    </ec:case>
+    <ec:case if=@iv(@XID)>@obj_userGroup</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

@@ -1,0 +1,100 @@
+@share
+<ec:var val=@svr[param/val].nullifblank symb=@svr[param/symb].nullifblank/>
+
+<ec:output>
+    <ec:case if=@not(@val.isnull)>
+        @RESPONSE_CONTENTTYPE(image/svg+xml)
+        <?xml version="1.0" encoding="utf-8"?>
+        <ec:xCode value=@val() symbology=@symb()/>
+        @stop()
+    </ec:case>
+
+    <ec:case if=@val.isnull>
+        @RESPONSE_CONTENTTYPE(application/json)
+        {"error": "the 'val' param was not supplied to the API."}
+        @stop()
+    </ec:case>
+</ec:output>
+
+
+
+
+<ec:function xCode REM="UPGRADE PATH ... STORE RENDERED SYMB, VAL, AND SVG IN A DATA OBJECT AND RETRIEVE AND RETURN THAT IF THIS FUNCTION IS USED MORE THAN ONCE FOR THE SAME CODE">
+    <ec:param value symbology="c128c"/>
+    <ec:set symbology=@symbology.lower()/>
+    <ec:set value="0@value()" if=@all(@value.isNumber()|@value.length.is(12)|@symbology.is(upc)) rem="upc IS a subset of EAN13 and therefore should be converted to it if not default"/>
+    <ec:set symbology="ean13" if=@all(@symbology.is(upc)|@value.length.is(13))/>
+
+    <ec:case if=@symbology.is(c128|c128a|c128b|c128c)>
+        <ec:set value="0@value()" if=@value.length.isodd/>
+
+        <ec:var startCode stopCode="2331112"/>
+        <ec:set startCode="211412" if=@symbology.is(c128a)/>
+        <ec:set startCode="211214" if=@symbology.is(c128b)/>
+        <ec:set startCode="211232" if=@symbology.is(c128|c128c)/>
+
+        <ec:data xx connection=@connection>
+            SELECT dbo.fn_barcode_c128_widths(@sqlstr(@symbology), @sqlstr(@value)) AS resultWidths
+        </ec:data>
+        <ec:var widths = @xx[1/resultWidths]/>
+
+        <ec:var completeCode = '@startCode()@widths()@stopCode()'/>
+        <ec:var totalWidth/>
+
+        <ec:loop count=@completeCode.length>
+            <ec:set totalWidth = @calc(@totalWidth.alt(0) + @completeCode.right(@index).left(1))/>
+        </ec:loop>
+    
+        <svg barcodeVal="@value()" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="width:@calc(@totalWidth() + 8)px; height:23px;" viewbox="0 0 @totalWidth() 23">
+            <ec:var previousWidth/>    
+
+            <rect width="calc(@totalwidth()px + 1ch)" height="23px" style="fill:rgb(255,255,255); height:23px;"/>
+            <ec:loop count=@completeCode.length>
+                <ec:set previousWidth = @calc(@previousWidth.alt(0) - @completeCode.right(@calc(@index - 1)).left(1)).asinteger.alt(0) if=@index.isgreaterthan(1)/>
+                <ec:set previousWidth = @totalWidth if=@index.is(1)/>
+            
+                <rect width="calc(@previousWidth.asinteger.alt(0)px + .5ch)" height="23px" @if(@index.isodd|style="fill:rgb(0,0,0);")@if(@index.iseven|style="fill:rgb(255,255,255);")/>
+            </ec:loop>
+            <rect width=".5ch" height="23px" style="fill:rgb(255,255,255); height:23px;"/>
+
+            Please upgrade to a browser that supports svg images in order to view this barcode.
+        </svg>
+    </ec:case>
+
+
+
+    <ec:case if=@symbology.is(ean|ean13|ean-13|upc|upca)>
+        <ec:var startCode="111" midguard='11111' stopCode="111" rem="midguard is var for the middle guard in EAN/UPC syntax"/>
+        <ec:set value=@value.left(12) if=@value.length.is(13) rem="remove checkSum so it can be recaluclated (checksum is last digit before stop code)"/>
+
+        <ec:data xx connection=@connection>
+            SELECT resultWidths, checkSumValue FROM dbo.tb_barcode_EAN13_widths(@sqlstr(@value))
+        </ec:data>
+        <ec:var widths=@xx[1/resultWidths] checkSumValue=@xx[1/checkSumValue]/>
+
+        <ec:var completeCode="@startCode()@widths.left(24)@midguard()@widths.right(24)@stopCode"/>
+        <ec:var totalWidth/>
+        
+        <ec:loop count=@completeCode.length>
+            <ec:set totalWidth = @calc(@totalWidth.alt(0) + @completeCode.right(@index).left(1))/>
+        </ec:loop>
+        
+        <svg barcodeVal="@value()" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="width:@calc(@totalWidth() + 16)px; height:50.25px;" viewbox="0 0 @calc(@totalWidth() + 16) 50.25">
+            <ec:var previousWidth/>    
+
+            <rect width="calc(@totalwidth()px + 2ch)" height="50.25px" style="fill:rgb(255,255,255); height:50.25px;"/>
+            <ec:loop count=@completeCode.length>
+                <ec:set previousWidth = @calc(@previousWidth.alt(0) - @completeCode.right(@calc(@index - 1)).left(1)).asinteger.alt(0) if=@index.isgreaterthan(1)/>
+                <ec:set previousWidth = @totalWidth if=@index.is(1)/>
+
+                <rect width="calc(@previousWidth.asinteger.alt(0)px + 1ch)" height="37px" style="@if(@index.isodd|fill:rgb(0,0,0);)@if(@index.iseven|fill:rgb(255,255,255); height:42px;)@if(@any(@index.islessthan(4)|@index.isgreaterthan(55)|@index.isbetween(28|32))| height:42px;)"/>
+            </ec:loop>
+            <rect width="1ch" height="37px" style="fill:rgb(255,255,255); height:42px;"/>
+
+            <ec:var leftValue="@value.left(6)" rightValue="@value.right(6)"/>
+            <text xml:space="preserve" font-size="9.5pt" x="0" y="50" fill="black">@leftValue.left(1)@char(32)@char(32)@char(32)@leftValue().right(5)@char(32)@char(32)@char(32)@char(32)@rightValue()@char(32)@char(32)@checkSumValue()</text>
+
+            Please upgrade to a browser that supports svg images in order to view this barcode.
+        </svg>
+    </ec:case>
+</ec:function>

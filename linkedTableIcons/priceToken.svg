@@ -1,0 +1,44 @@
+<svg width="401" height="402" viewBox="0 0 401 402" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g filter="url(#filter0_d_107_278)">
+<circle cx="200.5" cy="197.5" r="196.5" fill="#F7A724"/>
+</g>
+<circle cx="195.5" cy="202.5" r="158.5" fill="#FFF2C6"/>
+<g filter="url(#filter1_d_107_278)">
+<circle cx="200.5" cy="197.5" r="158.5" fill="#FFD772"/>
+</g>
+<g filter="url(#filter2_d_107_278)">
+<path d="M190.562 332.656V304.391C178.281 303.172 167.312 299.938 157.656 294.688C148 289.438 140.406 282.031 134.875 272.469C129.438 262.812 126.812 250.859 127 236.609L127.281 235.906H175.516C175.516 243.5 176.641 249.688 178.891 254.469C181.141 259.156 184.234 262.625 188.172 264.875C192.109 267.031 196.656 268.109 201.812 268.109C206.031 268.109 209.547 267.266 212.359 265.578C215.172 263.797 217.281 261.359 218.688 258.266C220.094 255.172 220.797 251.609 220.797 247.578C220.797 242.797 220.047 238.766 218.547 235.484C217.141 232.203 214.75 229.297 211.375 226.766C208.094 224.141 203.547 221.562 197.734 219.031C183.109 213.219 171.062 207.406 161.594 201.594C152.219 195.781 145.281 188.984 140.781 181.203C136.281 173.422 134.031 163.672 134.031 151.953C134.031 136.016 139.422 122.938 150.203 112.719C160.984 102.406 175.375 96.4062 193.375 94.7188V65.0469H215.875V95.4219C232.75 97.9531 246.109 104.891 255.953 116.234C265.891 127.578 270.719 142.062 270.438 159.688L270.859 160.812H222.062C222.062 150.781 220.141 143.375 216.297 138.594C212.547 133.719 207.625 131.281 201.531 131.281C195.25 131.281 190.609 133.25 187.609 137.188C184.609 141.125 183.109 146.234 183.109 152.516C183.109 156.641 183.766 160.25 185.078 163.344C186.484 166.344 188.875 169.109 192.25 171.641C195.625 174.172 200.266 176.75 206.172 179.375C220.609 185.656 232.562 191.797 242.031 197.797C251.5 203.797 258.531 210.688 263.125 218.469C267.812 226.156 270.156 235.766 270.156 247.297C270.156 263.516 265 276.594 254.688 286.531C244.375 296.469 230.547 302.328 213.203 304.109V332.656H190.562Z" fill="white"/>
+</g>
+<defs>
+<filter id="filter0_d_107_278" x="0" y="1" width="401" height="401" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="2"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_107_278"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_107_278" result="shape"/>
+</filter>
+<filter id="filter1_d_107_278" x="39" y="30" width="327" height="327" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dx="2" dy="-4"/>
+<feGaussianBlur stdDeviation="2.5"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_107_278"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_107_278" result="shape"/>
+</filter>
+<filter id="filter2_d_107_278" x="122.719" y="65.0469" width="152.141" height="275.609" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="2"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_107_278"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_107_278" result="shape"/>
+</filter>
+</defs>
+</svg>

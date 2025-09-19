@@ -1,0 +1,172 @@
+@share
+
+<ec:var fltid = @svr[param/fltid].nullifblank/>
+<ec:var fdescription = @svr[param/fdescription].nullifblank/>
+
+<ec:object dt_linkedTables page=@page limit="100" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>linkedTableID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT linkedTableID, description, tableTag, primaryKey, iconURL
+            FROM vw_linkedTables
+            WHERE 1=1
+            @if(@iv(@fltid)|AND linkedTableID = @fltid.asInt)
+            @if(@iv(@fdescription)| AND description + 's' LIKE @sqlstr(%@fdescription%))
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT description, tableTag, primaryKey, iconURL, tableName, inSearchIndex, searchRankFactor
+            FROM vw_linkedTable
+            WHERE linkedTableID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">linkedTableID</sort>
+</ec:object>
+<ec:object obj_linkedTables_pageNavigator dataObj=@dt_linkedTables type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_linkedTables dataObj=@dt_linkedtables type="tComponent">
+    <ec:titlebox title="Linked Tables">
+        <table class="tbl">
+            <tr>
+                <th>Img</th>
+                <th>LTID</th>
+                <th>Description (Tag)</th>
+                <th>Primary Key</th>
+                <th>Options</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=100&xid=@rs[linkedTableID]">
+                    <td><img src="@rs[iconURL]" alt="@rs[linkedTableID]-img" style="height:24px;"/></td>
+                    <td>@rs[linkedTableID]</td>
+                    <td>@if(@rs[description].right(1).is(y)|@rs[description].left(@calc(@rs[description].length() - 1))|@rs[description])@if(@rs[description].right(1).is(y)|ies|s) @if(@iv(@rs[tableTag].nullifblank)|(@rs[tableTag]))</td>
+                    <td>@rs[primaryKey]</td>
+                    <td><a href="/console?ltid=@rs[linkedTableID]" rel="nofollow">View Records</a></td>
+                </tr>
+            </ec:loop>
+        </table>
+        @obj_linkedTables_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_linkedTable dataObj=@dt_linkedtables type="tComponent">
+    <ec:var tbl=@dataObj.dataDef[data/1]/>
+
+    <ec:data dt_tableDesign connection=@connection>
+        SELECT catalog, tblSchema, tableName, columnName, dataType, maxLength, allowNulls, defaultValue
+        FROM vw_tableDesign
+        WHERE tableName = @sqlstr(@tbl[tableName])
+    </ec:data>
+
+    <ec:data dt_contraints connection=@connection>
+        SELECT constraintName, constraintType, uq_cols, ck_def, fk_table, fk_col
+        FROM vw_tableConstraints
+        WHERE tableName = @sqlstr(@tbl[tableName])
+    </ec:data>
+
+    <ec:data dt_indexes connection=@connection>
+        SELECT indexName, columns, isPrimaryKey, indexType
+        FROM vw_tableIndexes
+        WHERE tableName = @sqlstr(@tbl[tableName])
+    </ec:data>
+
+    <ec:data dt_fulltextIndexes connection=@connection>
+        SELECT catalogName, PK_index, columns
+        FROM vw_table_fullTextIndexes
+        WHERE tableName = @sqlstr(@tbl[tableName])
+    </ec:data>
+
+
+    <ec:var options/><ec:options><a href="/console?ltid=@LTID" rel="nofollow"><ec:icon title="View other records" icon="th-list" size="med"/></a></ec:options>
+    <ec:titlebox title="Linked Table" options=@options>
+        <img id="recordIcon" src="@tbl[iconURL]" alt="@tbl[description]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="LTID" content=@XID/>
+                <ec:displayField title="Name & Tag" content="@tbl[tableName] (@tbl[tableTag])"/>
+                <ec:displayField title="Primary Key" content=@tbl[primaryKey]/>
+                <ec:displayField title="Searchable" content="@tbl[inSearchIndex]&nbsp; | &nbsp;(rank factor: @tbl[searchRankFactor])"/>
+            </div>
+        </div>
+    </ec:titlebox>
+
+    
+    <ec:titlebox title="Table Design">
+        <h3 style="margin-left: 2%; color: grey;">@dt_tableDesign[1/catalog] / @dt_tableDesign[1/tblSchema]@chr(46)@dt_tableDesign[1/tableName]</h3>
+        <table class="tbl">
+            <tr>
+                <th>Column Name</th>
+                <th>Data Type</th>
+                <th>Allow Null</th>
+                <th style="text-align: left;">Default</th>
+            </tr>
+            <ec:loop data=@dt_tableDesign>
+                <tr>
+                    <td>@rs[columnName]</td>
+                    <td>@rs[dataType].upper@if(@iv(@rs[maxLength])|@chr(40)@rs[maxLength]@chr(41))</td>
+                    <td>@if(@rs[allowNulls].is(YES)|TRUE|FALSE)</td>
+                    <td style="text-align: left;">@rs[defaultValue].upper.nullifblank</td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        <table class="tbl">
+            <tr><th>CONSTRAINTS</th><th>&nbsp;</th></tr>
+            <ec:loop data=@dt_contraints>
+                <tr>
+                    <ec:case if=@rs[constraintType].is(C) ><td>CHECK&nbsp;&nbsp;[@rs[constraintName]]&nbsp;&nbsp;@rs[ck_def]</td><td>&nbsp;</td></ec:case>
+                    <ec:case if=@rs[constraintType].is(F) ><td>FOREIGN KEY&nbsp;&nbsp;[@rs[constraintName]]&nbsp;&nbsp;(@rs[fk_col])&nbsp;&nbsp;REFERENCES&nbsp;&nbsp;@rs[fk_table]</td><td>&nbsp;</td></ec:case>
+                    <ec:case if=@rs[constraintType].is(UQ)><td>UNIQUE&nbsp;&nbsp;[@rs[constraintName]]&nbsp;&nbsp;(@rs[uq_cols])</td><td>&nbsp;</td></ec:case>
+                </tr>
+            </ec:loop>
+        </table>
+
+        <table class="tbl">
+            <tr><th>INDEXES</th><th>&nbsp;</th></tr>
+            <ec:loop data=@dt_indexes>
+                <tr>
+                    <td>@if(@rs[isPrimaryKey].is(1|true)|PRIMARY KEY&nbsp;&nbsp;)@rs[indexType]&nbsp;&nbsp;[@rs[indexName]]&nbsp;&nbsp;(@rs[columns])</td><td>&nbsp;</td>
+                </tr>
+            </ec:loop>
+            <ec:case if=@dt_fulltextIndexes.count.alt(0).isGreaterThan(0)><tr><td colspan="2">&nbsp;</td></tr></ec:case>
+            <ec:loop data=@dt_fulltextIndexes>
+                <tr><td>FULLTEXT INDEX&nbsp;&nbsp;(@rs[columns])&nbsp;&nbsp;KEY INDEX [@rs[PK_index]]&nbsp;&nbsp;ON [@rs[catalogName]]</td><td>&nbsp;</td></tr>
+            </ec:loop>
+        </table>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_number title="LTID" id="fltid" name="fltid" style="height:24px;" fieldValue=@fltid/>
+            <ec:input_text title="Description" id="fdescription" name="fdescription" fieldValue=@fdescription/>
+        </ec:consoleSearchBox>
+
+        @obj_linkedTables
+    </ec:case>
+    <ec:case if=@iv(@XID)>@obj_linkedTable</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@iv(@XID)>
+        <a href="/console?LTID=@XID&xLTID=@LTID&xXID=@XID" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View Records</a><br/>
+    </ec:case>
+</ec:function>

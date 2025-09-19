@@ -1,0 +1,39 @@
+<ec:function encodeJWT>
+  <ec:param dt_headers dt_payload secret required/>
+
+  <ec:var header_encoded=@base64(@dt_header.json()|UTF8) rem="Base64 UTF8"/>
+  <ec:var header_encoded=@header_encoded().replace(+|-).replace(/|_).trim() rem="URL Safety"/>
+
+  <ec:var payload_encoded=@base64(@dt_payload.json()|UTF8) rem="Base64 UTF8"/> 
+  <ec:var payload_encoded=@payload_encoded().replace(+|-).replace(/|_).trim() rem="URL Safety"/> 
+
+  <ec:var signing_input="@header_encoded()@chr(46)@payload_encoded()" rem="Used to create singature"/>
+
+  <ec:var signature=@hash_hmac_sha256(@signing_input()|@secret()).asbase64 rem="Base64 signature"/>
+  <ec:var signature_encoded=@signature().replace(+|-).replace(/|_).replace(=).trim() rem="URL Safety"/>
+
+  <ec:var JWT="@header_encoded()@chr(46)@payload_encoded()@chr(46)@signature_encoded()"/>
+  @return(@JWT)
+</ec:function>
+
+
+<ec:data dt_header format="JSON">
+  {
+    "alg": "HS256",
+    "typ": "JWT"
+  }
+</ec:data>
+<ec:data dt_payload format="JSON">
+  {
+    "sub": "1234567890",
+    "name": "John Doe",
+    "admin": true
+  }
+</ec:data>
+<ec:var secret="your-256-bit-secret"/>
+
+
+<ec:var some_jwt=@encodeJWT(@dt_header()|@dt_payload()|@secret()).asString()/>
+@some_jwt()
+
+@decodeJWT(@some_JWT()).json

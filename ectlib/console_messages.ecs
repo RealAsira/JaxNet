@@ -1,0 +1,82 @@
+@share
+
+<ec:object dt_messages page=@page limit="100" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>messageID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT messages.*
+            FROM messages
+            LEFT JOIN linkedEntities LE ON LE.toLTID = 255 AND LE.toXID = messageID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT messages.*, linkedTables.iconURL, linkedTables.description AS iconDescription
+            FROM messages
+            LEFT JOIN linkedTables ON 255 = linkedTables.linkedTableID
+            LEFT JOIN linkedEntities LE ON LE.toLTID = 255 AND LE.toXID = messages.messageID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            AND messages.messageID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="DESC">sendDate</sort>
+</ec:object>
+<ec:object obj_messages_pageNavigator dataObj=@dt_messages type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_messages dataObj=@dt_messages type="tComponent">
+        <ec:titlebox title="Comments">
+        <table class="tbl">
+            <tr>
+                <th>MessageID</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr>
+                    <td>@rs[messageID]</td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_messages_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_message dataObj=@dt_messages type="tComponent">
+    <ec:var msg=@dataObj.dataDef[data/1]/>
+
+    <ec:titlebox title="Comment" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@msg[iconURL]" alt="@msg[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID"/>
+            </div>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        @obj_messages()
+    </ec:case>
+    <ec:case if=@iv(@XID)>
+        @obj_message()
+    </ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

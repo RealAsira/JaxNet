@@ -1,0 +1,40 @@
+@share
+
+<ec:type tEmployee>
+    <ec:var employeeID LEID clockState preferredName quickPin/>
+
+    <ec:function initialize>
+        @employeeData()
+        @location()
+    </ec:function>
+
+
+
+    <ec:function employeeData>
+        <ec:data xx connection=@connection>
+            SELECT LEID, clockState, preferredName, quickPin
+            FROM dbo.tb_employee_getData(@sqlstr(@user.employeeID))
+        </ec:data>
+
+        @employeeID.setValue(@user.employeeID)
+        @LEID.setValue(@xx[1/LEID])
+        @clockState.setValue(@xx[1/clockState])
+        @preferredName.setValue(@xx[1/preferredName])
+        @quickPin.setValue(@xx[1/quickPin])
+    </ec:function>
+
+
+    <ec:function location>
+        <ec:script if=@requestType.is(regular)>
+            if (navigator.geolocation){
+                navigator.geolocation.getCurrentPosition(function(position){
+                    jQuery.data($('#responderScripts')[0],'cs_latitude',position.coords.latitude);
+                    jQuery.data($('#responderScripts')[0],'cs_longitude',position.coords.longitude);
+                })
+            };
+        </ec:script>
+    </ec:function>
+</ec:type>
+
+
+<ec:object employee if=@nv(@employee) type="tEmployee" global/>

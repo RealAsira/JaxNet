@@ -1,0 +1,451 @@
+@share
+<ec:case if=@iv(@XID)>
+    <ec:module comp_contactCards/>
+</ec:case>
+
+<ec:var defaultPassword="Jax@chr(64)@today.formatDate(mmdd)"/>
+<ec:var ffirstName = @svr[param/ffirstName].nullifblank/>
+<ec:var flastName = @svr[param/flastName].nullifblank/>
+<ec:var femail = @svr[param/femail].nullifblank/>
+<ec:var forganizationID = @svr[param/forganizationID].nullifblank/>
+<ec:var fphoneNumber = @svr[param/fphoneNumber].nullifblank/>
+<ec:var fzipcode = @svr[param/fzipcode].nullifblank/>
+<ec:var finactive = @svr[param/finactive].alt(false)/>
+<ec:var fneedsVerified = @svr[param/fneedsVerified]/>
+<ec:var fisBanned = @svr[param/fisBanned].alt(false)/>
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+
+
+
+<ec:object dt_users page=@page limit="25" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>userID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT userID, firstName, lastName, email, inActive, isBanned, organizationName, phoneNumber, phoneNumberExtension, city, zipcode, territoryName, countryCode
+            FROM vw_users
+            WHERE websiteID = @websiteID.asInt
+
+            @if(@finactive.is(true)|AND (inActive = 1))
+            @if(@finactive.is(false)|AND (inActive = 0))
+            
+            @if(@fneedsVerified.is(true)|AND (inActive = 1 AND accountRisk @chr(62) 99 AND isBanned = 0))
+            @if(@fneedsVerified.is(false)|AND (accountRisk @chr(60) 100 AND isBanned = 0))
+            
+            @if(@fisBanned.is(true)|AND (isBanned = 1))
+            @if(@fisBanned.is(false)|AND (isBanned = 0))
+
+            @if(@iv(@fdate_start)|AND CAST(registrationDate AS DATE) @chr(62)= @sqlstr(@fdate_start.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fdate_end)|AND CAST(registrationDate AS DATE) @chr(60)= @sqlstr(@fdate_end.formatdate(yyyy-mm-dd)))
+
+            @if(@iv(@ffirstName)|AND firstName LIKE @sqlstr(%@ffirstName%))
+            @if(@iv(@flastName)|AND lastName LIKE @sqlstr(%@flastName%))
+            @if(@iv(@femail)|AND email = @sqlstr(@femail))
+            @if(@iv(@fphoneNumber)|AND dbo.fn_stripNonNumeric(phoneNumber) LIKE dbo.fn_stripNonNumeric(@sqlstr(%@fphoneNumber%)))
+            @if(@iv(@fzipcode)|AND zipcode LIKE @sqlstr(@fzipcode%))
+            @if(@iv(@forganizationID)|AND organizationID = @sqlstr(@forganizationID))
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT userID, employeeID, firstName, lastName, displayName, email, emailValidated, registrationDate, inActive, isBanned, accountRisk, organizationID, organizationName, iconURL, iconDescription
+            FROM vw_user
+            WHERE websiteID = @websiteID.asInt AND userID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">lastName, firstName</sort>
+</ec:object>
+<ec:object obj_users_pageNavigator dataObj=@dt_users type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_users dataObj=@dt_users type="tComponent">
+    <ec:titlebox title="Users" options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>Last Name</th>
+                <th>First Name</th>
+                <th>&nbsp;</th>
+                <th>Organization</th>
+                <th>Email</th>
+                <th>Primary Phone</th>
+                <th>Location</th>
+                <th>Options</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <ec:var statusColor/><ec:set statusColor="#f0b624" if=@rs[inactive].is(true)/><ec:set statusColor="red" if=@rs[isBanned].is(true)/>
+                <tr class="anchorify" href="/console?ltid=1&xid=@rs[userID]">
+                    <td>@rs[lastName]</td>
+                    <td>@rs[firstName]</td>
+                    <td @statusColor.nullifblank.with(style="color: | !important;")>@if(@rs[inActive].is(true)|Inactive)@if(@rs[isBanned].is(true)|, Banned)</td>
+                    <td>@rs[organizationName]</td>
+                    <td>@rs[email]</td>
+                    <td>@rs[phoneNumber] @if(@iv(@rs[phoneNumberExtension])|ext. @rs[phoneNumberExtension])</td>
+                    <td>@if(@iv(@rs[city])|@rs[city],&nbsp;)@if(@iv(@rs[territoryName])|@rs[territoryName]&nbsp;)@if(@iv(@rs[zipcode])|@rs[zipcode],&nbsp;)@if(@iv(@rs[countryCode])|@rs[countryCode])</td>
+                    <td>&nbsp;</td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_users_pageNavigator()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_user dataObj=@dt_users type="tComponent">
+    <ec:var usr=@dataObj.dataDef[data/1]/>
+    @if(@all(@usr[inActive].is(true)|@usr[isBanned].is(false)|@usr[accountRisk].isGreaterThan(99))|@notification(This is a risky account. Please validate all information before allowing it to be used.))
+    
+    <ec:titlebox title="User" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@usr[iconURL]" alt="@usr[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:var emailTitle/><ec:emailTitle>
+                    Email
+                    <ec:icon if=@usr[emailValidated].is(true) title="Email is validated" icon="check-sign" color="green" size="sml"/>
+                    <ec:icon if=@usr[emailValidated].is(false) title="Email is not validated" icon="remove-sign" color="red" size="sml"/>
+                </ec:emailTitle>
+
+                <ec:displayField title="ID" content="@usr[userID]"/>
+                <ec:displayField title="Name" content="@usr[firstName] @usr[lastName]"/>
+                <ec:displayField title="Display Name" content="@usr[displayName]"/>
+                <ec:displayField title=@emailTitle content=@usr[email]/>
+                <ec:displayField title="Registered On" content="@usr[registrationDate].formatDate(dd mmmm yyyy)"/>
+                <ec:case if=@usr[isBanned].is(true)>
+                    <ec:displayField title="Ban Status" content="User banned, account is inactive, and risk level is @usr[accountRisk]!" style="color:red;"/>
+                </ec:case>
+                <ec:case if=@usr[isBanned].is(false)>
+                    <ec:var riskLink/><ec:riskLink><a title="View a break-down of the user account's calculated risk score." rel="nofollow" target="_blank" href="/console?ltid=105&xid=19&fuserID=@XID">@usr[accountRisk]</a> @hint(Either the calculated or the employee-provided risk score for this account.)</ec:riskLink>
+                    <ec:displayField title="Inactive" content="@usr[inActive]" style="@if(@usr[inActive].is(true)|color:#f0b624;)"/>
+                    <ec:displayField title="Risk Score" content=@riskLink style="@if(@usr[accountRisk].isGreaterThan(99)|color:#f0b624;)"/>
+                </ec:case>
+            </div>
+        </div>
+
+        <br/><br/><hr/><br/>
+
+        <div style="display:flex; flex-wrap:wrap; justify-content:flex-start;">
+            <ec:case if=@iv(@usr[employeeID])>
+                <div class="shortcut shadowOnHover anchorify" style="margin:9px 7px 0 0; width:156px;" href="/console?ltid=2&xid=@usr[employeeID]">
+                    <img src="/linkedTableIcons/employee.svg" alt="2-img" style="height:24px;">
+                    <p class="recordShortcut" title="@usr[firstName] @usr[lastName]">@usr[firstName] @usr[lastName]</p>
+                </div>
+            </ec:case>
+            <ec:case if=@iv(@usr[organizationID])>
+                <div class="shortcut shadowOnHover anchorify" style="margin:9px 7px 0 0; width:156px;" href="/console?ltid=4&xid=@usr[organizationID]">
+                    <img src="/linkedTableIcons/organization.svg" alt="4-img" style="height:24px;">
+                    <p class="recordShortcut" title="@usr[organizationName]">@usr[organizationName]</p>
+                </div>
+            </ec:case>
+            <br/>
+        </div>
+    </ec:titlebox>
+
+    @obj_contactCard()
+    @obj_sessions()
+</ec:object>
+
+
+
+
+
+<ec:var submitTitle/><ec:submitTitle>Sign Up&nbsp;&nbsp;&nbsp;<ec:icon title="Sign up for an account" icon="user" size="sml" color="white"/></ec:submitTitle>
+<ec:object obj_record_new title="New User" buttonCaption=@submitTitle type="tDialogRecordForm">
+    <ec:var firstName=@svr[param/firstName].nullifblank/>
+    <ec:var lastName=@svr[param/lastName].nullifblank/>
+    <ec:var email=@svr[param/email].nullifblank/>
+    <ec:var password=@svr[param/password].nullifblank/>
+    <ec:var organizationID=@svr[param/organizationID].nullifblank/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@firstName)|@iv(@lastName)|@iv(@email)|@iv(@password))>
+            <ec:var signupInfo/>
+            <ec:set signupInfo = @user.signup(@firstName|@lastName|@email|@password|@organizationID)/>
+
+            <ec:case>
+                <ec:case if=@iv(@signupInfo[userID]) rem="new account created">
+                    @logAction(2|1|@signupInfo[userID]|New user signed up via console)
+                </ec:case>
+                
+                <ec:case if=@iv(@signupInfo[errorMessage].nullifblank) rem="sign up error">
+                    <ec:set errMsg = @signupInfo[errorMessage].replace(Please login instead.|).replace(Your account has been created but needs to be verified. Please contact customer support.|)/>
+                    @if(@iv(@signupInfo[userID].nullifblank)|@redirect(/console?ltid=1&xid=@signupInfo[userID]))
+                </ec:case>
+
+                <ec:case if=@nv(@signupInfo[errorMessage].nullifblank) rem="redirect to console record if no error">
+                    @notification(User USR-@signupInfo[userID] created successfully||1)
+                    @redirect(/console?ltid=1&xid=@signupInfo[userID])
+                    @close()
+                </ec:case>
+            </ec:case>
+        </ec:case>
+    
+        <ec:case if=@else>
+            <ec:set errMsg = "First name, last name, and email are all required to create a new user."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_organizationsSelect connection=@connection>
+            SELECT organizationID, name
+            FROM vw_organizations
+            WHERE websiteID = @websiteID.asInt
+        </ec:data>
+        
+        @if(@iv(@errMsg.nullifblank)|@notification(@errMsg))<br/>
+        <ec:input_text title="First Name" id="firstName" name="firstName" fieldValue=@firstName maxlength="50" require/>
+        <ec:input_text title="Last Name" id="lastName" name="lastName" fieldValue=@lastName maxlength="50" require/><br/>
+        <ec:input_email title="Email" id="email" name="email" fieldValue=@email maxlength="50" require/>
+        <ec:input_select title="Organization" id="organizationID" name="organizationID" fieldValue=@organizationID options=@dt_organizationsSelect allowNull/><br/>
+        
+        <input type="hidden" name="password" value="@defaultPassword"/>
+        <br/><p class="notice">Default password is <i id="newDefaultPassword">@defaultPassword</i></p>
+        <ec:script>
+            setTimeout(function(){document.getElementById('newDefaultPassword').innerHTML = '<ec:loop count=@defaultPassword.length>*</ec:loop>'},12000);
+        </ec:script>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit User Information" type="tDialogRecordForm">
+    <ec:var firstName=@svr[param/firstName].nullifblank/>
+    <ec:var lastName=@svr[param/lastName].nullifblank/>
+    <ec:var displayName=@svr[param/displayName].nullifblank/>
+    <ec:var email=@svr[param/email].nullifblank/>
+    <ec:var organizationID = @svr[param/organizationID].nullifblank/>
+    <ec:var inActive = @svr[param/inActive]/>
+    <ec:var isBanned = @svr[param/isBanned]  wasBanned = @svr[param/wasBanned]/>
+    <ec:var accountRisk = @svr[param/accountRisk].nullifblank/>
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_user connection=@connection>
+            SELECT firstName, lastName, displayName, email, organizationID, inActive, isBanned, accountRisk, dbo.fn_userAccount_riskScore(userID) AS computedRisk, employeeID
+            FROM vw_user
+            WHERE websiteID = @websiteID.asInt AND userID = @XID.asInt
+        </ec:data>
+        <ec:var usr = @dt_user[1]/>
+        <ec:var accessLevel2=0 rem="permission level to edit employee's user profile active/ban/risk status"/>
+        <ec:set accessLevel2 = @user.accessLevel(2|@usr[employeeID])  if=@iv(@usr[employeeID].nullifblank)/>
+    </ec:case>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@firstName)|@iv(@lastName)|@iv(@email))>
+            <ec:case if=@not(@any(@nv(@usr[employeeID].nullifblank)|@all(@iv(@usr[employeeID].nullifblank)|@accessLevel2.isGreatAs(5)))) rem="no permission to edit employee's user profile active/ban/risk status">
+                <ec:set inActive = @usr[inActive].asBool/>
+                <ec:set isBanned = @usr[isBanned].asBool/>
+                <ec:set accountRisk = @usr[accountRisk]/>
+            </ec:case>
+
+            <ec:set inactive=1 if=@isBanned.is(true|1)/>
+            <ec:data xx procedure="pr_user_edit" connection=@connection>
+                <userID>@XID.asInt</userID>
+                <firstName>@firstName</firstName>
+                <lastName>@lastName</lastName>
+                <displayName>@displayName</displayName>
+                <organizationID>@organizationID.asInt</organizationID>
+                <email>@email</email>
+                <inActive>@if(@inActive.alt(0).is(1)|1|0).asBool</inActive>
+                <isBanned>@if(@isBanned.alt(0).is(1)|1|0).asBool</isBanned>
+                <accountRisk>@accountRisk.alt(0).asInt</accountRisk>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+            <ec:case if=@nv(@errMsg)>
+                @logAction(3|@LTID|@XID|Edited user)
+                @dt_users.refresh()
+                @obj_user.refresh()
+                @close()
+
+                <ec:script if=@inActive.alt(0).asBool.is(1)>$('#endAllSessionsButton').click();</ec:script>
+                <ec:case if=@isBanned.alt(0).asBool.isnot(@wasBanned.alt(0).asBool) rem="requires change of ban state">
+                    <ec:case if=@isBanned.alt(0).asBool.is(1) rem="account is now banned">
+                        @logAction(49|@LTID|@XID|User account is now banned!)
+                        <ec:script>
+                            $('#addShortcutButton').attr({act:'newNote', noteTitle:'Ban Reason', forceContinue:'1'});
+                            $('#addShortcutButton').click();
+                            $('#addShortcutButton').removeAttr('act noteTitle forceContinue');
+                        </ec:script>
+                    </ec:case>
+                    <ec:case if=@isBanned.alt(0).asBool.is(0) rem="account ban lifted!">
+                        @logAction(49|@LTID|@XID|User account ban lifted!)
+                    </ec:case>
+                </ec:case>
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "First name, last name, and email are all required to edit a user record."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_organizationsSelect connection=@connection>
+            SELECT organizationID, name
+            FROM vw_organizations
+            WHERE websiteID = @websiteID.asInt
+        </ec:data>
+                
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="First Name" id="firstName" name="firstName" fieldValue=@firstName.alt(@usr[firstName]) maxlength="50" require/>
+        <ec:input_text title="Last Name" id="lastName" name="lastName" fieldValue=@lastName.alt(@usr[lastName]) maxlength="50" require/>
+        <ec:input_text title="Display Name" id="displayName" name="displayName" fieldValue=@displayName.alt(@usr[displayName]) maxlength="50" require/><br/>
+        <ec:input_email title="Email" id="email" name="email" fieldValue=@usr[email] maxlength="50" require/>
+        <ec:input_select title="Organization" id="organizationID" name="organizationID" fieldValue=@organizationID.alt(@usr[organizationID]) options=@dt_organizationsSelect allowNull/><br/><br/>
+
+        <input type="hidden" id="wasBanned" name="wasBanned" value="@usr[isBanned].asBool()"/>
+        <ec:input_checkbox if=@any(@nv(@usr[employeeID].nullifblank)|@all(@iv(@usr[employeeID].nullifblank)|@accessLevel2.isGreatAs(5))) title="Inactive?" id="inActive" name="inActive" fieldValue=@if(@inactive.is(true)|1).alt(@if(@usr[inactive].is(true)|1)) onchange="if($(this).not(':checked')){$('#checkbox_isBanned').prop('checked', false)}"/>
+        <ec:input_checkbox if=@any(@nv(@usr[employeeID].nullifblank)|@all(@iv(@usr[employeeID].nullifblank)|@accessLevel2.isGreatAs(5))) title="Banned?" id="isBanned" name="isBanned" fieldValue=@if(@isBanned.is(true)|1).alt(@if(@usr[isBanned].is(true)|1)) onchange="if($(this).is(':checked')){$('#checkbox_inActive').prop('checked', true)}"/>
+
+        <ec:var riskTitle/>
+        <ec:riskTitle>
+            <span>Risk Level <a href="javascript:void(0)" onclick="$('#number_accountRisk').val('@usr[computedRisk].alt(@usr[accountRisk].alt(0))'); $('#number_accountRisk').css('color', 'green');"><ec:icon title="Recalculate and use computed risk." icon="cog-refresh" size="lrg" style="margin-left:23px; margin-top:-5px;"/></a></span>
+        </ec:riskTitle>
+        <ec:input_number if=@any(@nv(@usr[employeeID].nullifblank)|@all(@iv(@usr[employeeID].nullifblank)|@accessLevel2.isGreatAs(5))) title=@riskTitle id="accountRisk" name="accountRisk" fieldValue=@accountRisk.alt(@usr[accountRisk]) min="0" max="255" onchange="$('#number_accountRisk').css('color', '');" containerStyle="margin-left:4px;" style="min-width:110px;" hintContent="RISK RANGE @br()(0-99) 'Min Risk' @br()(r@chr(62)99) 'Needs Validation' @br()(155-255) 'Max Risk'"/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_sessions if=@iv(@XID) style="width:auto;" type="tComponent">
+    <ec:case if=@act.is(endAllUserSessions)>
+        @user.endAllUserSessions(@XID)
+        @if(@user.userID.is(@XID)|@reload)
+    </ec:case>
+    <ec:case if=@all(@act.is(endSession)|@iv(@svr[param/sid]))>
+        @user.endSession(@svr[param/sid]|@XID)
+        @if(@user.sessionID.is(@svr[param/sid])|@reload)
+    </ec:case>
+    <ec:case if=@act.is(resetACL)>
+        <ec:data xx procedure="pr_acl_edit" connection=@connection>
+            <ipAddress>@svr[param/aclIP]</ipAddress>
+            <CAPTCHAScore>0</CAPTCHAScore>
+            <errorScore>0</errorScore>
+            <locationScore>0</locationScore>
+            <riskScore>0</riskScore>
+        </ec:data>
+    </ec:case>
+
+
+    <ec:data dt_sessions connection=@connection>
+        SELECT sessionID, expires, persist, ipv4, ipv6, loginAttempts, aclScore, cookie
+        FROM vw_sessions
+        WHERE (ownerID = @XID.asInt OR actingOwnerID = @XID.asInt) AND (expires >= (GETDATE() - 1))
+        ORDER BY expires DESC, sessionID DESC
+    </ec:data>
+
+    <ec:var sessionOptions/>
+    <ec:sessionOptions>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" id="endAllSessionsButton" ecid="obj_sessions" act="endAllUserSessions"><ec:icon title="End All of @usr[firstName]'s Sessions" icon="log-out"/></a>
+    </ec:sessionOptions>
+    <ec:titlebox title="Sessions" options=@sessionOptions>
+        <table class="tbl">
+            <tr>
+                <th>sessionID</th>
+                <th>Expiration</th>
+                <th>Persist</th>
+                <th>IP Address</th>
+                <th>Login Attempts</th>
+                <th>ACL</th>
+                <th>Cookie</th>
+                <th>Options</th>
+            </tr>
+            <ec:loop data=@dt_sessions>
+                <tr class="anchorify" href="/console?ltid=105&xid=6&recordID=@rs[sessionID]" rel="nofollow">
+                    <td>@rs[sessionID]</td>
+                    <td>@rs[expires].formatDate(dd mmmm)</td>
+                    <td>@rs[Persist]</td>
+                    <td>@ipv6_condense(@rs[ipv6]).alt(@rs[ipv4]).alt(127.0.0.1)</td>
+                    <td>@rs[loginAttempts]</td>
+                    <td><span class="col-left">@rs[aclScore]&nbsp;&nbsp;</span><ec:case if=@all(@iv(@rs[aclScore].nullifblank)|@rs[aclScore].alt(0).isGreaterThan(0))><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessions" act="resetACL" aclIP="@rs[ipv6].alt(@rs[ipv4]).alt(127.0.0.1)" confirm="Are you sure you want to reset the ACL Score for this IP Address?"><ec:icon title="Reset ACL Score" icon="repeat" size="tiny" direction="left" style="transform: translateY(3px);"/></a></ec:case></td>
+                    <td>@rs[cookie]</td>
+                    <td><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_sessions" act="endSession" sid="@rs[sessionID]"><ec:icon title="End This Session" icon="log-out" size="sml"/></a></td>
+                </tr>
+            </ec:loop>
+        </table>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_reset_password type="tComponent">
+    <ec:var responded=0/>
+    <ec:case if=@all(@act.is(resetPassword)|@accessLevel.isGreatAs(3))>
+        <ec:data xx procedure="pr_user_resetPassword" connection=@connection>
+            <userID>@XID.asInt</userID>
+            <password>@defaultPassword</password>
+        </ec:data>
+        <ec:set responded=1/>
+        @if(@user.userID.is(@XID)|@reload)
+    </ec:case>
+    <ec:case if=@all(@act.is(resetPassword)|@not(@accessLevel.isGreatAs(3)))>@notification(You do not have a sufficient access level to reset this user's password.)</ec:case>
+
+    <ec:case if=@responded.is(1)>
+        <p class="notice">Password reset to <i id="newDefaultPassword">@defaultPassword</i></p>
+        <ec:script>
+            setTimeout(function(){document.getElementById('newDefaultPassword').innerHTML = '<ec:loop count=@defaultPassword.length>*</ec:loop>'},12000);
+        </ec:script>
+    </ec:case>
+    <ec:case if=@responded.is(0)>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" act="resetPassword" ecid="obj_reset_password" confirm="Reset password and log out all sessions?"><ec:icon title="" icon="relock" direction="left"/>Reset Password</a>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:data dt_organizationsSelect connection=@connection>
+                SELECT organizationID, name
+                FROM vw_organizations
+                WHERE websiteID = @websiteID.asInt
+            </ec:data>
+
+            <ec:input_text title="First Name" id="ffirstName" name="ffirstName" fieldValue=@ffirstName placeholder="John"/>
+            <ec:input_text title="Last Name" id="flastName" name="flastName" fieldValue=@flastName placeholder="Doe"/>
+            <ec:input_email id="femail" name="femail" fieldValue=@femail placeholder="john@chr(64)example.com"/>
+        
+            <ec:input_tel title="Phone Number" id="fphoneNumber" name="fphoneNumber" fieldValue=@fphoneNumber/>
+            <ec:input_text title="Zip Code" id="fzipcode" name="fzipcode" fieldValue=@fzipcode placeholder="84321"/>
+            <ec:input_select title="Organization" id="forganizationID" name="forganizationID" fieldValue=@forganizationID options=@dt_organizationsSelect allowNull/>
+            <ec:input_dateRange title="Registration Date" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+
+            <div>
+                <ec:input_trueFalse title="Inactive?" id="finactive" name="finactive" fieldValue=@finactive.alt(false) allowNull/>
+                <ec:input_trueFalse title="Banned?" id="fisBanned" name="fisBanned" fieldValue=@fisBanned.alt(false) allowNull/>
+                <ec:input_trueFalse title="Needs Validation?" id="fneedsVerified" name="fneedsVerified" fieldValue=@fneedsVerified.nullifblank allowNull/>
+            </div>
+        </ec:consoleSearchBox>
+
+        @obj_users()
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>@obj_user()</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@iv(@XID)>
+        <ec:case if=@accessLevel.isGreatAs(3)>@obj_reset_password</ec:case>
+        <ec:case if=@accessLevel.isGreatAs(4)><a href="#" rel="nofollow"><ec:icon title="" icon="merge" direction="left"/>Merge Account</a><br/></ec:case>
+        <ec:case if=@user.accessLevel(105|1).isGreatAs(2)><a href="/console?ltid=105&xid=1&fdate_start=@today()&fuserID=2" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>User Activity</a><br/></ec:case>
+    </ec:case>
+</ec:function>

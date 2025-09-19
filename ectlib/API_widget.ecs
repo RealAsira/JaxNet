@@ -1,0 +1,18 @@
+@share
+<ec:module comp_widgets/>
+<ec:var widgetID=@svr[param/widgetID].nullifblank/>
+<ec:var tag=@svr[param/tag].nullifblank/>
+
+
+
+<ec:case if=@iv(@tag) rem="widgetID is intentionally not used here to prevent anyone from attempting to access widgets via widgetID">
+    <ec:widget tag=@tag isIframe=1/>
+</ec:case>
+
+<ec:case if=@else>
+    <ec:set errMsg = "Widget tag (tag) is required"/>
+    @logError(API Widget - Missing Tag|@errMsg|75)
+    @RESPONSE_CONTENTTYPE(application/json)
+    {"error": "@jesc(@errMsg)"}
+    @stop()
+</ec:case>

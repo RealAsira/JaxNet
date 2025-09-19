@@ -1,0 +1,338 @@
+@share
+
+<ec:var fdescription = @svr[param/fdescription].nullifblank/>
+<ec:var fprefix = @svr[param/fprefix].nullifblank/>
+<ec:var fparentLocationID = @svr[param/fparentLocationID].nullifblank/>
+<ec:var fwarehouseID = @svr[param/fwarehouseID].nullifblank/>
+
+<ec:object dt_binLocations page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>binLocationID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT binLocationID, description, prefix, parentBinLocationID, dbo.fn_binLocationTag(parentBinLocationID, 1) AS binAddress
+            FROM binLocations
+            LEFT JOIN linkedEntities LE ON toLTID = 14 AND toXID = binLocationID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+
+            @if(@iv(@fdescription)|AND description LIKE @sqlstr(%@fdescription%))
+            @if(@iv(@fprefix)|AND prefix LIKE @sqlstr(%@fprefix%))
+            @if(@iv(@fparentLocationID)|AND parentBinLocationID = @fparentLocationID.asInt)
+            @if(@iv(@fwarehouseID)|AND warehouseID = @fwarehouseID.asInt)
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT binLocations.description, binLocations.prefix, binLocations.parentBinLocationID, dbo.fn_binLocationTag(binLocationID, 1) AS binAddress, binLocations.warehouseID, linkedTables.iconURL, linkedTables.description AS iconDescription
+            FROM binLocations
+            LEFT JOIN linkedTables ON 14 = linkedTables.linkedTableID
+            LEFT JOIN linkedEntities LE ON toLTID = 14 AND toXID = binLocationID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            AND binLocationID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">binLocations.binLocationID</sort>
+</ec:object>
+<ec:object obj_binLocations_pageNavigator dataObj=@dt_binLocations type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_binLocations dataObj=@dt_binLocations type="tComponent">
+    <ec:titlebox title="Bin Locations"  options=@defaultListOptions()>
+        <table class="tbl binLocationsTbl">
+            <tr>
+                <th>Description</th>
+                <th>Prefix</th>
+                <th style="text-align:left;">Bin Address</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=@LTID&xid=@rs[binLocationID]">
+                    <td>@rs[description]</td>
+                    <td>@rs[prefix]</td>
+                    <td style="text-align: left;"><ec:case if=@iv(@rs[parentBinLocationID].nullifblank)><a href="/console?ltid=@LTID&xid=@rs[parentBinLocationID]&xLTID=@LTID&xXID=@rs[binLocationID]" rel="nofollow">@rs[binAddress]&nbsp;<ec:icon title="View parent bin location" icon="hyperlink" size="sml" direction="left"/></a></ec:case><ec:case if=@else>No location</ec:case></td>
+                </tr>
+            </ec:loop>
+        </table>
+        @obj_binLocations_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_binLocation dataObj=@dt_binLocations type="tComponent">
+    <ec:var loc=@dataObj.dataDef[data/1]/>
+    <ec:var parentLocationAddress/><ec:parentLocationAddress if=@iv(@loc[parentBinLocationID])><a href="/console?ltid=@LTID&xid=@loc[parentBinLocationID]&xLTID=@LTID&xXID=@XID" rel="nofollow">@loc[binAddress]</a></ec:parentLocationAddress>
+    <ec:var locationOptions/>
+    <ec:locationOptions>
+        <a href="javascript:void(0)" rel="nofollow"><ec:icon title="Move to different location" icon="random" size="med" style="transform:translateY(1px);"/></a>&nbsp;
+        <a href="javascript:void(0)" rel="nofollow"><ec:icon title="Scan to different location" icon="barcode" size="med" style="transform:translateY(1px);"/></a>
+    </ec:locationOptions>
+
+    <ec:titlebox title="Bin Location" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@loc[iconURL]" alt="@loc[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID"/>
+                <ec:displayField title="Description" content="@loc[description]"/>
+                <ec:displayField title="Prefix" content="@loc[prefix]"/>
+                <ec:displayField title="Location Tag" content="@parentLocationAddress.nullifblank.alt(self-contained)&nbsp;&nbsp;@locationOptions"/>
+            </div>
+            @obj_breadCrumbs()
+        </div>
+
+        <ec:titlebox title="Child Locations" style="width:98%;">
+            @obj_childLocationList()
+        </ec:titlebox>
+    </ec:titlebox>
+
+
+    <ec:var binOptions/>
+    <ec:binOptions>
+        <a href="javascript:void(0)" rel="nofollow"><ec:icon title="Create new bin here" icon="plus" size="med"/></a>&nbsp;
+        <a href="javascript:void(0)" rel="nofollow"><ec:icon title="Scan bins to this location" icon="barcode" size="med"/></a>
+    </ec:binOptions>
+
+    <ec:titlebox title="Bins At Location" options=@binOptions>
+
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_breadCrumbs type="tComponent">
+    <ec:xBreadCrumbs binLocationID=@XID/>
+</ec:object>
+
+
+<ec:function xBreadCrumbs>
+    <ec:param binLocationID=0/>
+    <ec:data xx connection=@connection>
+        SELECT binLocations.binLocationID, dbo.fn_binLocationTag(binLocations.binLocationID, 0) AS description
+        FROM binLocations
+        INNER JOIN dbo.tb_binLocationAncestors(@binLocationID.asInt) ON binLocations.binLocationID = dbo.tb_binLocationAncestors.binLocationID
+    </ec:data>
+
+    <ul class="breadcrumb">
+        <ec:loop data=@xx DESC>
+            <ec:case if=@rs[binLocationID].isnot(@binLocationID)>
+                <li><a href="/console?ltid=@LTID&xid=@rs[binLocationID]&xLTID=@LTID&xXID=@XID" rel="nofollow">@rs[description]&nbsp;&nbsp;<strong>@chr(47)</strong>&nbsp;&nbsp;</a></li>      
+            </ec:case>
+            <ec:case if=@else>
+                <li style="color: var(--link-color-hover);"><strong>@rs[description]</strong></li>      
+            </ec:case>
+        </ec:loop>
+    </ul>
+
+    <ec:include if=@xx.count.isGreaterThan(1) group="headerInclude">
+        <script type="application/ld+json">
+            {
+                "@chr(64)context": "@protocol()@host@svr[request/url]",
+                "@chr(64)type": "BreadcrumbList",
+                "itemListElement": [          
+                    <ec:loop data=@xx DESC>
+                        {
+                            "@chr(64)type": "ListItem",
+                            "position": @index(),
+                            "name": "@rs[description]",
+                            "item": "@protocol()@host()@svr[request/url]?ltid=@LTID&xid=@rs[binLocationID]&xLTID=@LTID&xXID=@XID"
+                        }@if(@not(@rs.isFirst)|,|)
+                    </ec:loop>
+                ]
+            }
+        </script>
+    </ec:include>
+</ec:function>
+
+
+<ec:object obj_childLocationList dataObj=@dt_binLocations type="tComponent">
+    <ec:var childLocationID = @svr[param/childLocationID].nullifblank/>
+
+    <ec:case if=@all(@act.is(unlink)|@iv(@childLocationID))>
+        <ec:data xx procedure="pr_binLocation_changeLocation" connection=@connection>
+            <binLocationID>@childLocationID.asInt</binLocationID>
+            <parentBinLocationID></parentBinLocationID>
+        </ec:data>
+    </ec:case>
+
+    <ec:data dt_childLocations connection=@connection>
+        SELECT binLocations.binLocationID, dbo.fn_binLocationTag(binLocations.binLocationID, 0) AS description
+        FROM binLocations
+        WHERE parentBinLocationID = @XID.asInt
+        ORDER BY binLocations.prefix
+    </ec:data>
+
+    <div id="childLocationList">
+        <ec:loop data=@dt_childLocations>
+            <div class="childLocationDiv"><span class="anchorify" href="/console?ltid=@LTID&xid=@rs[binLocationID]&xLTID=@LTID&xXID=@XID">@rs[description]</span> <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_childLocationList" act="unlink" childLocationID="@rs[binLocationID]" confirm="Are you sure you want to unlink this child from its parent?">&nbsp;<ec:icon title="Remove child from this location" icon="remove" size="tiny" direction="none"/></a></div>
+        </ec:loop>
+        <div class="childLocationDiv"><span class="ajaxClick" ecid="obj_record_new" parentBinLocationID="@XID" warehouseID="@dataObj.dataDef[data/1/warehouseID]">New Child Location&nbsp;&nbsp;<ec:icon title="" icon="plus" size="tiny" direction="none"/></span></div>
+    </div>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Bin Location" type="tDialogRecordForm">
+    <ec:var binDescription = @svr[param/binDescription].nullifblank/>
+    <ec:var binPrefix = @svr[param/binPrefix].nullifblank/>
+    <ec:var parentBinLocationID = @svr[param/parentBinLocationID].nullifblank/>
+    <ec:var warehouseID = @svr[param/warehouseID].nullifblank/>
+
+
+    <ec:case if=@all(@state.is(respond)|@svr[param/submittedBy].isnot(select_warehouseID))>
+        <ec:case if=@all(@iv(@binDescription)|@iv(@binPrefix)|@iv(@warehouseID))>
+            <ec:data xx procedure="pr_binLocation_new" connection=@connection>
+                <binDescription>@binDescription</binDescription>
+                <binPrefix>@binPrefix</binPrefix>
+                <parentBinLocationID>@parentBinLocationID.asInt</parentBinLocationID>
+                <warehouseID>@warehouseID.asInt</warehouseID>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newBinLocationID = @xx[newBinLocationID].nullifblank/>
+
+            <ec:case if=@iv(@newBinLocationID)>
+                @logAction(2|@LTID|@newBinLocationID)
+                @notification(Bin Location BNL-@newBinLocationID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@newBinLocationID)
+                @close()
+            </ec:case>
+            <ec:case if=@nv(@newBinLocationID)>
+                <ec:set errMsg = "An error occurred. Pleae contact a system administrator."/>
+                @logError(error|obj_newBinLocation_dialog unknown SQL error|101)
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else><ec:set errMsg="Description, prefix, and warehouse are required to make a new bin location!"/></ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_parentLocationSelect connection=@connection>
+            SELECT binLocationID, dbo.fn_binLocationTag(binLocationID, 1) AS description
+            FROM binLocations
+            LEFT JOIN linkedEntities LE ON toLTID = 14 AND toXID = binLocationID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            @if(@iv(@warehouseID)|AND warehouseID = @warehouseID.asInt|AND 1=2)
+        </ec:data>
+        <ec:data dt_warehouseSelect connection=@connection>
+            SELECT warehouses.warehouseID, warehouses.description
+            FROM warehouses
+            LEFT JOIN linkedEntities LE ON toLTID = 16 AND toXID = warehouses.warehouseID
+            WHERE LE.websiteID = @websiteID.asInt
+        </ec:data>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_select title="Warehouse" name="warehouseID" id="warehouseID" fieldValue=@warehouseID options=@dt_warehouseSelect class="submitOnChange" onchange="document.getElementById('select_parentBinLocationID').value = '';"/>
+        <ec:input_select title="Parent Loc." name="parentBinLocationID" id="parentBinLocationID" fieldValue=@parentBinLocationID options=@dt_parentLocationSelect/>
+        <ec:input_text title="Prefix (Tag)" name="binPrefix" id="binPrefix" maxLength="16" fieldValue=@binPrefix/>
+        <ec:input_text title="Description" name="binDescription" id="binDescription" fieldValue=@binDescription/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Bin Location" type="tDialogRecordForm">
+    <ec:var binDescription = @svr[param/binDescription].nullifblank/>
+    <ec:var binPrefix = @svr[param/binPrefix].nullifblank/>
+    <ec:var parentBinLocationID = @svr[param/parentBinLocationID].nullifblank/>
+    <ec:var warehouseID = @svr[param/warehouseID].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@binDescription)|@iv(@binPrefix)|@iv(@warehouseID))>
+            <ec:data xx procedure="pr_binLocation_edit" connection=@connection>
+                <binLocationID>@XID.asInt</binLocationID>
+                <binDescription>@binDescription</binDescription>
+                <binPrefix>@binPrefix</binPrefix>
+                <parentBinLocationID>@parentBinLocationID.asInt</parentBinLocationID>
+                <warehouseID>@warehouseID.asInt</warehouseID>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage] if=@iv(@xx[errorMessage].nullifblank)/>
+            <ec:case if=@iv(@errMsg)>@logError(Edit Bin Location Error|@errMsg|101)</ec:case>
+            
+            <ec:case if=@nv(@errMsg)>
+                @logAction(3|@LTID|@XID|Edited bin location)
+                @dt_binLocations.refresh()
+                @obj_binLocation.refresh()
+                @close()
+            </ec:case>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_binLocation connection=@connection>
+            SELECT description, prefix, parentBinLocationID, warehouseID
+            FROM binLocations
+            WHERE binLocationID = @XID.asInt
+        </ec:data>
+        <ec:var binLoc = @dt_binLocation[1]/>
+        
+        <ec:data dt_parentLocationSelect connection=@connection>
+            SELECT binLocationID, dbo.fn_binLocationTag(binLocationID, 1) AS description
+            FROM binLocations
+            LEFT JOIN linkedEntities LE ON toLTID = 14 AND toXID = binLocationID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            AND binLocationID <> @XID.asInt
+            @if(@iv(@warehouseID)|AND warehouseID = @warehouseID.asInt|AND 1=2)
+        </ec:data>
+        <ec:data dt_warehouseSelect connection=@connection>
+            SELECT warehouses.warehouseID, warehouses.description
+            FROM warehouses
+            LEFT JOIN linkedEntities LE ON toLTID = 16 AND toXID = warehouses.warehouseID
+            WHERE LE.websiteID = @websiteID.asInt
+        </ec:data>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Description" name="binDescription" id="binDescription" fieldValue=@binLoc[description].alt(@binDescription)/>
+        <ec:input_text title="Prefix" name="binPrefix" id="binPrefix" maxLength="16" fieldValue=@binLoc[prefix].alt(@binPrefix)/>
+        <ec:input_select title="Parent Loc." name="parentBinLocationID" id="parentBinLocationID" fieldValue=@binLoc[parentBinLocationID].alt(@parentBinLocationID) options=@dt_parentLocationSelect/>
+        <ec:input_select title="Warehouse" name="warehouseID" id="warehouseID" fieldValue=@binLoc[warehouseID].alt(@warehouseID) options=@dt_warehouseSelect class="submitOnChange" onchange="document.getElementById('select_parentBinLocationID').value = '';"/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:data dt_parentLocationSelect connection=@connection>
+                SELECT binLocationID, dbo.fn_binLocationTag(binLocationID, 1) AS description
+                FROM binLocations
+                LEFT JOIN linkedEntities LE ON toLTID = 14 AND toXID = binLocationID
+                WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+                @if(@iv(@fwarehouseID)|AND warehouseID = @fwarehouseID.asInt)
+            </ec:data>
+            <ec:data dt_warehouseSelect connection=@connection>
+                SELECT warehouses.warehouseID, warehouses.description
+                FROM warehouses
+                LEFT JOIN linkedEntities LE ON toLTID = 16 AND toXID = warehouses.warehouseID
+                WHERE LE.websiteID = @websiteID.asInt
+            </ec:data>
+
+            <ec:input_text title="Description" id="fdescription" name="fdescription" fieldValue=@fdescription/>
+            <ec:input_text title="Prefix" id="fprefix" name="fprefix" maxlength="16" fieldValue=@fprefix/>
+            <ec:input_select title="Warehouse" id="fwarehouseID" name="fwarehouseID" fieldValue=@fwarehouseID options=@dt_warehouseSelect onchange="document.getElementById('select_fparentLocationID').value = ''; this.form.submit();" allowNull/>
+            <ec:input_select title="Parent Location" id="fparentLocationID" name="fparentLocationID" fieldValue=@fparentLocationID options=@dt_parentLocationSelect allowNull/>
+        </ec:consoleSearchBox>
+
+        @obj_binLocations
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>@obj_binLocation</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

@@ -1,0 +1,263 @@
+@share
+<ec:module comp_highlights/>
+<ec:module comp_input_entity/>
+
+<ec:var fkeywords = @svr[param/fkeywords].nullifblank/>
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+<ec:var fhighlightTypeID = @svr[param/fhighlightTypeID].nullifblank/>
+<ec:var fhomepage = @svr[param/fhomepage].nullifblank/>
+
+<ec:object dt_highlights page=@page limit="100" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>highlightID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT highlightID, title, startDate, endDate, highlightTypeID, highlightType
+            FROM vw_highlights
+            WHERE websiteID = @websiteID.asInt
+            
+            @if(@fhomepage.isnull|AND (dispOnCollectionID IS NULL OR dispOnCollectionID IS NOT NULL))
+            @if(@fhomepage.is(true)|AND (dispOnCollectionID IS NULL))
+            @if(@fhomepage.is(false)|AND (dispOnCollectionID IS NOT NULL))
+            
+            @if(@iv(@fkeywords)|AND FREETEXT((title, keywords), 'NEAR(@sqlesc(@fkeywords))'))
+            @if(@iv(@fdate_start)|AND CAST(startDate AS DATE) @chr(62)= @sqlstr(@fdate_start.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fdate_end)|AND CAST(endDate AS DATE) @chr(60)= @sqlstr(@fdate_end.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fhighlightTypeID)|AND highlightTypeID = @fhighlightTypeID.asInt)
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT highlightID, startDate, endDate, highlightType, collectionID, collectionName
+            FROM vw_highlight
+            WHERE websiteID = @websiteID.asInt AND highlightID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="desc">highlightID</sort>
+</ec:object>
+<ec:object obj_highlights_pageNavigator dataObj=@dt_highlights type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_highlights dataObj=@dt_highlights type="tComponent">
+    <ec:titlebox title="Highlights" options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Start Date</th>
+                <th style="text-align:left;">End Date</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=@LTID&xid=@rs[highlightID]">
+                    <td>@rs[title]</td>
+                    <td>@rs[highlightType]</td>
+                    <td>@rs[startDate].formatdate(dd mmm yyyy)</td>
+                    <td style="text-align:left;">@rs[endDate].formatdate(dd mmm yyyy).alt(Indefinite)</td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_highlights_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_highlight dataObj=@dt_highlights type="tComponent">
+    <ec:var hl = @dataObj.dataDef[data/1]/>
+    <ec:var revealKeywordsBtn/><ec:revealKeywordsBtn><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_keywordsList">View Keywords</a></ec:revealKeywordsBtn>
+
+    <ec:titlebox title="Highlight" options=@defaultRecordOptions()>
+        <ec:displayField title="ID" content="@XID"/>
+        <ec:displayField title="Highlight Type" content=@hl[highlightType]/>
+        <ec:displayField title="Start Date @hint(The morning this highlight begins.)" content=@hl[startDate].formatDate(dd MMM yyyy)/>
+        <ec:displayField title="End Date @hint(The night this highlight ends.)" content=@hl[endDate].formatDate(dd MMM yyyy).alt(Indefinite)/>
+        <ec:var collectionLink/><ec:collectionLink><a href="/console?ltid=18&xid=@hl[collectionID]" rel="nofollow">@hl[collectionName].alt(&nbsp;)</a></ec:collectionLink>
+        <ec:displayField title="Collection @hint(The collection this highlight displays on. Blank shows on the website home page or employee bulletin.)" content=@collectionLink/>
+        <ec:displayField title="Keywords" content=@revealKeywordsBtn/>
+    </ec:titlebox>
+
+    <div style="display:flex; flex-wrap:warp;">
+        @highlight(@hl[highlightID].alt(0))
+        <!-- use this space for analytics or other widgets -->
+    </div>
+</ec:object>
+
+
+
+
+
+<ec:object obj_keywordsList title="Keywords" buttonCaption="Close" type="tDialogForm">
+    <ec:case if=@not(@closed)>
+        <ec:data dt_keywords connection=@connection>
+            SELECT dbo.fn_sortAlphaString(keywords) AS sortedKeywords
+            FROM vw_highlights
+            WHERE highlightID = @XID.asInt.alt(0)
+        </ec:data>
+        <br/><strong>Automatically generated keywords</strong><br/><p class="notice">The highlight title, ID, and key phrases such as "highlight".</p><br/><br/>
+
+        @dt_keywords[1/sortedKeywords].lower
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Highlight" type="tDialogRecordForm">
+    <ec:var highlightTypeID = @svr[param/highlightTypeID].nullifblank/>
+    <ec:var title = @svr[param/title].nullifblank/>
+    <ec:var keywords = @svr[param/keywords].nullifblank/>
+    <ec:var content = @svr[param/content].nullifblank/>
+    <ec:var startDate = @svr[param/daterange_start].asDate.nullifblank/>
+    <ec:var endDate = @svr[param/daterange_end].asDate.nullifblank/>
+    <ec:var eLTID=@svr[param/L_entity].nullifblank  dispOnCollectionID = @svr[param/X_entity].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@content|@highlightTypeID)>
+            <ec:data xx procedure="pr_highlight_new" connection=@connection>
+                <highlightTypeID>@highlightTypeID.asInt</highlightTypeID>
+                <title>@title</title>
+                <keywords>@keywords</keywords>
+                <content>@content.encode</content>
+                <startDate>@startDate.asDate</startDate>
+                <endDate>@endDate.asDate</endDate>
+                <dispOnCollectionID>@dispOnCollectionID.asInt</dispOnCollectionID>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+            <ec:case if=@nv(@errMsg)>
+                @logAction(2|@LTID|@xx[newHighlightID])
+                @notification(Highlight HLT-@xx[newHighlightID] created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@xx[newHighlightID])
+                @close()
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "Highlight type and content are both required to create a new highlight."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_highlightTypes_select connection=@connection>
+            SELECT highlightTypeID, description
+            FROM highlightTypes
+        </ec:data>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Title" id="title" name="title" fieldValue=@title require/>
+        <ec:input_select title="Highlight Type" id="highlightTypeID" name="highlightTypeID" fieldValue=@highlightTypeID options=@dt_highlightTypes_select require/>
+        <ec:input_entity title="Collection" id="entity" name="entity" fieldLTID=@eLTID fieldXID=@dispOnCollectionID filterLTID="18" allowNull hintContent="Which collection should this highlight display on? Leave blank to show on the website home page or employee bulletin."/>
+        <br/><br/>
+        <ec:input_dateRange title="Date Range" id="daterange" name="daterange" fieldValue1=@startDate.alt(@calc(@today.add(1))) fieldValue2=@endDate allowNull hintContent="The morning the highlight starts and the night it ends (blank end date for indefinite)."/>
+        <br/><br/>
+        <ec:input_text title="Keywords" id="keywords" name="keywords" containerstyle="width:100%;" style="width:100%;" fieldValue=@keywords hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Avoid adjectives / articles."/><br/><br/>
+        <ec:input_textField title="Content" id="content" name="content" fieldValue=@content require/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Highlight" type="tDialogRecordForm">
+    <ec:var highlightTypeID = @svr[param/highlightTypeID].nullifblank/>
+    <ec:var title = @svr[param/title].nullifblank/>
+    <ec:var keywords = @svr[param/keywords].nullifblank/>
+    <ec:var content = @svr[param/content].nullifblank/>
+    <ec:var startDate = @svr[param/daterange_start].asDate.nullifblank/>
+    <ec:var endDate = @svr[param/daterange_end].asDate.nullifblank/>
+    <ec:var eLTID=@svr[param/L_entity].nullifblank  dispOnCollectionID = @svr[param/X_entity].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@content|@highlightTypeID)>
+            <ec:data xx procedure="pr_highlight_edit" connection=@connection>
+                <highlightID>@XID.asInt</highlightID>
+                <highlightTypeID>@highlightTypeID.asInt</highlightTypeID>
+                <title>@title</title>
+                <keywords>@keywords</keywords>
+                <content>@content.encode</content>
+                <startDate>@startDate.asDate</startDate>
+                <endDate>@endDate.asDate</endDate>
+                <dispOnCollectionID>@dispOnCollectionID.asInt</dispOnCollectionID>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+            <ec:case if=@nv(@errMsg)>
+                @logAction(3|@LTID|@XID|Edited highlight)
+                @dt_highlights.refresh()
+                @obj_highlight.refresh()
+                @close()
+            </ec:case>
+        </ec:case>
+    
+        <ec:case if=@else>
+            <ec:set errMsg = "Highlight type and content are both required to create a new highlight."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_highlightTypes_select connection=@connection>
+            SELECT highlightTypeID, description
+            FROM highlightTypes
+        </ec:data>
+
+        <ec:data dt_highlight connection=@connection>
+            SELECT title, startDate, endDate, highlightTypeID, keywords, content, dispOnCollectionID
+            FROM vw_highlight
+            WHERE websiteID = @websiteID.asInt AND highlightID = @XID.alt(0).asInt
+        </ec:data>
+        <ec:var hl = @dt_highlight[1]/>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Title" id="title" name="title" fieldValue=@hl[title].alt(@title) require/>
+        <ec:input_select title="Highlight Type" id="highlightTypeID" name="highlightTypeID" fieldValue=@hl[highlightTypeID].alt(@highlightTypeID) options=@dt_highlightTypes_select require/>
+        <ec:input_entity title="Collection" id="entity" name="entity" fieldLTID=@if(@iv(@hl[dispOnCollectionID])|18|@eLTID) fieldXID=@hl[dispOnCollectionID].alt(@dispOnCollectionID) filterLTID="18" allowNull hintContent="Which collection should this highlight display on? Leave blank to show on the website home page or employee bulletin."/>
+        <br/><br/>
+        <ec:input_dateRange title="Date Range" id="daterange" name="daterange" fieldValue1=@hl[startDate].alt(@startDate.alt(@calc(@today.add(1)))) fieldValue2=@hl[endDate].alt(@endDate) allowNull hintContent="The morning the highlight starts and the night it ends (blank end date for indefinite)."/>
+        <br/><br/>
+        <ec:input_text title="Keywords" id="keywords" name="keywords" containerstyle="width:100%;" style="width:100%;" fieldValue=@hl[keywords].alt(@keywords) hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Avoid adjectives / articles."/><br/><br/>
+        <ec:input_textField title="Content" id="content" name="content" fieldValue=@hl[content].alt(@content) require/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:data dt_highlightTypes_select connection=@connection>
+                SELECT highlightTypeID, description
+                FROM highlightTypes
+            </ec:data>
+
+            <ec:input_text title="Keywords" id="fkeywords" name="fkeywords" fieldValue=@fkeywords/> 
+            <ec:input_dateRange title="Date Range" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+            <ec:input_select title="Highlight Type" id="fhighlightTypeID" name="fhighlightTypeID" fieldValue=@fhighlightTypeID options=@dt_highlightTypes_select allowNull/>
+            <ec:input_trueFalse title="On Homepage" id="fhomepage" name="fhomepage" fieldValue=@fhomepage allowNull/>
+        </ec:consoleSearchBox>
+        
+        @obj_highlights()
+    </ec:case>
+    
+    <ec:case if=@iv(@XID)>@obj_highlight()</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

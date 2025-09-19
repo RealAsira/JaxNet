@@ -1,0 +1,389 @@
+@share
+@pageTitle.setValue(Entity Queue)
+<ec:module comp_input_entity/>
+<ec:module lib_printing/>
+
+<ec:var fqueueTypeID = @svr[param/fqueueTypeID].alt(1)/>
+<ec:var fownerLTID = @svr[param/L_fownerID].alt(2).nullifblank/>
+<ec:var fownerXID = @svr[param/X_fownerID].alt(@user.employeeID).nullifblank/>
+<ec:var fownerLEID = @svr[param/LEID_fownerID].alt(@getLEID(2|@user.employeeID)).nullifblank/>
+
+<ec:object dt_entityQueue page=@page limit="72" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>entityQueueID</primaryKey>
+    <sqlSelect>
+        SELECT EQ.entityQueueID, EQ.entityLEID, LE.toLTID AS entityLTID, LE.toXID AS entityXID, EQ.quantity, dbo.fn_entityImage(EQ.entityLEID, 2) AS iconURL, dbo.fn_entityName(LE.toLTID, LE.toXID) AS entityName,
+        EQ.ownerLEID, oLE.toLTID AS ownerLTID, oLE.toXID AS ownerXID, dbo.fn_entityName(oLE.toLTID, oLE.toXID) AS ownerName
+        FROM entityQueue EQ
+        LEFT JOIN linkedEntities LE ON EQ.entityLEID = LE.linkedEntityID
+        LEFT JOIN linkedEntities oLE ON EQ.ownerLEID = oLE.linkedEntityID
+        WHERE 1=1
+
+        @fqueueTypeID.asInt.with(AND EQ.entityQueueTypeID = |)
+        @fownerLEID.asInt.with(AND EQ.ownerLEID = |)
+    </sqlSelect>
+    <sort>date DESC, dbo.fn_entityName(LE.toLTID, LE.toXID) ASC</sort>
+</ec:object>
+<ec:object obj_entityQueue_pageNavigator dataObj=@dt_entityQueue type="tPageNavigator"/>
+
+
+
+
+
+<ec:style>
+    .entityQueueItem {
+        & span, & a {line-height:30px;}
+        & img {height:28px; padding:1px 0px;}
+    }
+</ec:style>
+
+
+
+
+
+<ec:object obj_entityQueue dataObj=@dt_entityQueue type="tComponent">
+    <ec:var options/>
+    <ec:options>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" act="insert" ecid="obj_newQueueItem_dialog"><ec:icon title="Add Item To Queue" icon="plus"/></a>
+        <ec:input_barcode title="Scan items to entity queue" name="entityQueueScan" id="entityQueueScan" direction="right" containerStyle="transform: translate(-5px, 2px);" ecid="obj_newQueueItem_scan" loader="#tb_entityqueue"/>
+    </ec:options>
+
+    <ec:titlebox title="Entity Queue" options=@options()>
+        <table class="tbl">
+            <tr id="entityQueueTable_header">
+                <th>&nbsp;</th>
+                <th>Description</th>
+                <th>Quantity</th>
+                <th style="text-align:right;">Options</th>
+            </tr>
+        <ec:loop data=@dataObj.dataDef[data]>
+            <ec:case if=@rs[ownerLED].isHeader>
+                <tr><th colspan="4" style="text-align: center;"><a href="/console?ltid=@ownerLTID&xid=@ownerXID&xLTID=@LTID&xXID=@XID" rel="nofollow">@rs[ownerName]</a></th></tr>
+            </ec:case>
+            <tr class="entityQueueItem" id="entityQueueID-@rs[entityQueueID]">
+                <td><img src="@rs[iconURL]" alt="@rs[entityName]"/></td>
+                <td><a href="/console?ltid=@rs[entityLTID]&xid=@rs[entityXID]&xltid=@LTID&xxid=@XID" rel="nofollow">@rs[entityName]</a></td>
+                <td>
+                    @comment(manually created input here in order to add unique attributes to it)
+                    <div class="formfield number">
+                        <label for="number_quantity_@rs[entityQueueID]"></label><br/>
+                        <input type="number" inputmode="numeric" id="number_quantity_@rs[entityQueueID]" name="quantity" min="0" max="9999" step="1" class="ajaxChange" value="@rs[quantity]" entityQueueID="@rs[entityQueueID]" ecid="obj_entityQueue_changeQuantity" loader="#entityQueueID-@rs[entityQueueID]"/>
+                    </div>
+                </td>
+                <td style="text-align:right;"><a href="javascript:void(0)" rel="nofollow" id="clearQueueButton" class="ajaxClick" entityQueueID="@rs[entityQueueID]" ecid="obj_entityQueue_clear" loader="#entityQueueID-@rs[entityQueueID]"><ec:icon title="Remove this entity from the queue?" icon="remove" size="xsml"/></a></td>
+            </tr>
+        </ec:loop>
+        </table>
+        
+        @obj_entityQueue_pageNavigator
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+<ec:object obj_newQueueItem_dialog title="Add Entity To Queue" type="tDialogForm">
+    <ec:var entityLTID = @svr[param/L_entityID].nullifblank/>
+    <ec:var entityXID = @svr[param/X_entityID].nullifblank/>
+    <ec:var entityLEID = @svr[param/LEID_entityID].nullifblank/>
+    <ec:var quantity = @svr[param/quantity].alt(1)/>
+    <ec:var message/>
+
+    <ec:var ownerLEID = @svr[param/ownerLEID].alt(@svr[param/fownerLEID]).alt(@getLEID(2|@user.employeeID))/>
+    <ec:var queueTypeID = @svr[param/queueTypeID].alt(@svr[param/fqueueTypeID]).alt(1)/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@entityLEID)>           
+            <ec:data xx procedure="pr_entityQueue_new" connection=@connection>
+                <entityLEID>@entityLEID.asInt</entityLEID>
+                <ownerLEID>@ownerLEID.asInt</ownerLEID>
+                <entityQueueTypeID>@queueTypeID.asInt</entityQueueTypeID>
+                <quantity>@quantity.asInt</quantity>
+            </ec:data>
+
+            <ec:var newEntityQueueID = @xx[newEntityQueueID].nullifblank/>
+            <ec:set if=@nv(@newEntityQueueID) errMsg = "A server error occurred while adding the entity to the entity queue. Please contact a system administrator."/>
+
+            <ec:case if=@nv(@errMsg)>
+                <ec:data dt_newQueueItem connection=@connection>
+                    SELECT LE.toLTID, LE.toXID, EQ.quantity, dbo.fn_entityName(LE.toLTID, LE.toXID) AS entityName
+                    FROM entityQueue EQ
+                    LEFT JOIN linkedEntities LE ON EQ.entityLEID = LE.linkedEntityID
+                    WHERE 1=1 AND entityQueueID = @newEntityQueueID.asInt
+                </ec:data>
+
+                <ec:message>
+                    Added @quantity.alt(1)qty of <a href="/console?ltid=@dt_newQueueItem[1/toLTID]&xid=@dt_newQueueItem[1/toXID]&xLTID=@LTID&xXID=@XID" rel="nofollow">@dt_newQueueItem[1/entityName]</a> to the entity queue.
+                </ec:message>
+
+                @dt_entityQueue.refresh()
+                @obj_entityQueue.refresh() 
+
+                @entityLTID.setValue(@null)
+                @entityXID.setValue(@null)
+                @quantity.setValue(1)
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else()>
+            <ec:set errMsg = "No entity was selected. Please select an entity to add it to the queue."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <p class="notice">@message.nullifblank</p>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <input type="hidden" id="ownerLEID" name="ownerLEID" value="@ownerLEID"/>
+        <input type="hidden" id="queueTypeID" name="queueTypeID" value="@queueTypeID"/>
+        <ec:input_entity title="Entity" id="entityID" name="entityID" fieldLTID=@entityLTID fieldXID=@entityXID fieldLEID=@entityLEID filterLTID="6,14,15,16,19,20"/>
+        <ec:input_number title="Quantity" id="quantity" name="quantity" fieldValue=@quantity.alt(1) containerStyle="margin-left:10px;"/>
+
+        <ec:script if=@all(@state.is(refresh)|@nv(@message.nullifblank))>
+            //auto-click entitySearch
+            document.getElementById('searchEntities_entityID').click();
+        </ec:script>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_newQueueItem_scan type="tComponent">
+    <ec:case if=@iv(@scanLEID)>
+        <ec:data xx procedure="pr_entityQueue_new" connection=@connection>
+            <entityLEID>@scanLEID.asInt</entityLEID>
+            <ownerLEID>@svr[param/fownerLEID].alt(@getLEID(2|@user.employeeID)).asInt</ownerLEID>
+            <entityQueueTypeID>@svr[param/fqueueTypeID].alt(1).asInt</entityQueueTypeID>
+            <quantity>1</quantity>
+        </ec:data>
+
+        @dt_entityQueue.refresh()
+        @obj_entityQueue.refresh() 
+    </ec:case>
+    <ec:case if=@else>
+        @notification(Invalid entity scanned to queue.)
+    </ec:case>
+</ec:object>
+@obj_barcodeResponder.registerComponent(@obj_newQueueItem_scan())
+
+
+
+
+
+
+<ec:object obj_entityQueue_clear type="tComponent">
+    <ec:var entityQueueID = @svr[param/entityQueueID].nullifblank/>
+    <ec:var ownerLEID = @svr[param/ownerLEID].nullifblank/>
+    <ec:var queueTypeID = @svr[param/queueTypeID].nullifblank/>
+
+    @comment(will either receive entityQueueID and remove specific item OR will receive ownerLEID and queueTypeID (or neither) will remove all from queue meeting those params)
+    <ec:case if=@any(@all(@iv(@entityQueueID)|@nv(@ownerLEID)|@nv(@queueTypeID))|@nv(@enityQueueID))>
+        <ec:data xx procedure="pr_entityQueue_clear" connection=@connection>
+            <entityQueueID>@entityQueueID.asInt</entityQueueID>
+            <ownerLEID>@ownerLEID.asInt</ownerLEID>
+            <queueTypeID>@queueTypeID.asInt</queueTypeID>
+        </ec:data>
+
+        @dt_entityQueue.refresh()
+        @obj_entityQueue.refresh()
+    </ec:case>
+
+    <ec:case if=@else>
+        @notification(A server misconfiguration error in clearQueue has occurred. Please contact a system administrator.)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_entityQueue_changeQuantity type="tComponent">
+    <ec:var entityQueueID = @svr[param/entityQueueID].nullifblank/>
+    <ec:var quantity = @svr[param/value].nullifblank/>
+
+    <ec:case if=@all(@iv(@entityQueueID)|@iv(@quantity))>
+        <ec:data xx procedure="pr_entityQueue_edit" connection=@connection>
+            <entityQueueID>@entityQueueID.asInt</entityQueueID>
+            <quantity>@quantity.asInt</quantity>
+        </ec:data>
+
+        <ec:script>
+            $('#number_quantity_@entityQueueID').val(@jstr(@quantity.asInt));
+        </ec:script>
+    </ec:case>
+
+    <ec:case if=@else>
+        @notification(A server misconfiguration error in changeQuantity has occurred. Please contact a system administrator.)
+        @dt_entityQueue.refresh()
+        @obj_entityQueue.refresh()
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_entityQueue_print type="tPrintDialog">
+    <ec:case if=@fqueueTypeID.is(1) rem="label queue">
+        <ec:var mode=@svr[param/mode]/>
+
+        <ec:case if=@mode.is(uni_80|prod_80|bin_80)>@self.labelType.setValue(Avery5167)</ec:case>
+        <ec:case if=@mode.is(uni_30|prod_30|bin_30)>@self.labelType.setValue(Avery5160)</ec:case>
+
+        <ec:data dt_entityQueueLabels connection=@connection>
+            SELECT LE.toLTID, EQ.quantity, dbo.fn_entityBarcode(LE.toLTID, LE.toXID) AS barcodeVal, dbo.fn_entityImage(EQ.entityLEID, 2) AS iconURL, dbo.fn_entityName(LE.toLTID, LE.toXID) AS entityName, LT.tableTag AS entityTypeTag,
+            CASE LE.toLTID WHEN 20 THEN prod.SKU ELSE NULL END AS SKU
+            FROM entityQueue EQ
+            LEFT JOIN linkedEntities LE ON EQ.entityLEID = LE.linkedEntityID
+            LEFT JOIN vw_linkedTables LT ON LE.toLTID = LT.linkedTableID
+            LEFT JOIN productVariants prod ON LE.toXID = productVariantID
+            WHERE 1=1
+    
+            @fqueueTypeID.asInt.with(AND EQ.entityQueueTypeID = |)
+            @fownerLEID.asInt.with(AND EQ.ownerLEID = |)
+
+            ORDER BY date DESC, dbo.fn_entityName(LE.toLTID, LE.toXID) ASC
+        </ec:data>
+
+        <style>
+            /*  barcode layout ... 7px padding included in lib_printing ... careful not to override this with position:absolute  */
+
+            .uni_80 {
+                & *             {display:inline-block; position:relative}
+                & img           {top:0; left: 0; height:100%}
+                & .jsBarcode    {top:-10%; float:right; width:max-content; height:50%; overflow:hidden;}
+                & span.name     {top:-60%; float:right; width:calc(100% - 50px); overflow:hidden; font-size:.6rem; text-align:right; font-weight:bold}
+            }
+
+            .uni_30 {
+                & *             {display:inline-block; position:relative}
+                & img           {top:7.5%; left: 0; height:85%}
+                & .jsBarcode    {top:7.5%; float:right; width:max-content; height:50%; overflow:hidden;}
+                & span.name     {top:-45%; float:right; width:calc(100% - 76px); overflow:hidden; font-size:.9rem; text-align:right; font-weight:bold}
+            }
+
+            .prod_80 {
+                & *             {display:inline-block; position:relative}
+                & span.name     {top:0; left: 0; font-weight:bold; font-size:.6rem; width:35%; height:100%; text-align:left;}
+                & .jsBarcode    {top:-10%; float:right; width:max-content; height:50%; overflow:hidden;}
+                & span.sku      {top:-40%; float:right; width:calc(45% - 14px); overflow:hidden; font-size:.6rem; text-align:right; font-weight:bold} 
+            }
+            
+            .prod_30 {
+                & *             {display:inline-block; position:relative}
+                & span.sku      {top:0%; left:1%; font-size:1rem; font-weight:bold; text-align:left;}
+                & img           {top:0; left:0; height:75%}
+                & .jsBarcode    {top:-10%; float:right; width:max-content; height:50%; overflow:hidden;}
+                & span.name     {top:-50%; float:right; width:calc(100% - 76px); overflow:hidden; font-size:.9rem; text-align:right; font-weight:bold}
+            }
+
+            .bin_80 {
+                & *             {display:inline-block; position:relative}
+                & span.name     {top:32%; left: 0; font-weight:bold; font-size:.8rem; width:35%; height:100%;}
+                & .jsBarcode    {top:14%; float:right; width:max-content;}
+            }
+
+            .bin_30 {
+                & *             {display:inline-block; position:relative}
+                & .jsBarcode    {position:relative; top:15%; width:100%; height:60%; text-align:center; overflow:hidden;}
+                & span.name     {width:100%; font-size:1.4rem; text-align:center; font-weight:bold; overflow:hidden;}
+            }
+        </style>
+
+        <ec:loop data=@dt_entityQueueLabels>
+            <ec:var ref=@dt_entityQueueLabels[@index]/>
+
+            <ec:loop count=@rs[quantity]>
+                <ec:case if=@mode.is(uni_80)>
+                    <ec:label class="uni_80">
+                        <img src="@ref[iconURL]" alt="@ref[entityTypeTag]"/>
+                        <ec:barcode val="@ref[barcodeVal]" symb="c128c"/>
+                        <span class="name">@ref[entityName]</span>
+                    </ec:label>
+                </ec:case>
+
+                <ec:case if=@mode.is(uni_30)>
+                    <ec:label class="uni_30">
+                        <img src="@ref[iconURL]" alt="@ref[entityTypeTag]"/>
+                        <ec:barcode val="@ref[barcodeVal]" symb="c128c"/>
+                        <span class="name">@ref[entityName]</span>
+                    </ec:label>
+                </ec:case>
+
+                <ec:case if=@all(@mode.is(prod_80)||@ref[toLTID].is(19|20))>
+                    <ec:label class="prod_80">
+                        <span class="name">@ref[entityName]</span>
+                        <ec:barcode val="@ref[barcodeVal]" symb="c128c"/>
+                        <span class="sku">@ref[SKU].alt(&nbsp;)</span>
+                    </ec:label>
+                </ec:case>
+
+                <ec:case if=@all(@mode.is(prod_30)|@ref[toLTID].is(19|20))>
+                    <ec:label class="prod_30">
+                        <span class="sku">@ref[SKU].alt(&nbsp;)</span><br/>
+                        <img src="@ref[iconURL]" alt="@ref[entityTypeTag]"/>
+                        <ec:barcode val="@ref[barcodeVal]" symb="c128c"/>
+                        <span class="name">@ref[entityName]</span>
+                    </ec:label>
+                </ec:case>
+
+                <ec:case if=@mode.is(bin_80)|@ref[toLTID].is(14|15|16))>
+                    <ec:label class="bin_80">
+                        <span class="name">@ref[entityName]</span>
+                        <ec:barcode val="@ref[barcodeVal]" symb="c128c"/>
+                    </ec:label>
+                </ec:case>
+
+                <ec:case if=@all(@mode.is(bin_30)|@ref[toLTID].is(14|15|16))>
+                    <ec:label class="bin_30">
+                        <ec:barcode val="@ref[barcodeVal]" symb="c128c"/>
+                        <span class="name">@ref[entityName]</span>
+                    </ec:label>
+                </ec:case>
+            </ec:loop>
+        </ec:loop>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:consoleSearchBox>
+        <ec:data dt_queueTypeSelect connection=@connection>
+            SELECT entityQueueTypeID, entityQueueTypeName
+            FROM entityQueueTypes
+            WHERE disabled = 0
+        </ec:data>
+
+        <ec:input_select title="Queue Type" id="fqueueTypeID" name="fqueueTypeID" options=@dt_queueTypeSelect fieldValue=@fqueueTypeID/>
+        <ec:input_entity title="Owner" id="fownerID" name="fownerID" fieldLTID=@fownerLTID fieldXID=@fownerXID fieldLEID=@fownerLEID filterLTID="1,2" allowNull/>
+    </ec:consoleSearchBox>
+
+    @obj_entityQueue()
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+     <ec:case if=@fqueueTypeID.is(1) rem="label queue">
+        <a href="javascript:void(0)" rel="nofollow" id="clearQueueButton" class="ajaxClick" ownerLEID="@fownerLEID" queueTypeID="@fqueueTypeID" ecid="obj_entityQueue_clear" confirm="Clear entity queue for selected user and queue type (or all users and queue types if none are selected)?">Clear entity queue</a><br/>
+        
+        <br/><span><h4 style="display:inline-block;">Print Universal Labels</h4>@hint(Labels that work for every entity type. Includes small icon/image)</span><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="printDialog" ecid="obj_entityQueue_print" mode="uni_80" loader="none">80 per page (Avery5167)</a><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="printDialog" ecid="obj_entityQueue_print" mode="uni_30" loader="none">30 per page (Avery5160)</a><br/>
+        
+        <br/><span><h4 style="display:inline-block;">Print Product Labels</h4>@hint(Labels that are exclusively tailored to products. Includes larger icon/image, except for 80 per page.)</span><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="printDialog" ecid="obj_entityQueue_print" mode="prod_80" loader="none">80 per page (Avery5167)</a><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="printDialog" ecid="obj_entityQueue_print" mode="prod_30" loader="none">30 per page (Avery5160)</a><br/>
+
+        <br/><span><h4 style="display:inline-block;">Print Bin & Location Labels</h4>@hint(Labels that are exclusively tailored to bins and bin locations. No icon/image.)</span><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="printDialog" ecid="obj_entityQueue_print" mode="bin_80" loader="none">80 per page (Avery5167)</a><br/>
+        <a href="javascript:void(0)" rel="nofollow" class="printDialog" ecid="obj_entityQueue_print" mode="bin_30" loader="none">30 per page (Avery5160)</a><br/>
+    </ec:case>
+</ec:function>

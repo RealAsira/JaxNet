@@ -1,0 +1,62 @@
+@share
+@pageFound.set(1)
+
+@if(@act.is(logout)|@user.logout)
+@if(@act.is(endAllUserSessions)|@user.endAllUserSessions(@user.userID) @redirect(/login))
+
+<ec:set returnto=@returnto.alt(/home)/>
+<ec:case if=@iv(@user.userID)>@redirect(#returnto)</ec:case>
+
+<ec:var email=@svr[param/email].left(255).nullifblank/>
+<ec:var password=@svr[param/password].left(32).nullifblank/>
+<ec:var persist=@svr[param/persist].alt(0)/>
+
+<ec:case if=@all(@iv(@email)|@iv(@password)|@iv(@persist))>
+    <ec:var loginUserID = @user.login(@email|@password|@persist)/>
+    <ec:case if=@iv(@loginUserID)>@redirect(#returnto)</ec:case>
+</ec:case>
+
+
+
+
+
+<ec:webpage title="@host Login">
+    <ec:metaTag name="description" content="Sign into or sign up for an account with @host"/>
+    <ec:metaTag name="og:description" content="Sign into or sign up for an account with @host"/>
+    <ec:metaTag name="og:image" content="/imgs-default/account.png"/>
+    <ec:metaTag name="og:url" content="/login"/>
+    <ec:metaLink rel="canonical" href="/login"/>
+
+    <ec:var menuItems/>
+    <ec:menuItems>
+      <li class="anchorify" href="/home">Site Home</li>
+    </ec:menuItems>
+    <ec:topbar bannerIcon=@siteSettings[topbarIcon] rMenuContent=@menuItems/>
+    
+    <div id="primaryContent">
+        <br/>
+        <br desktop/>
+        <br desktop/>
+        <ec:titlebox dark class="col-40 col-center">    
+            <div style="height:8px;">&nbsp;</div>   
+            <span style="margin-top:13px;"><h2 style="margin-left:13px; font-size:1.4rem; display:inline;">Login</h2>&nbsp;&nbsp;<p style="color:red; display:inline;">@user.loginMessage.alt(&nbsp;)</p></span>
+            <br/><br/>
+            <form method="POST" style="padding:0px 13px;">
+                <ec:input_email title="Email" id="email" name="email" fieldValue=@email maxlength="255"/><br/>
+                <ec:input_password title="Password" id="password" name="password" maxlength="32" hintContent="Password must include at least one lowercase letter, one uppercase letter, one number, one symbol, and be six to twenty characters in length."/>
+                <ec:input_checkbox title="Stay signed in?" id="persist" name="persist" fieldValue=@persist/><br/>
+                <ec:var submitTitle/><ec:submitTitle>Sign In&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="log-in" size="med" color="white"/></ec:submitTitle>
+                <ec:input_submit class="btn-info shadowOnHover" title=@submitTitle/>
+                <a href="javascript:void(0)" rel="nofollow">Forgot password?</a>
+            </form><br/>
+            <p style="margin-left:13px;">By clicking "Sign In" you agree to our <a href="/doc/terms-of-service">terms of service</a> and <a href="/doc/privacy-policy">privacy policy</a>.</p>
+            <br/>
+        </ec:titlebox>
+        <br/><br/>
+        <div class="col-40 col-center" style="text-align:center;">
+            <p>New to @host?</p>
+            <hr style="margin:7px 0px 13px 0px;"/>
+            <a href="/signup?returnto=@returnto.urlencode" rel="nofollow" class="btn btn-secondary">Create your account</a>
+        </div>
+    </div>
+</ec:webpage>

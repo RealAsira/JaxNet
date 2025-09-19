@@ -1,0 +1,268 @@
+@share
+<ec:module comp_input_entity/>
+
+<ec:var fkeywords = @svr[param/fkeywords].nullifblank/>
+<ec:var fstartDate_start = @svr[param/fstartDate_start].asDate.nullifblank/>
+<ec:var fstartDate_end = @svr[param/fstartDate_end].asDate.nullifblank/>
+<ec:var fdueDate_start = @svr[param/fdueDate_start].asDate.nullifblank/>
+<ec:var fdueDate_end = @svr[param/fdueDate_end].asDate.nullifblank/>
+<ec:var fcompleteDate_start = @svr[param/fcompleteDate_start].asDate.nullifblank/>
+<ec:var fcompleteDate_end = @svr[param/fcompleteDate_end].asDate.nullifblank/>
+<ec:var fcomplete = @svr[param/fcomplete].nullifblank/>
+<ec:var frecurs = @svr[param/frecurs].nullifblank/>
+<ec:var fassignedByEmployeeID = @svr[param/X_fassignedByEmployeeID].nullifblank/>
+<ec:var fassignedToEmployeeID = @svr[param/X_fassignedToEmployeeID].nullifblank/>
+<ec:var fprojectID = @svr[param/X_fprojectID].nullifblank/>
+<ec:var fordered = @svr[param/fordered].alt(false)/>
+
+<ec:var orderClause/>
+<ec:orderClause if=@fordered.asBool rem="approximate overall priority order">
+    CASE WHEN tasks.completeDate IS NULL THEN 1 ELSE 0 END DESC,                                    --not has a complete date
+    CASE WHEN CAST(tasks.startDate AS DATE) >= CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END DESC,      --has started
+    CASE WHEN tasks.recurCode IS NOT NULL THEN 1 ELSE 0 END DESC,                                   --is recurring task
+    CASE WHEN tasks.assignedToProjectID IS NULL THEN 1 ELSE 0 END DESC,                             --is independent task
+    CASE WHEN tasks.dueDate IS NOT NULL THEN 1 ELSE 0 END DESC,                                     --has a due date
+    tasks.dueDate ASC, tasks.startDate DESC, tasks.completeDate DESC, tasks.taskID ASC              --final oderers
+</ec:orderClause>
+<ec:orderClause if=@not(@fordered.asBool)>
+    tasks.taskID DESC   --newer tasks first
+</ec:orderClause>
+
+
+
+
+
+<ec:object dt_tasks page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>taskID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT tasks.taskID, tasks.completeDate, tasks.description, tasks.assignedByEmployeeID, tasks.assignedToEmployeeID, tasks.assignedToProjectID, tasks.hasMemo, tasks.fromEmployeeName, tasks.toEmployeeName, tasks.toProjectName, IIF(TE.startDatetime IS NOT NULL, 1, 0) AS isClockedIn
+            FROM vw_tasks tasks
+            LEFT JOIN timeEntries TE ON tasks.taskID = TE.taskID AND (endDateTime IS NULL OR endDateTime > GETDATE()) AND TE.employeeID = @employee.employeeID.alt(0).asInt --is THIS employee clocked into task?
+            WHERE websiteID = @websiteID.asInt
+
+            @if(@iv(@fkeywords)|AND FREETEXT((tasks.description), 'NEAR(@sqlesc(@fkeywords))'))
+            @if(@iv(@fassignedByEmployeeID)|AND (tasks.assignedByEmployeeID = @sqlesc(@fassignedByEmployeeID.asInt)))
+            @if(@iv(@fassignedToEmployeeID)|AND (tasks.assignedToEmployeeID = @sqlesc(@fassignedToEmployeeID.asInt)))
+            @if(@iv(@fprojectID)|AND (tasks.assignedToProjectID = @sqlesc(@fprojectID.asInt)))
+
+            @comment(recurrence)
+            @if(@frecurs.isnull|AND (tasks.recurCode IS NOT NULL OR tasks.recurCode IS NULL))
+            @if(@frecurs.is(true)|AND (tasks.recurCode IS NOT NULL))
+            @if(@frecurs.is(false)|AND (tasks.recurCode IS NULL))
+
+            @comment(startDate)
+            @if(@iv(@fstartdate_start)|AND CAST(tasks.startDate AS DATE) @chr(62)= @sqlstr(@fstartdate_start.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fstartdate_end)|AND CAST(tasks.startDate AS DATE) @chr(60)= @sqlstr(@fstartdate_end.formatdate(yyyy-mm-dd)))
+            
+            @comment(dueDate)
+            @if(@iv(@fdueDate_start)|AND CAST(tasks.dueDate AS DATE) @chr(62)= @sqlstr(@fdueDate_start.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fdueDate_end)|AND CAST(tasks.dueDate AS DATE) @chr(60)= @sqlstr(@fdueDate_end.formatdate(yyyy-mm-dd)))
+            
+            @comment(completedOnDate)
+            @if(@iv(@fcompleteDate_start)|AND CAST(tasks.completeDate AS DATE) @chr(62)= @sqlstr(@fcompleteDate_start.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fcompleteDate_end)|AND CAST(tasks.completeDate AS DATE) @chr(60)= @sqlstr(@fcompleteDate_end.formatdate(yyyy-mm-dd)))
+
+            @comment(is complete ... shows all that are complete even if date range is null)
+            @if(@fcomplete.isnull|AND (tasks.completeDate IS NOT NULL OR tasks.completeDate IS NULL))
+            @if(@fcomplete.is(true)|AND (tasks.completeDate IS NOT NULL))
+            @if(@fcomplete.is(false)|AND (tasks.completeDate IS NULL))
+        </ec:case>
+
+
+        <ec:case if=@iv(@XID)>
+            SELECT description, memo, assignedByEmployeeID, assignedToEmployeeID, assignedToProjectID, startDate, dueDate, completeDate, recurCode, iconURL, iconDescription
+            FROM vw_task tasks
+            WHERE websiteID = @websiteID.asInt AND taskID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort>@orderClause()</sort>
+</ec:object>
+<ec:object obj_tasks_pageNavigator dataObj=@dt_tasks type="tPageNavigator"/>
+
+
+
+
+
+
+<ec:object obj_tasks dataObj=@dt_tasks type="tComponent">
+    <style>
+        #consoleTasksTable .icndiv {margin-top:1px;}
+    </style>
+
+    <ec:var tasksOptions/>
+    <ec:tasksOptions>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_task_new"><ec:icon title="Add Task" icon="plus" size="med"/></a>
+    </ec:tasksOptions>
+    <ec:titlebox title="Tasks"  options=@tasksOptions()>
+        <p class="notice" style="margin-left:2%;">Tasks with incomplete predecessors are never listed here. NEED TO REFLECT THIS IN THE SQL QUERY!!</p>
+        <table class="tbl" id="consoleTasksTable">
+            <tr>
+                <th>Status</th>
+                <th>Description</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Options</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr id="taskRow-@rs[taskID]" class="anchorify" href="/console?ltid=253&xid=@rs[taskID]">
+                    <td>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_task_toggleState" taskID="@rs[taskID]" loader="#taskRow-@rs[taskID]"><ec:icon title="@if(@iv(@rs[completeDate].nullifblank)|Task was completed @rs[completeDate].formatDate(yyyy mm-dd)|This task is uncomplete)" icon="@if(@iv(@rs[completeDate].nullifblank)|check|unchecked) " direction="left" size="sml"/></a>
+                        <ec:case if=@if(@iv(@rs[completeDate].nullifblank)|0|1) rem="show if uncomplete">
+                            <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_taskTimeClock" taskID="@rs[taskID]" loader="#taskRow-@rs[taskID]"><ec:icon title="Clock @if(@rs[isClockedIn].is(1|true)|out of|into) this task" icon="clock" size="sml" direction="left" color=@if(@rs[isClockedIn].is(1|true)|var(--notice-highlight-color) !important)/></a>
+                        </ec:case>
+                    </td>
+                    <td @if(@iv(@tsk[completeDate])|color:green;|@if(@tsk[dueDate].alt(@today).asDate.isLessThan(@today)|color:red;|@if(@tsk[dueDate].alt(@nextWorkDay).asDate.is(@today)|color:var(--notice-highlight-color);))).with(style="|")>
+                        @rs[description]
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_taskMemo_dialog" taskID="@rs[taskID]"><ec:icon title="@if(@rs[hasMemo].alt(0).asBool|View details and a memo about this task|View details about this task)" icon="file" direction="right" size="sml" color="@if(@rs[hasMemo].alt(0).asBool|var(--notice-highlight-color) !important|)"/></a>
+                    </td>
+                    <td><a href="/console?ltid=2&xid=@rs[assignedByEmployeeID].asInt" rel="nofollow" target="_blank">@rs[fromEmployeeName]</a></td>
+                    <td><ec:case if=@iv(@rs[assignedToProjectID])><a href="/console?ltid=252&xid=@rs[assignedToProjectID].asInt" rel="nofollow" target="_blank">@rs[toProjectName]</a>&nbsp;/&nbsp;</ec:case><a href="/console?ltid=2&xid=@rs[assignedToEmployeeID].asInt" rel="nofollow" target="_blank">@rs[toEmployeeName]</a></td>
+                    <td>
+                        <ec:case if=@all(@accessLevel.isGreatAs(5)|@app.is(console)|@LTID.isnot(105))>
+                            <a href="javascript:void(0)" onclick="$('#taskRow-@rs[taskID]').remove()" class="ajaxClick" ecid="obj_deleteRecord" loader="none" recordXID="@rs[taskID].asInt" doRedirect="false" confirm="Are you sure you want to delete this task? This action cannot be undone!"><ec:icon title="Delete This Task" icon="remove" size="xsml" direction="right"/></a>
+                        </ec:case>
+                        <a href="/console?ltid=105&xid=21&x_ftaskID=@rs[taskID]" rel="nofollow"><ec:icon title="View time entry records" icon="spreadsheets-app" size="sml" direction="right"/></a>
+                        <ec:case if=@any(@all(@accessLevel(@LTID|@rs[taskID]).isGreatAs(4)|@app.is(console)|@LTID.isnot(105))|@employee.employeeID.is(@rs[assignedByEmployeeID]|@rs[assignedToEmployeeID]))><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_task_edit" taskID="@rs[taskID].asInt"><ec:icon title="Edit This Task" icon="pencil" size="sml" direction="right"/></a></ec:case>
+                    </td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_tasks_pageNavigator()
+    </ec:titlebox>
+</ec:object>
+<ec:case if=@nv(@XID)>
+    @obj_task_new.registerComponent(@dt_tasks)
+    @obj_task_new.registerComponent(@obj_tasks)
+
+    @obj_task_edit.registerComponent(@dt_tasks)
+    @obj_task_edit.registerComponent(@obj_tasks)
+    
+    @obj_taskTimeClock.registerComponent(@dt_tasks)
+    @obj_taskTimeClock.registerComponent(@obj_tasks)
+
+    @obj_task_toggleState.registerComponent(@dt_tasks)
+    @obj_task_toggleState.registerComponent(@obj_tasks)
+</ec:case>
+
+
+
+
+
+<ec:object obj_task dataObj=@dt_tasks type="tComponent">
+    <ec:var tsk=@dataObj.dataDef[data/1]/>
+
+    <style>
+        .taskDispWindow#taskMemo {
+            display:block;
+            min-height:30px;
+            max-height:320px;
+            overflow-y: auto;
+            border: 1px solid grey;
+            border-radius:5px;
+            margin-bottom:19px;
+            padding:7px 5px;
+            box-shadow:var(--box-shadow-light);
+            
+            <ec:case if=@userSettings[theme].is(light)>
+                background-color:#fffded;
+                color:black;
+            </ec:case>
+            
+            <ec:case if=@userSettings[theme].is(dark)>
+                background-color:#3d4b51;
+                color:white;
+            </ec:case>()
+        }
+        
+        #taskMemo {& ol, & ul {margin-left: 20px;}}
+    </style>
+
+    <ec:var taskRecordOptions/>
+    <ec:taskRecordOptions>
+        <ec:case rem="list" if=@accessLevel.isGreatAs(2)><a @if(@LTID.isnot(105)|/console?ltid=@LTID|/console?ltid=@LTID&xid=@XID).with(href="|") rel="nofollow" onclick="if(!window.event.ctrlKey){addLoader(undefined, 'body');}"><ec:icon title="View Other Records" icon="th-list" size="med"/></a></ec:case>
+        <ec:case rem="del"  if=@all(@accessLevel.isGreatAs(5)|@app.is(console)|@LTID.isnot(105))><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_deleteRecord" confirm="Are you sure you want to delete this record? This action cannot be undone!"><ec:icon title="Delete record?" icon="remove-sign" size="med"/></a></ec:case>
+        <ec:case rem="edit" if=@any(@all(@accessLevel(@LTID|@rs[taskID]).isGreatAs(4)|@app.is(console)|@LTID.isnot(105))|@employee.employeeID.is(@rs[assignedByEmployeeID]|@rs[assignedToEmployeeID]))><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_task_edit" taskID="@XID.asInt"><ec:icon title="Edit This Record" icon="pencil" size="med"/></a></ec:case>
+    </ec:taskRecordOptions>
+
+
+    <ec:titlebox title="Task" options=@taskRecordOptions()>
+        <img id="recordIcon" src="@tsk[iconURL]" alt="@ts[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID.asInt"/>
+                <ec:var assignedByValue/><ec:assignedByValue><ec:input_entity title="Assigned By" id="fassignedByEmployeeID" name="fassignedByEmployeeID" fieldLTID=@if(@iv(@tsk[assignedByEmployeeID])|2|@null) fieldXID=@tsk[assignedByEmployeeID] filterLTID="2" containerStyle="margin-left:6px;" disabled/></ec:assignedByValue>
+                <ec:var assignedToValue/><ec:assignedToValue><ec:input_entity title="Assigned To" id="fassignedToEmployeeID" name="fassignedToEmployeeID" fieldLTID=@if(@iv(@tsk[assignedToEmployeeID])|2|@null) fieldXID=@tsk[assignedToEmployeeID] filterLTID="2" containerStyle="margin-left:6px;" disabled/></ec:assignedToValue>
+                <ec:var projectValue/><ec:projectValue if=@iv(@tsk[assignedToProjectID])><ec:input_entity title="Part Of Project" id="fprojectID" name="fprojectID" fieldLTID=@if(@iv(@tsk[assignedToProjectID])|2|@null) fieldXID=@tsk[assignedToProjectID] filterLTID="252" containerStyle="margin-left:6px;" disabled/></ec:projectValue>
+                @assignedByValue()
+                @assignedToValue()
+                <ec:displayField if=@nv(@tsk[assignedToProjectID].nullifblank) title="Part Of Project" content="Independent @hint(This is a stand-alone task which is not part of any projects.)"/>
+                <ec:projectValue if=@iv(@tsk[assignedToProjectID].nullifblank)/>
+                <ec:displayField title="Start Date" content="@tsk[startDate].asDate.formatDate(dd mmm yyyy)"/>
+                <ec:displayField title="Due Date" content="@tsk[dueDate].asDate.formatDate(dd mmm yyyy)" contentStyle=@if(@iv(@tsk[completeDate])|color:green;|@if(@tsk[dueDate].alt(@today).asDate.isLessThan(@today)|color:red;|@if(@tsk[dueDate].alt(@nextWorkDay).asDate.is(@today)|color:var(--notice-highlight-color);)))/>
+                <ec:displayField title="Completed?" content="@if(@iv(@tsk[completeDate])|@tsk[completeDate].asDate.formatDate(dd mmm yyyy)|Incomplete)"/>
+                <ec:displayField title="Recurrence" content="@tsk[recurCode].alt(None)"/>
+            </div>
+        </div><br/>
+    </ec:titlebox>
+
+    <ec:titlebox title="Memo">
+        <br/>
+        <ec:input_text title="Description" id="description" name="description" fieldValue=@tsk[description] containerStyle="width:100%;" style="width:100%;" fieldValue=@tsk[description].alt(@description) disabled/>
+        <br/><br/>
+        <span style="font-weight:bold; font-size: .9rem;">Memo</span>
+        <div class="taskDispWindow" id="taskMemo">
+            @tsk[memo].decode
+        </div>
+    </ec:titlebox>
+</ec:object>
+<ec:case if=@iv(@XID)>
+    @obj_task_edit.registerComponent(@dt_tasks)
+    @obj_task_edit.registerComponent(@obj_task)
+</ec:case>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <div>
+                <ec:input_text title="Keywords" id="fkeywords" name="fkeywords" fieldValue=@fkeywords/> 
+                <ec:input_dateRange title="Start Date" id="fstartDate" name="fstartDate" fieldValue1=@fstartDate_start fieldValue2=@fstartDate_end allowNull/>
+                <ec:input_dateRange title="Due Date" id="fdueDate" name="fdueDate" fieldValue1=@fdueDate_start fieldValue2=@fdueDate_end allowNull/>
+                <ec:input_dateRange title="Completion Date" id="fcompleteDate" name="fcompleteDate" fieldValue1=@fcompleteDate_start fieldValue2=@fcompleteDate_end allowNull/>
+                <ec:input_trueFalse title="Recurring?" id="frecurs" name="frecurs" fieldValue=@frecurs allowNull/>
+            </div>
+            
+            <div>
+                <ec:input_entity title="Assigned By" id="fassignedByEmployeeID" name="fassignedByEmployeeID" fieldLTID=@if(@iv(@fassignedByEmployeeID)|2|@null) fieldXID=@fassignedByEmployeeID filterLTID="2" allowNull/>
+                <ec:input_entity title="Assigned To" id="fassignedToEmployeeID" name="fassignedToEmployeeID" fieldLTID=@if(@iv(@fassignedToEmployeeID)|2|@null) fieldXID=@fassignedToEmployeeID filterLTID="2" allowNull/>
+                <ec:input_entity title="Project" id="fprojectID" name="fprojectID" fieldLTID=@if(@iv(@fprojectID)|252|@null) fieldXID=@fprojectID filterLTID="252" allowNull/>
+                <ec:input_trueFalse title="Priority Order?" id="fordered" name="fordered" fieldValue=@fordered.alt(false) hintContent="Display tasks in an approximate priority order."/>
+                <ec:input_trueFalse title="Completed?" id="fcomplete" name="fcomplete" fieldValue=@fcomplete allowNull/>
+            </div>
+        </ec:consoleSearchBox>
+
+        @obj_tasks()
+    </ec:case>
+    <ec:case if=@iv(@XID)>
+        @obj_task()
+    </ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@nv(@XID)>
+        <span><a href="#" rel="nofollow">Projects I Lead</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#" rel="nofollow">Ongoing Projects</a></span><br/>
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>
+        <a href="/console?ltid=105&xid=21&x_ftaskID=@XID.asInt" rel="nofollow">Task Time Entries</a><br/>
+    </ec:case>
+</ec:function>

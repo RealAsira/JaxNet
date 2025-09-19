@@ -1,0 +1,114 @@
+@share
+<ec:case if=@nv(@comp_widgetsCalled)>
+    <ec:module lib_pageFunctions/>
+    <ec:module comp_scriptHandler/>
+
+    <ec:var comp_widgetsCalled = 1/>    
+    <ec:var widget = @xWidget.asReference global/>
+
+    <ec:object obj_refreshWidget type="tComponent">
+        <ec:var widgetID = @svr[param/widgetID].asInt/>
+
+        <ec:var key1 = @svr[param/key1].nullifblank  key2 = @svr[param/key2].nullifblank  hash = @hash_hmac_SHA256(@widgetID|@user.sessionID()@today()@saltKey())/>
+        <ec:case if=@nv(@key1|@key2) rem="a security key (hash) is required to validate widget refresh">
+            @throw(Error: No Widget Key|No Widget Key|Access denied. A security key was not provided for the widget|403)
+        </ec:case>
+        <ec:case if=@all(@hash.isnot(@key1)|@hash.isnot(@key2)) rem="someone is attempting to access the widget without a correct security key">
+            @throw(Error: Invalid Widget Key|Invalid Widget Key|Access denied. A bad security key was provided for the widget|403)
+        </ec:case>
+
+        <ec:set state="respond"/>
+        <ec:case if=@iv(@widgetID)>
+            <ec:var widgetContent selector="#widget@widgetID"/>
+            <ec:widgetContent><ec:widget widgetID=@widgetID contentOnly/></ec:widgetContent>
+            @responder.update(@selector|@widgetContent)
+        </ec:case>
+    </ec:object>
+</ec:case>
+
+
+
+<ec:function xWidget>
+    <ec:param tag widgetID contentOnly isIframe/>
+    <ec:var params = @paramList.asReference rem="used to pass parameters from widget call to the widget"/>
+
+
+    <ec:exception>
+        @logError(Widget Error|Unable to render widget @chr(124) widgetID: @widgetID @chr(124) tag: @tag|101)
+    
+        <head>
+            <title>Widget Error</title>
+            <style>
+                * {box-sizing:border-box; -webkit-box-sizing: border-box;}
+                body {text-wrap:wrap; overflow-wrap:break-word;}
+
+                <ec:case if=@userSettings[theme].is(dark)>
+                    body{
+                        background-color:#181818;
+                        color:#ffffff;
+                    }
+                </ec:case>()
+            </style>
+        </head>
+        <body>
+            <div style="display:block; width:100%; min-height:108px; font-size:1.3rem; text-align:center; color:white; font-weight:bold; background-color:rgb(0, 66, 110);">
+                <br/><span>Unable to Render Widget</span><br/><br/>
+                <span style="font-weight:normal; font-size:1.2rem;">
+                    An error has occurred on the page and a website technician has been notified.&nbsp;
+                    If you typed the link (URL) into your browswer directly, please check it for accuracy.&nbsp;
+                    You may also try reloading this page at a later time.
+                </span>
+            </div>
+        
+            <h4>If you need immediate assistance, please contact us with the following information:</h4>
+            <strong>URL: </strong>@canonical
+            <br/><strong>Reference: </strong>@requestTimeStamp()
+        </body>
+    
+        @response_statusCode(500)
+        @stop()
+    </ec:exception>
+
+
+    <ec:data dt_widget connection=@connection>
+        SELECT widgetID, sourceCode, isPublic
+        FROM vw_widget
+        WHERE websiteID = @websiteID.asInt
+        @tag.replace('|'').with(AND tag='|')
+        @widgetID.asInt.with(AND widgetID = |)
+    </ec:data>
+    <ec:var src = @dt_widget[1/sourceCode] widgetID = @widgetID.alt(@dt_widget[1/widgetID]).asInt  isPublic = @dt_widget[1/isPublic]/>
+
+
+    <ec:case if=@iv(@src.nullifblank)>
+        <ec:var key1=@hash_hmac_SHA256(@widgetID|@user.sessionID()@today()@saltKey()) key2=@hash_hmac_SHA256(@widgetID|@user.sessionID()@today().add(1)@saltKey())/>
+        <ec:var executedContent ajaxWidget='href="javascript:void(0)" class="ajaxClick" ecid="obj_refreshWidget" loader="#widget@widgetID" widgetID="@widgetID" key1="@key1" key2="@key2"'/>
+        <ec:executedContent>@runScript(@src)</ec:executedContent>
+
+        <ec:case if=@any(@not(@isIframe.alt(0))|@all(@isIframe.alt(0)|@isPublic))>
+            <ec:case if=@contentOnly.alt(0)>@executedContent</ec:case>
+            <ec:case if=@else><div class="widget" id="widget@widgetID">@executedContent</div></ec:case>
+            <ec:case if=@isIframe.alt(0)>
+                <script defer>
+                    var els = document.querySelectorAll('[ecid=obj_refreshWidget]');
+                    els.forEach((el) => {
+                        el.remove();
+                        @if(@testServer.is(1)|console.log('removed a refresh button because refreshing is not allowed in iframe widgets');)
+                    });
+                </script>
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "The widget (ID: @widgetID / Tag: @tag)is not publicly available and cannot display"/>
+            <span>@errMsg</span>
+            @logError(Widget Privacy Error|@errMsg|76)
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@else>
+        <ec:set errMsg = "The widget (ID: @widgetID / Tag: @tag) is non-existent or has no content"/>
+        <span>@errMsg</span>
+        @logError(Widget Missing Content|@errMsg|65)
+    </ec:case>
+</ec:function>

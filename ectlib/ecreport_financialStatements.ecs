@@ -1,0 +1,36 @@
+@share
+@pageTitle.setValue(Financial Statements)
+
+<ec:object dt_reports page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>ecreportID</primaryKey>
+    <sqlSelect>
+        SELECT ecreportID, tag, description, memo
+        FROM ecreports
+    </sqlSelect>
+    <sort>description ASC</sort>
+</ec:object>
+<ec:object obj_reports_pageNavigator dataObj=@dt_reports type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_reports dataObj=@dt_reports type="tComponent">
+    @notification(PAGE UNDER CONSTRUCTION DO NOT USE|0|1)
+</ec:object> 
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    @obj_reports
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

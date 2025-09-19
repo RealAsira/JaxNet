@@ -1,0 +1,88 @@
+@share
+
+<ec:object dt_externalLinks page=@page limit="100" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>externalLinkID</primaryKey>
+    <sqlSelect>
+        SELECT link_ID, link_description, link_url
+        FROM vw_externalLinks
+        WHERE websiteID = @websiteID.asInt
+    </sqlSelect>
+    <sort by="desc">link_ID</sort>
+</ec:object>
+<ec:object obj_externalLinks_pageNavigator dataObj=@dt_externalLinks type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_externalLinks dataObj=@dt_externalLinks type="tComponent">
+    <ec:titlebox title="External Links">
+        <table class="tbl">
+            <tr>
+                <th>Description</th>
+                <th>URL</th>
+                <th>Linked To</th>
+            </tr>
+
+            <ec:loop data=@dataObj.dataDef[data]>
+                <ec:data dt_externalLinkShortcuts connection=@connection>
+                    SELECT dest_shortcutID, dest_ltid, dest_xid, dest_description, dest_iconURL, readOnly FROM (
+                        SELECT dest_shortcutID, dest_ltid, dest_xid, dest_description, dest_iconURL, readOnly = 0 FROM dbo.tb_shortcuts(dbo.fn_linkedEntity_getID(@LTID.asInt.alt(0),@rs[link_ID].asInt.alt(NULL))) ts1
+                    ) t
+
+                    WHERE dbo.fn_accessLevel(@user.userID.asInt.alt(NULL), @user.employeeID.asInt.alt(NULL), dest_ltid, dest_xid) >= 1 --only show if employee has at least view access
+
+                    ORDER BY (CASE
+                    WHEN t.dest_ltid = 7 AND t.readOnly = 0 THEN 6
+                    WHEN t.dest_ltid = 11 AND t.readOnly = 0 THEN 5
+                    WHEN (t.dest_ltid != 7 OR t.dest_ltid != 11) AND t.readOnly = 0 THEN 4
+
+                    WHEN t.dest_ltid = 7 AND t.readOnly = 1 THEN 3 --notes are at bottom
+                    WHEN t.dest_ltid = 11 AND t.readOnly = 1 THEN 2 --external links are just above notes
+                    ELSE 1 END --regular console links appear first
+                    ), t.dest_ltid
+                </ec:data>
+
+                <tr class="anchorify" href="@rs[link_url].urldecode">
+                    <td>@rs[link_description]</td>
+                    <td>@rs[link_url].urldecode</td>
+                    <td>
+                        <ec:var currentLinkID = @rs[link_ID]/>
+                        <ec:loop data=@dt_externalLinkShortcuts>
+                            <ec:case if=@rs[dest_ltid].is(7) rem="note">
+                                <ec:data dt_note connection=@connection>
+                                    SELECT dbo.fn_stripTags(noteContent) AS content FROM notes WHERE noteID = @rs[dest_xid]
+                                </ec:data>
+                                <img title="@dt_note[1/content]" src="@rs[dest_iconURL]" height="24px" alt="@dt_note[1/content]"/>
+                            </ec:case>
+                            <ec:case if=@rs[dest_ltid].is(11) rem="external link">
+                                <ec:data dt_externalURL connection=@connection>
+                                    SELECT externalLinkDescription, externalLinkURL FROM externalLinks WHERE externalLinkID = @rs[dest_xid]
+                                </ec:data>
+                                <a href="@dt_externalURL[1/externalLinkURL].urldecode" rel="nofollow"><img src="@rs[dest_iconURL]" height="28px" alt="external link" title="@rs[dest_description]"/></a>
+                            </ec:case>
+                            <ec:case if=@rs[dest_ltid].isnot(11|7) rem="everything else"><a href="/console?ltid=@rs[dest_ltid]&xid=@rs[dest_xid]&xltid=@LTID&xxid=@currentLinkID" rel="nofollow"><img src="@rs[dest_iconURL]" height="28px" alt="@rs[dest_ltid]-img" title="@rs[dest_description]"/></a></ec:case>
+                        </ec:loop>
+                    </td>
+                </tr>
+            </ec:loop>
+        </table>
+        
+        @obj_externalLinks_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    @obj_externalLinks
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

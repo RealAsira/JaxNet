@@ -1,0 +1,267 @@
+@share
+@pageFound.set(1)
+
+@if(@nv(@user.userID)|@var(returnto|/status) @var(returnto|@returnto.urlencode) @logError(Unauthorized|must be signed in to access site status|76) @redirect(/login?returnto=@returnto))
+@if(@nv(@user.employeeID)|@logError(Unauthorized|must be an employee to access site status|76) @redirect(home))
+@if(@nv(@ecid)|@logAction(50))
+
+<ec:module lib_pageFunctions/>
+
+<ec:style>
+  .statusBox {
+    width:max-content;
+    min-width:240px;
+    margin:13px 5px;
+    box-shadow: var(--box-shadow);
+    border-radius:5px;
+    padding:5px;
+
+    & .statusBox {margin-top: 13px;}
+
+    & .statusTitle {
+      border-bottom:1px solid grey; padding:4px 0px; margin-bottom:4px;
+      & h {font-weight:bold; font-size:.95rem; letter-spacing:.25px;}
+    }
+
+    <ec:case if=@userSettings[theme].is(dark)>
+      background-color:#fafafa; border-left:1px solid rgba(0,0,0,.05);
+    </ec:case>
+
+    <ec:case if=@userSettings[theme].is(dark)>
+      background-color:#313131; border-left:1px solid #45484a;
+    </ec:case>
+  }
+
+
+  .tComponent {
+    position: relative; width: 100%; height: auto;
+    &:has( > div.statusBox){width:max-content; margin:13px 5px;}
+    & .statusBox {width: 100%; margin:0; & .statusBox{margin-top:13px;}}
+  }
+</ec:style>
+
+
+
+<ec:function statusBox>
+  <ec:param title containingObject/>
+  <div class="statusBox">
+    <div class="statusTitle"><h>@title.nullifblank</h></div>
+    <ec:case if=@iv(@containingObject.nullifblank)><a href="javascript:void(0)" style="position:absolute; top:8px; right:3px;" class="ajaxClick" ecid="@containingObject"><ec:icon title="Refresh" icon="reload" size="sml" direction="right"/></a></ec:case>
+    @sender.execute()
+  </div>
+</ec:function>
+
+
+
+<ec:object obj_errors type="tComponent">
+  <ec:var errorsFilter = "(48,65,66,67,68,79,71,77,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110)"/>
+  <ec:var alertsFilter = "(5,13,14,16,44,45,46,47,51,52,75,76,78)"/>
+  <ec:var risksFilter = "(49)"/>
+
+  <ec:data xx connection=@connection>
+    SELECT SUM(t3.errorCount) AS errorCount, SUM(t3.alertCount) AS alertCount, SUM(t3.riskCount) AS riskCount, MAX(t3.lastError) AS lastError, MAX(t3.lastAlert) AS lastAlert, MAX(t3.lastRisk) AS lastRisk FROM (
+      SELECT COUNT(logID) AS errorCount, NULL AS alertCount, NULL AS riskCount, MAX(actionDate) AS lastError, NULL AS lastAlert, NULL AS lastRisk
+      FROM vw_actionLog
+      WHERE actionDate >= CONVERT(DATE, GETDATE(), 101) AND actionID IN @errorsFilter
+      UNION 
+      
+      SELECT NULL AS errorCount, COUNT(logID) AS alertCount, NULL AS riskCount, NULL AS lastError, MAX(actionDate) AS lastAlert, NULL AS lastRisk
+      FROM vw_actionLog
+      WHERE actionDate >= CONVERT(DATE, GETDATE(), 101) AND actionID IN @alertsFilter
+      UNION
+  
+      SELECT NULL AS errorCount, NULL AS alertCount, COUNT(logID) AS riskCount, NULL AS lastError, NULL AS lastAlert, MAX(actionDate) AS lastRisk
+      FROM vw_actionLog
+      WHERE actionDate >= CONVERT(DATE, GETDATE(), 101) AND actionID IN @risksFilter
+    ) t3
+  </ec:data>
+
+  <ec:statusBox title="Errors, Alerts, Risks" containingObject="obj_errors">
+    <table style="width:100%;">
+      <tr>
+        <td>@xx[1/errorCount].alt(0)</td>
+        <td><a rel="nofollow" target="_blank" href="/console?ltid=105&xid=3&fdate_start=@today" title="@xx[1/errorCount].alt(0) errors">Error@if(@any(@xx[1/errorCount].isGreaterThan(1)|@xx[1/errorCount].is(0))|s)</a></td>
+        <td style="text-align:right; float:right;" title="Last error at @xx[1/lastError].formatDate(hh:nn am/pm)">@xx[1/lastError].formatDate(hh:nn am/pm)</td>
+      </tr>
+      <tr>
+        <td>@xx[1/alertCount].alt(0).add(-10) @comment(add -10 because there are 8 stored procedures and 2 backups that run daily)</td>
+        <td><a rel="nofollow" target="_blank" href="/console?ltid=105&xid=2&fdate_start=@today" title="@xx[1/alertCount].alt(0).add(-10) alerts">Alert@if(@any(@xx[1/alertCount].alt(0).add(-10).isGreaterThan(1)|@xx[1/alertCount].alt(0).add(-10).is(0))|s)</a></td>
+        <td style="text-align:right; float:right;" title="Last alert at @xx[1/lastAlert].formatDate(hh:nn am/pm)">@xx[1/lastAlert].formatDate(hh:nn am/pm)</td>
+      </tr>
+      <tr>
+        <td>@xx[1/riskCount].alt(0)</td>
+        <td><a rel="nofollow" target="_blank" href="/console?ltid=105&xid=4&fdate_start=@today" title="@xx[1/riskCount].alt(0) risky behavior alerts">Risk Alert@if(@any(@xx[1/riskCount].isGreaterThan(1)|@xx[1/riskCount].is(0))|s)</a></td>
+        <td style="text-align:right; float:right;" title="Last risky behavior alert at @xx[1/lastRisk].formatDate(hh:nn am/pm)">@xx[1/lastRisk].formatDate(hh:nn am/pm)</td>
+      </tr>
+    </table>
+  </ec:statusBox>
+</ec:object>
+
+
+
+<ec:object obj_paymentAlerts type="tComponent">
+  <ec:statusBox title="Payment Alerts" containingObject="obj_paymentAlerts">
+    <ec:data xx connection=@connection>
+      SELECT SUM(t3.declinedCount) AS declinedCount, SUM(t3.voidedCount) AS voidedCount, SUM(t3.refundedCount) AS refundedCount FROM (
+        SELECT COUNT(logID) AS declinedCount, NULL AS voidedCount, NULL AS refundedCount
+        FROM vw_actionLog
+        WHERE actionDate >= CONVERT(DATE, GETDATE(), 101) AND actionID = (55)
+        UNION 
+        
+        SELECT NULL AS declinedCount, COUNT(logID) AS voidedCount, NULL AS refundedCount
+        FROM vw_actionLog
+        WHERE actionDate >= CONVERT(DATE, GETDATE(), 101) AND actionID = 56
+        UNION
+    
+        SELECT NULL AS declinedCount, NULL AS voidedCount, COUNT(logID) AS refundedCount
+        FROM vw_actionLog
+        WHERE actionDate >= CONVERT(DATE, GETDATE(), 101) AND actionID = 57
+      ) t3
+    </ec:data>
+
+    <ec:data yy connection=@connection>
+      SELECT 0 AS paymentErrors
+    </ec:data>
+
+    <table style="width:100%;">
+      <tr>
+        <td>@xx[1/declinedCount].alt(0)</td>
+        <td><a rel="nofollow" target="_blank" href="#" title="@xx[1/declinedCount].alt(0) payments declined">Payments Declined</a></td>
+      </tr>
+      <tr>
+        <td>@xx[1/voidedCount].alt(0)</td>
+        <td><a rel="nofollow" target="_blank" href="#" title="@xx[1/voidedCount].alt(0) payments voided">Payments Voided</a></td>
+      </tr>
+      <tr>
+        <td>@xx[1/refundedCount].alt(0)</td>
+        <td><a rel="nofollow" target="_blank" href="#" title="@xx[1/refundedCount].alt(0) refunds issued">Refund@if(@any(@xx[1/refundedCount].isGreaterThan(1)|@xx[1/refundedCount].is(0))|s) Issued</a></td>
+      </tr>
+      <tr>
+        <td>@xy[1/paymentErrors].alt(0)</td>
+        <td><a rel="nofollow" target="_blank" href="#" title="@xy[1/paymentErrors].alt(0) payment errors">Payment Errors</a></td>
+      </tr>
+    </table>
+  </ec:statusBox>
+</ec:object>
+
+
+
+<ec:object obj_saleStats type="tComponent">
+  <ec:statusBox title="Sale Stats" containingObject="obj_saleStats">
+    <ec:data dt_newUsers connection=@connection>
+      SELECT COUNT(userID) AS newUsersCount
+      FROM vw_user
+      WHERE inActive = 0 AND CAST(registrationDate AS DATE) >= CAST(GETDATE() AS DATE) AND websiteID = @websiteID.asInt
+    </ec:data>
+
+    <ec:data dt_verifyUserCount connection=@connection>
+      SELECT COUNT(userID) AS verifyUsersCount
+      FROM vw_user
+      WHERE accountRisk >99 AND isBanned = 0 AND websiteID = @websiteID.asInt
+    </ec:data>
+
+    <ec:data dt_sales connection=@connection>
+      SELECT 0 AS salesTotal
+    </ec:data>
+
+    <ec:data dt_fulfillment connection=@connection>
+      SELECT 0 AS total, 0 AS scanned, 0 AS shipped
+    </ec:data>
+
+    <table style="width:100%;">
+      <tr>
+        <td>Orders Fulfilled</td>
+        <td title="@dt_fulfillment[1/total].alt(0) total - @dt_fulfillment[1/scanned].alt(0) scanned - @dt_fulfillment[1/shipped].alt(0) shipped">@dt_fulfillment[1/shipped].alt(0)/@dt_fulfillment[1/scanned].alt(0)/@dt_fulfillment[1/total].alt(0)</td>
+      </tr>
+      <tr>
+        <td>Sales Today</td>
+        <td title="@dt_sales[1/salesTotal].alt(0).formatNumber($0.00) in sales today"><a target="_blank" href="#" rel="nofollow">@dt_sales[1/salesTotal].alt(0).formatNumber($0.00)</a></td>
+      </tr>
+      <tr>
+        <td>New Users</td>
+        <td><a target="_blank" href="/console?ltid=1&fdate_start=@today" rel="nofollow" title="@dt_newUsers[1/newUsersCount].alt(0) new users today">@dt_newUsers[1/newUsersCount].alt(0)</a></td>
+      </tr>
+      <tr>
+        <td>Unverified Users</td>
+        <td><a target="_blank" href="/console?ltid=1&fneedsVerified=true&finactive=" rel="nofollow" title="@dt_verifyUserCount[1/verifyUsersCount].alt(0) users need to be verified to user their account">@dt_verifyUserCount[1/verifyUsersCount].alt(0)</a></td>
+      </tr>
+    </table>
+  </ec:statusBox>
+</ec:object>
+
+
+
+<ec:object obj_verifyOrders type="tComponent">
+  <ec:statusBox title="Verify Orders" containingObject="obj_verifyOrders">
+    <ec:data xx connection=@connection>
+      SELECT 1
+    </ec:data>
+
+    <table style="width:100%;">
+      <tr style="text-align:left;">
+        <th>ESH</th>
+        <th>User</th>
+        <th>OrderID</th>
+        <th>Risk</th>
+      </tr>
+      <ec:loop data=@xx>
+        <tr>
+          <td>01/23</td>
+          <td>John Doe</td>
+          <td>1218892</td>
+          <td>97</td>
+        </tr>
+      </ec:loop>
+    </table>
+  </ec:statusBox>
+</ec:object>
+
+
+
+<ec:webpage title="Status">
+  <ec:metaTag name="description" content="Status page for employees only"/>
+  <ec:metaTag name="og:description" content="Status page for employees only"/>
+  <ec:metaTag name="og:image" content="/imgs-default/dynamic.png"/>
+
+  <ec:var menuItems/>
+  <ec:menuItems>
+    <li class="anchorify" target="_blank" href="/home">Site Home</li>
+    <li class="anchorify" target="_blank" href="/console">Console</li>
+    <li class="anchorify" target="_blank" href="/login?act=logout">Logout</li>
+  </ec:menuItems>
+  <ec:topbar bannerIcon=@siteSettings[topbarIcon] rMenuContent=@menuItems/>
+  
+  <div id="primaryContent">
+    <h3 style="font-weight:bold; margin-top:0px;">Website Status: <span id="status" style="color:@if(@offlineMode|red|green);">@if(@offlineMode|Offline|Online)</span></h3>
+    <h5 style="font-weight:bold;">Last Page Refresh: <span id="lastLoadTime"></span></h5>
+      
+    <div style="display:flex; flex-wrap:wrap; justify-content:flex-start;">
+      @obj_errors
+      @obj_saleStats
+      @obj_paymentAlerts
+      @obj_verifyOrders
+    </div>
+  </div>
+
+  @notification(This page reloads every 30 minutes during the work day. Last reload: @now.formatDate(hh:nn am/pm)|10)
+  <script>
+    (function() {
+      const d = new Date();
+      var hoursFloat = Number(d.getHours()) + Number(d.getMinutes()) / 60;
+      
+      //automatically reload page only if the current time is during the workday
+      if (hoursFloat >= 8.75 && hoursFloat <= 17.25) {
+        setTimeout("location.reload(true);", 1800000);
+      } else {
+        //milliseconds until next 9am (reload at this time instead of every 30 minutes during workday)
+        var millsTo9 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0, 0) - d; 
+        if (millsTo9 < 0) {
+          millsTo9 += 86400000; // it's after 9am, try 9am tomorrow.
+        }
+        setTimeout("location.reload(true);", millsTo9); //automatiicaly reload at 9am
+      }
+      
+      document.getElementById('lastLoadTime').innerHTML = ' ' + d.toLocaleTimeString(); //display last reload time
+    })();
+  </script>
+</ec:webpage>

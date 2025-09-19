@@ -1,0 +1,33 @@
+@share
+@pageTitle.setValue(Time Entries Report)
+
+@comment(obj_reportTimeEntries is stored in comp_timeClock which is called in ecreports.ecs)
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@recordID)>
+        <ec:consoleSearchBox>
+            <div>
+                <ec:input_dateTime title="Start Time" id="fstartDate" name="fstartDate" fieldValue=@fstartDate.asDate allowNull/>
+                <ec:input_dateTime title="End Time" id="fendDate" name="fendDate" fieldValue=@fendDate allowNull/>
+                <ec:input_trueFalse title="Work Time-Clock?" id="fisTimeClockEntry" name="fisTimeClockEntry" fieldValue=@fisTimeClockEntry hintContent="Filter to only show employee work time-clock time entries. If true, this overrides task to null."/>
+                <ec:input_trueFalse title="Deleted?" id="fdeleted" name="fdeleted" fieldValue=@fdeleted allowNull hintContent="Deleted time entries do not contribute to time entries summed."/>
+            </div>
+            <div>
+                <ec:input_entity title="Employee" id="femployeeID" name="femployeeID" fieldLTID=@if(@iv(@femployeeID)|2|@null) fieldXID=@femployeeID filterLTID="2" allowNull/>
+                <ec:input_entity title="Task" id="ftaskID" name="ftaskID" fieldLTID=@if(@iv(@ftaskID)|253|@null) fieldXID=@ftaskID filterLTID="253" allowNull/>
+            </div>
+        </ec:consoleSearchBox>
+
+        @obj_reportTimeEntries()
+    </ec:case>
+
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

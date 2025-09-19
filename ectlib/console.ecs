@@ -1,0 +1,140 @@
+@share
+@pageFound.set(1)
+
+@if(@nv(@user.userID)|@var(returnto|/console?ltid=@LTID&xid=@XID) @var(returnto|@returnto.urlencode) @logError(Unauthorized|must be signed in to access the console|76) @redirect(/login?returnto=@returnto))
+@if(@nv(@user.employeeID)|@logError(Unauthorized|must be an employee to access the console|76) @redirect(/home))
+
+
+
+<ec:var accessLevel=@user.accessLevel global rem="get user access right level"/>
+<ec:set accessLevel=1 if=@nv(@LTID) rem="employee bulletin"/>
+@if(@accessLevel.isLessThan(1)|@throw(Access Denied|Access Denied @chr(40)Access Level @accessLevel@chr(41)|You are currently not allowed to access this page. Pleaes contact a system administrator if you think this is in error.|401|44))
+
+
+
+@comment(yes, these need to be included here)
+<ec:module lib_dataFunctions/>
+<ec:module lib_pageElements/>
+<ec:module lib_pageFunctions/>
+<ec:module lib_barcodeScanner/>
+<ec:module lib_console/>
+<ec:module lib_consoleRelated/>
+<ec:module lib_employee/>
+
+<ec:set LEID = @getLEID(@LTID.alt(0)|@XID.alt(0))/>
+<ec:data dt_entityName connection=@connection>
+    SELECT dbo.fn_entityName(@LTID.asInt.alt(NULL), @XID.asInt.alt(NULL)) AS entityName
+</ec:data>
+<ec:var pageTitle = @dt_entityName[1/entityName].alt(Employee Console)/>
+
+
+
+
+
+<ec:object obj_barcodeResponder type="tBarcodeResponder">
+    <ec:var targetECID = @svr[param/target_ecid].nullifblank  fromECID = @svr[param/ecid].nullifblank/>
+    <ec:set scanBarcode = @svr[param/scancode].replace(@chr(124)|).nullifblank/>
+
+    <ec:data dt_barcode connection=@connection>
+        SELECT LTID, XID, LEID
+        FROM dbo.tb_entityBarcode_decode(@sqlstr(@scanBarcode))
+    </ec:data>
+    <ec:set scanLTID = @dt_barcode[1/LTID].nullifblank  scanXID = @dt_barcode[1/XID].nullifblank  scanLEID = @dt_barcode[1/LEID].nullifblank rem="GLOBAL VARS VALS ARE SET HERE"/>
+    
+
+    <ec:case if=@all(@iv(@scanLTID)|@iv(@scanXID)|@iv(@scanLEID))>
+        @logAction(17|@scanLTID|@scanXID|ECID: @fromECID, targetECID: @targetECID)
+        <ec:case if=@all(@iv(@targetECID)|@targetECID.isnot(@name))>
+            @refreshRegisteredComponent(@targetECID)
+        </ec:case>
+        
+        <ec:case if=@else>
+            @redirect(/console?ltid=@scanLTID&xid=@scanXID&xLTID=@LTID&xXID=@XID)
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@else rem="didn't return LTID/XID/LEID ... all are required to be a valid entity">
+        @notification(Unrecognized barcode: @scanBarcode)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+@comment(log page view if no action associated with request)
+@if(@all(@nv(@act)|@nv(@svr[param/ecid]))|@logAction(1|@LTID|@XID))
+<ec:case>
+    @comment(can use LTIDs 1 through 255 because data type is tinyint)
+    <ec:module console_bulletin if=@nv(@LTID)/>
+
+    <ec:module console_users if=@LTID.is(1)/>
+    <ec:module console_employees if=@LTID.is(2) obj_quickPanel = @obj_quickPanel.asReference rem="pass quick panel obj to page so employeeTimeClock can be refreshed by quick panel"/>
+    <ec:module console_userGroups if=@LTID.is(3)/>
+    <ec:module console_organizations if=@LTID.is(4)/>
+    <ec:module console_suppliers if=@LTID.is(5)/>
+    <ec:module console_assets if=@LTID.is(6)/>
+    
+    <ec:module console_employeeNotes if=@LTID.is(7)/>
+    <ec:module console_highlights if=@LTID.is(8)/>
+    <ec:module console_documents if=@LTID.is(9)/>
+    <ec:module console_knowledgebase if=@LTID.is(10)/>
+    <ec:module console_externalLinks if=@LTID.is(11)/>
+    <ec:module console_fileFolders if=@LTID.is(12)/>
+    @comment(LTID 13 is reserved for files)
+    
+    <ec:module console_binLocations if=@LTID.is(14)/>
+    <ec:module console_bins if=@LTID.is(15)/>
+    <ec:module console_warehouses if=@LTID.is(16)/>
+    @comment(LTID 17 is reserved for fulfillment centers)
+
+    <ec:module console_collections if=@LTID.is(18)/>
+    <ec:module console_products if=@LTID.is(19)/>
+    <ec:module console_productVariants if=@LTID.is(20)/>
+    @comment(21 - inventory ledger)
+    <ec:module console_priceTokens if=@LTID.is(22)/>
+    <ec:module console_saleCodes if=@LTID.is(23)/>
+
+    <ec:module console_purchaseOrders if=@LTID.is(30)/>
+    <ec:module console_bills if=@LTID.is(31)/>
+    <ec:module console_shipments if=@LTID.is(32)/>
+    <ec:module console_shipBoxes if=@LTID.is(33)/>
+    @comment(34 - Unused)
+    <ec:module console_orders if=@LTID.is(35)/>
+        
+    <ec:module console_emailChains if=@LTID.is(80)/>
+    <ec:module console_emailTemplates if=@LTID.is(81)/>
+
+    <ec:module console_linkedTables if=@LTID.is(100)/>
+    <ec:module console_widgets if=@LTID.is(101)/>
+    <ec:module console_websites if=@LTID.is(102)/>
+    <ec:module console_virtualPages if=@LTID.is(103)/>
+    <ec:module console_downloadGroups if=@LTID.is(104)/>
+    <ec:module ecreport if=@LTID.is(105) obj_barcodeResponder=@obj_barcodeResponder.asReference rem="pass barcode responder to child module so grandchild can access it too... ecreport module is subset of consoel module"/>
+        
+    <ec:module console_ledgerTransactions if=@LTID.is(200)/>
+    <ec:module console_bankAccounts if=@LTID.is(201)/>
+    <ec:module console_bankTransactions if=@LTID.is(202)/>
+    <ec:module console_payrollReports if=@LTID.is(203)/>
+    <ec:module console_payrollEntries if=@LTID.is(204)/>
+    <ec:module console_reconciliations if=@LTID.is(205)/>
+  
+    <ec:module console_projects if=@LTID.is(252)/>
+    <ec:module console_tasks if=@LTID.is(253)/>
+    @comment(LTID 254 is reserved for messageGroups if ever needed.)
+    <ec:module console_messages if=@LTID.is(255)/>
+</ec:case>
+
+
+
+
+
+<ec:webpage title=@pageTitle>
+    @comment(no need to add anything else here. each console module must have a fn:contents and fn:related which is then automatically added here)
+    <ec:metaTag name="description" content="Work console for employees only"/>
+    <ec:metaTag name="og:description" content="Work console for employees only"/>
+    <ec:metaTag name="og:image" content="/imgs-default/console.png"/>
+
+    @if(@offlineMode|@notification(Website is in offline / maintenance mode. Please limit console usage as much as possible. Thank you.))
+</ec:webpage>

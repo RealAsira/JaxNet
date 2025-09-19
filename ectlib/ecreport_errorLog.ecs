@@ -1,0 +1,185 @@
+@share
+@pageTitle.setValue(Error Logs)
+
+<ec:var fAction = @svr[param/fAction].nullifblank/>
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+<ec:var fLTID = @svr[param/fLTID].nullifblank/>
+<ec:var fXID = @svr[param/fXID].nullifblank/>
+<ec:var fsessionID = @svr[param/fsessionID].nullifblank/>
+<ec:var fipaddress = @svr[param/fipaddress].nullifblank/>
+<ec:var fuserID = @svr[param/fuserID].nullifblank/>
+<ec:var fURL = @svr[param/fURL].nullifblank/>
+
+<ec:var actionsFilter = "(48,65,66,67,68,79,71,77,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110)"/>
+
+<ec:object dt_logs page=@page limit=@min(999|@svr[param/perpage].alt(50)) type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>logID</primaryKey>
+    <sqlSelect>
+        SELECT logID, userID, actionDate, LTID, XID, URL, dbo.fn_IPAddress_toString(ipv4) AS ipv4, dbo.fn_IPAddress_toString(ipv6) AS ipv6, sessionID, memo, requestFile, action, name
+        FROM vw_actionLog
+        WHERE 1=1 AND actionID IN @actionsFilter
+
+        @if(@iv(@fAction)|AND actionID = @fAction)
+        @if(@iv(@fdate_start)|AND CAST(actionDate AS DATE) @chr(62)= '@fdate_start.formatdate(yyyy-mm-dd)')
+        @if(@iv(@fdate_end)|AND CAST(actionDate AS DATE) @chr(60)= '@fdate_end.formatdate(yyyy-mm-dd)')
+        @fLTID.with(AND LTID = |)
+        @fXID.with(AND XID = |)
+        @fsessionID.with(AND sessionID = |)
+        @if(@iv(@fipaddress)|AND (ipv4 = dbo.fn_IPAddress_toBinary(@fipaddress.trim.with('|')) OR ipv6 = dbo.fn_IPAddress_toBinary(@fipaddress.trim.with('|'))))
+        @fuserID.with(AND userID = |)
+        @fURL.urldecode.with(AND url LIKE '%|%')
+    </sqlSelect>
+    <sort>logID DESC</sort>
+</ec:object>
+<ec:object obj_logs_pageNavigator dataObj=@dt_logs type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_reportErrorLog dataObj=@dt_logs type="tComponent">
+    <ec:titlebox title="Error Logs">
+        <table class="tbl">
+            <tr>
+                <th>User</th>
+                <th>Date</th>
+                <th>LTID/XID</th>
+                <th>URL</th>
+                <th>IP Address</th>
+                <th>Session</th>
+                <th>Action</th>
+                <th style="text-align:left;">Memo</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr>
+                    <td><a href="/console?ltid=1&xid=@rs[userID]" rel="nofollow">@rs[name]</a></td>
+                    <td title="@rs[actionDate].formatDate(dd mmm yyyy hh:nn am/pm)">
+                        <ec:case if=@rs[actionDate].formatDate(ddmmyyyy).is(@today.formatDate(ddmmyyyy))>@rs[actionDate].formatDate(hh:nn)</ec:case>
+                        <ec:case if=@rs[actionDate].formatDate(ddmmyyyy).isnot(@today.formatDate(ddmmyyyy))>@rs[actionDate].formatDate(mm/dd)</ec:case>
+                    </td>
+                    <td title="/console?ltid=@rs[LTID]&xid=@rs[XID]"><a href="/console?ltid=@rs[LTID]&xid=@rs[XID]" rel="nofollow">@rs[LTID]@if(@iv(@rs[XID])|/)@rs[XID]</a></td>
+                    <td title="@rs[URL]">
+                        <ec:var condensedURL = @rs[URL].replace(@host|).replace(https://|).replace(http://|).left(32)/>
+                        <ec:case>
+                            <ec:case if=@rs[URL].is(SQLServerAgent)><span>@rs[URL]</span></ec:case>
+                            <ec:case if=@else><a href="@rs[URL]" rel="nofollow">@condensedURL()@if(@condensedURL.length.isGreatAs(32)|...)</a></ec:case>
+                        </ec:case>
+                    </td>
+                    <td><a title="View sessions associated with this IP" href="/console?ltid=105&xid=6&fipaddress=@rs[ipv6].replace(:|%3A).alt(@rs[ipv4]).alt(127.0.0.1)">@ipv6_condense(@rs[ipv6]).alt(@rs[ipv4]).alt(127.0.0.1)</a></td>
+                    <td><a title="View this session" href="/console?ltid=105&xid=6&recordID=@rs[sessionID]" rel="nofollow">@rs[sessionID]</a></td>
+                    <td @if(@rs[action].left(1).is(1|2|3|4|5|6|7|8|9)|Error @rs[action]).with(title="|")>
+                        <ec:case>
+                            <ec:case if=@rs[action].left(1).is(1|2|3|4|5|6|7|8|9)>Err @rs[action].left(3)</ec:case>
+                            <ec:case if=@else>@rs[action]</ec:case>
+                        </ec:case>
+                    </td>
+                    <td style="text-align:left;">
+                        
+                        <span title="@rs[memo].encode">@rs[memo].left(28)@if(@rs[memo].length.isGreatAs(28)|...)</span>
+                        <ec:case if=@iv(@rs[requestFile].nullifblank))>
+                            <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_requestInformationDialog" logID="@rs[logID]"><ec:icon title="View request information" icon="file" direction="right"/></a>
+                        </ec:case>
+                    </td>
+                </tr>
+            </ec:loop>
+        </table>
+        @obj_logs_pageNavigator
+    </ec:titlebox>
+</ec:object> 
+
+
+
+<ec:object obj_requestInformationDialog title="Log Details" buttonCaption="Close" type="tDialogForm">
+    <ec:var logID = @svr[param/logID].nullifblank/>
+    <ec:data xx connection=@connection>
+        SELECT logID, userID, actionDate, LTID, XID, URL, ipv4, ipv6, sessionID, memo, requestFile, action, name
+        FROM vw_actionLog
+        WHERE 1=1 @logID.with(AND logID = |)
+    </ec:data>
+
+    <style>
+        .dispWindow {
+            display:block;
+            min-height:30px;
+            max-height:320px;
+            overflow-y: auto;
+            border: 1px solid grey;
+            border-radius:5px;
+            margin-bottom:19px;
+            padding:7px 5px;
+            box-shadow:var(--box-shadow-light);
+
+            <ec:case if=@userSettings[theme].is(light)>
+                background-color:#fffded;
+                color:black;
+            </ec:case>
+
+            <ec:case if=@userSettings[theme].is(dark)>
+                background-color:#474337;
+                color:white;
+            </ec:case>()
+        }
+    </style>
+
+    <br/>
+    <h4>Memo</h4>
+    <div class="dispWindow" id="memo">
+        <pre id="memoContent">@xx[1/memo].encode</pre>
+    </div>
+
+    <ec:var dateStamp = @xx[1/requestFile].left(10)/>
+    <ec:var dir = "@serverSettings[globalVariables/sys/logfiles]\ect\@dateStamp\@xx[1/requestFile]_request.txt"/>
+    
+    <h4>@xx[1/requestFile]_request.txt</h4>
+    <div class="dispWindow" id="requestFile">
+        <pre id="requestContent">@if(@fileExists(@dir)|@textFile(@dir).encode)</pre>
+    </div>
+
+    <script>
+        function copyText(container) {
+            var content = document.getElementById(container).textContent;
+                if (window.isSecureContext) {
+                    navigator.clipboard.writeText(content);
+                    playNotification('Copied to clipboard', 2, container + '_content_notification', 0, 'ajax');
+                }
+            }
+    </script>
+</ec:object>
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:consoleSearchBox>
+        <ec:data dt_actionSelect connection=@connection>
+            SELECT actionID, description FROM vw_actions
+            WHERE 1=1 AND actionID IN @actionsFilter
+        </ec:data>
+
+        <ec:input_select title="Action" id="fAction" name="fAction" fieldValue=@fAction options=@dt_actionSelect allowNull/>
+        <ec:input_dateRange title="Date Range" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+        <ec:input_text title="IPAddress" id="fipaddress" name="fipaddress" fieldValue=@fipaddress/>
+        <ec:input_text title="URL" id="fURL" name="fURL" fieldValue=@fURL/>
+        <div>
+            <ec:input_number title="LTID" id="fLTID" name="fLTID" fieldValue=@fLTID/>
+            <ec:input_number title="XID" id="fXID" name="fXID" fieldValue=@fXID/>
+            <ec:input_number title="SessionID" id="fsessionID" name="fsessionID" fieldValue=@fsessionID/>
+            <ec:input_number title="userID" id="fuserID" name="fuserID" fieldValue=@fuserID/>
+        </div>
+    </ec:consoleSearchBox>
+
+    @obj_reportErrorLog
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <a href="/console?ltid=105&xid=1&fdate_start=@fdate_start&fdate_end=@fdate_end&fLTID=@fLTID&fXID=@fXID&fsessionID=@fsessionID&fipaddress=@fipaddress&fuserID=@fuserID" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View All Logs</a><br/>
+    <a href="/console?ltid=105&xid=2&fdate_start=@fdate_start&fdate_end=@fdate_end&fLTID=@fLTID&fXID=@fXID&fsessionID=@fsessionID&fipaddress=@fipaddress&fuserID=@fuserID" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View Alert Logs</a><br/>
+    <a href="/console?ltid=105&xid=4&fdate_start=@fdate_start&fdate_end=@fdate_end&fLTID=@fLTID&fXID=@fXID&fsessionID=@fsessionID&fipaddress=@fipaddress&fuserID=@fuserID" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View Risk Logs</a>
+</ec:function>

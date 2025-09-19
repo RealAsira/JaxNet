@@ -1,0 +1,6 @@
+@share
+<ec:set pageFound=0 rem="PAGE SHOULD NOT BE SET AS FOUND HERE. If a virtual page is found, then set pageFound=1"/> @LTID.set(103)
+
+@comment(virtual paths for documents and webpages/applications)
+@comment(each virtual-path-name should be stored as UNIQUE in database)
+@comment(don't forget to logAction)

@@ -1,0 +1,335 @@
+@share
+<ec:var fGroupName = @svr[param/fGroupName]/>
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+
+<ec:object dt_downloadGroup page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey></primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT downloadGroupID, downloadGroupName, date
+            FROM downloadGroups
+            LEFT JOIN linkedEntities LE ON toLTID = 104 AND toXID = downloadGroupID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+
+            @if(@iv(@fGroupName)|AND downloadGroupName LIKE @sqlstr(%@fGroupName%))
+            @if(@iv(@fdate_start)|AND CAST(date AS DATE) @chr(62)= @sqlstr(@fdate_start.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fdate_end)|AND CAST(date AS DATE) @chr(60)= @sqlstr(@fdate_end.formatdate(yyyy-mm-dd)))
+        </ec:case>
+        <ec:case if=@iv(@XID)>
+            SELECT downloadGroupID, downloadGroupName, downloadGroupDescription, date, linkedTables.iconURL, linkedTables.description AS iconDescription
+            FROM downloadGroups
+            LEFT JOIN linkedTables ON 104 = linkedTables.linkedTableID
+            LEFT JOIN linkedEntities LE ON toLTID = 104 AND toXID = downloadGroupID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            AND downloadGroupID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="ASC">downloadGroups.downloadGroupName</sort>
+    <order>downloadGroupName</order>
+</ec:object>
+<ec:object obj_downloadGroup_pageNavigator dataObj=@dt_downloadGroup type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_downloadGroupRecords dataObj=@dt_downloadGroup type="tComponent">
+    <ec:titlebox title="Download Group Records"  options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>Download Group Name</th>
+                <th style="text-align: left;">Creation Date</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=@LTID&xid=@rs[downloadGroupID]">
+                    <td><a href="/console?ltid=@LTID&xid=@rs[downloadGroupID]" rel="nofollow">@rs[downloadGroupName]</a></td>
+                    <td style="text-align: left;">@rs[date].formatDate(dd mmm yyyy hh:nn am/pm)</td>
+                </tr>
+            </ec:loop>
+        </table>
+    </ec:titlebox>
+
+    @obj_downloadGroup_pageNavigator()
+</ec:object>
+
+
+
+
+
+<ec:object obj_downloadGroupRecord dataObj=@dt_downloadGroup type="tComponent">
+    <ec:var grp=@dataObj.dataDef[data/1]/>
+    
+    <ec:titlebox title="@grp[downloadGroupName] Download Group" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@grp[iconURL]" alt="@grp[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID"/>
+                <ec:displayField title="Name" content="@grp[downloadGroupName]"/>
+                <ec:displayField title="Date" content="@grp[date].formatDate(dd MMM yyyy  hh:nn am/pm)"/>
+            </div>
+        </div>
+
+        <br/><br/>
+        <span style="display:block; width:96.53%; margin:auto;"><strong style="color:var(--field-header-color);">Description: </strong>@grp[downloadGroupDescription]</span>
+
+        @obj_downloadableFiles()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Download Group" type="tDialogRecordForm">
+    <ec:var name = @svr[param/name].nullifblank/>
+    <ec:var description = @svr[param/description].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@name)>
+            <ec:data xx procedure="pr_downloadGroup_edit" connection=@connection>
+                <groupID>@XID.asInt</groupID>    
+                <groupName>@name</groupName>
+                <groupDescription>@description</groupDescription>
+            </ec:data>
+            <ec:case if=@iv(@xx[errorMessage].nullifblank)>
+                <ec:set errMsg = @xx[errorMessage]/>
+                @logError(error|obj_editDownloadGroup_dialog unknown SQL error|101)
+            </ec:case>
+            <ec:case if=@else>
+                @logAction(3|@LTID|@XID|Edited download group)
+                @dt_downloadGroup.refresh()
+                @obj_downloadGroupRecord.refresh()
+                @close()
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg="A name is required for the group!"/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_downloadRec connection=@connection>
+            SELECT downloadGroupName, downloadGroupDescription
+            FROM downloadGroups
+            WHERE downloadGroupID = @XID.asInt
+        </ec:data>
+        <ec:var dwn = @dt_downloadRec[1]/>
+        
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Group Name" id="name" name="name" fieldValue=@name.alt(@dwn[downloadGroupName]) hintContent="Recommended 32 character limit."/><br/><br/>
+        <ec:input_text title="Description" id="description" name="description" containerstyle="width:100%;" style="width:100%;" fieldValue=@description.alt(@dwn[downloadGroupDescription]) hintContent="A brief description about what is contained in the download group."/><br/><br/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Download Group" type="tDialogRecordForm">
+    <ec:var name = @svr[param/name].nullifblank/>
+    <ec:var description = @svr[param/description].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@name)>
+            <ec:data xx procedure="pr_downloadGroup_new" connection=@connection>
+                <groupName>@name</groupName>
+                <groupDescription>@description</groupDescription>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+
+            <ec:var newGroupID = @xx[newGroupID].nullifblank/>
+            <ec:case if=@iv(@newGroupID)>
+                @logAction(2|@LTID|@newGroupID)
+                @notification(Download Group DWN-@newGroupID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@newGroupID)
+                @close()
+            </ec:case>
+            <ec:case if=@else>
+                <ec:case if=@iv(@xx[errorMessage].nullifblank)>
+                    <ec:set errMsg = @xx[errorMessage]/>
+                    @logError(error|@xx[errorMessage]|101)
+                </ec:case>
+                <ec:case if=@else>
+                    <ec:set errMsg = "An error occurred. Please contact a system administrator."/>
+                    @logError(error|obj_newGroup_dialog unknown SQL error|101)
+                </ec:case>
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A name is required for the group!"/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Group Name" id="name" name="name" fieldValue=@name hintContent="Recommended 32 character limit."/><br/><br/>
+        <ec:input_text title="Description" id="description" name="description" containerstyle="width:100%;" style="width:100%;" fieldValue=@description hintContent="A brief description about what is contained in the download group."/><br/><br/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_downloadableFiles_addFile_dialog title="Add File to Group" type="tDialogForm">
+    <ec:var filePath = @svr[param/filePath].nullifblank/>
+    <ec:var fileAlias = @svr[param/fileAlias].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@filePath)>
+            <ec:data xx procedure="pr_downloadGroup_addFile" connection=@connection>
+                <filePath>@filePath</filePath>
+                <fileAlias>@fileAlias</fileAlias>
+                <downloadGroupID>@XID.asInt</downloadGroupID>
+            </ec:data>
+            <ec:case if=@iv(@xx[errorMessage].nullifblank)>
+                <ec:set errMsg = @xx[errorMessage]/>
+                @logError(error|obj_downloadableFiles_addFile_dialog unknown SQL error|101)
+            </ec:case>
+            <ec:case if=@else>
+                @close()
+                @obj_downloadableFiles.refresh()
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "A file path, including the directory and name / extension, is required."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="File Path" id="filePath" name="filePath" fieldValue=@filePath containerstyle="width:100%;" style="width:100%;" hintContent="Directory, name, extension of the file to add"/><br/><br/>
+        <ec:input_text title="File Alias" id="fileAlias" name="fileAlias" fieldValue=@fileAlias containerstyle="width:100%;" style="width:100%;" hintContent="Directory, name, and extension to send this file as"/><br/><br/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_downloadableFiles_ediFile_dialog title="Edit File" type="tDialogForm">
+    <ec:var fileID = @svr[param/fileID].nullifblank/>
+    <ec:var filePath = @svr[param/filePath].nullifblank/>
+    <ec:var fileAlias = @svr[param/fileAlias].nullifblank/>
+
+    
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@filePath)>
+            <ec:data xx procedure="pr_downloadGroup_editFile" connection=@connection>
+                <fileID>@fileID.asInt</fileID>
+                <filePath>@filePath</filePath>
+                <fileAlias>@fileAlias</fileAlias>
+            </ec:data>
+            @close()
+            @obj_downloadableFiles.refresh()
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "A file path, including the directory and name / extension, is required."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_fileInfo connection=@connection>
+            SELECT downloadFilePath AS filePath, downloadFileAlias AS fileAlias
+            FROM downloadFiles
+            WHERE downloadFileID = @fileID.asInt
+        </ec:data>
+        <ec:var file = @dt_fileInfo[1]/>
+        
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <input type="hidden" name="fileID" id="fileID" value="@fileID"/>
+        <ec:input_text title="File Path" id="filePath" name="filePath" fieldValue=@filePath.alt(@file[filePath]) containerstyle="width:100%;" style="width:100%;" hintContent="Directory, name, extension of the file to add"/><br/><br/>
+        <ec:input_text title="File Alias" id="fileAlias" name="fileAlias" fieldValue=@fileAlias.alt(@file[fileAlias]) containerstyle="width:100%;" style="width:100%;" hintContent="Directory, name, and extension to send this file as"/><br/><br/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_downloadableFiles type="tComponent">
+    <ec:case if=@iv(@act.nullifblank)>
+        <ec:var fileID = @svr[param/fileID].nullifblank/>
+
+        <ec:case if=@act.is(delete)>
+            <ec:data xx procedure="pr_downloadGroup_deleteFile" connection=@connection>
+                <fileID>@fileID.asInt</fileID>
+            </ec:data>
+        </ec:case>
+
+        <ec:case if=@act.is(download)>
+            @notification(download not yet implemented)
+        </ec:case>
+    </ec:case>
+
+    <ec:data dt_filesList connection=@connection>
+        SELECT downloadFileID AS fileID, downloadFilePath AS filePath, downloadFileAlias AS fileAlias
+        FROM downloadFiles
+        WHERE downloadGroupID = @XID.asInt
+        ORDER BY filePath ASC, fileAlias ASC
+    </ec:data>
+
+    <ec:var options/>
+    <ec:options>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_downloadableFiles_addFile_dialog"><ec:icon title="Add a file to the @dt_downloadGroup.dataDef[data/1/downloadGroupName] Download Group" icon="plus"/></a>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_downloadableFiles" act="download"><ec:icon title="Download all files from the @dt_downloadGroup.dataDef[data/1/downloadGroupName] Download Group" icon="download"/></a>
+        <a href="/console?ltid=12&fTableID=104&ffolderName=@dt_downloadGroup.dataDef[data/1/downloadGroupName]" rel="nofollow"><ec:icon title="View files in file explorer" icon="eye-open"/></a>
+    </ec:options>
+
+    <ec:titlebox title="Included Files:" style="width:98%;" options=@options>
+        <table class="tbl">
+            <tr>
+                <th>File Path</th>
+                <th>File Alias</th>
+                <th>&nbsp;</th>
+            </tr>
+            <ec:loop data=@dt_filesList>
+                <tr>
+                    <td>@rs[filePath]</td>
+                    <td>@rs[fileAlias]</td>
+                    <td>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_downloadableFiles" act="delete" fileID="@rs[fileID]" confirm="Are you sure you want to remove this file from the download group?"><ec:icon title="Remove this file from the @dt_downloadGroup.dataDef[data/1/downloadGroupName] Download Group" icon="remove" size="xsml"/></a>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_downloadableFiles_ediFile_dialog" fileID="@rs[fileID]"><ec:icon title="Edit file path and alias" icon="pencil" size="sml"/></a>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_downloadableFiles" act="download" fileID="@rs[fileID]"><ec:icon title="Download @rs[filePath]&nbsp;&nbsp;AS&nbsp;&nbsp;@rs[fileAlias]" icon="download" size="sml"/></a>
+                    </td>
+                </tr>
+            </ec:loop>
+        </table>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="Group Name" id="fGroupName" name="fGroupName" fieldValue=@fGroupName/> 
+            <ec:input_dateRange title="Date Range" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+        </ec:consoleSearchBox>
+
+        @obj_downloadGroupRecords
+    </ec:case>
+    <ec:case if=@iv(@XID)>@obj_downloadGroupRecord</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@iv(@XID)>
+
+    </ec:case>
+</ec:function>

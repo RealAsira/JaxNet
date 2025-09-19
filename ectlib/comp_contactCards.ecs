@@ -1,0 +1,551 @@
+@share
+@comment(don't use this module for customer facing portion of the website. it is designed specifically for the console.)
+<ec:param ownerLEID ownerLTID ownerXID rem="pass in owner information ... if not provided, then the current LTID and XID will be used instead"/>
+
+
+<ec:module lib_pageFunctions/>
+<ec:set ownerLEID = @ownerLEID.nullifblank.alt(@getLEID(@ownerLTID.nullifblank.alt(@LTID.nullifblank).alt(0)|@ownerXID.nullifblank.alt(@XID.nullifblank).alt(0)))/>
+
+<ec:data dt_contactID connection=@connection>
+    SELECT TOP 1 contactID
+    FROM contacts WHERE ownerLEID = @ownerLEID.asInt.alt(0)
+</ec:data>
+<ec:var contactID=@dt_contactID[1/contactID].alt(0)/>
+
+
+
+
+
+<ec:style>
+    .addressCard, .emailCard, .phoneCard {
+        margin:9px 7px 0 0;
+        padding:5px;
+        border:1px solid var(--box-border-color);
+        border-radius:5px;
+
+        <ec:case if=@userSettings[theme].is(light)>
+            background-color:white;
+        </ec:case>
+
+        <ec:case if=@userSettings[theme].is(dark)>
+            background-color:#45484a;
+        </ec:case>
+    }
+</ec:style>
+
+
+
+
+
+<ec:object obj_contactCard style="width:auto;" type="tComponent">
+    <ec:var mode = @svr[param/mode].alt(contactPhones)/>
+
+    <ec:var options/>
+    <ec:options>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_contactCard" mode="contactEmailAddresses"><ec:icon title="View Email Addresses" icon="envelope" size="med"/></a>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_contactCard" mode="contactAddresses"><ec:icon title="View Addresses" icon="drop-pin" size="med"/></a>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_contactCard" mode="contactPhones"><ec:icon title="View Phone Numbers" icon="earphone" size="med"/></a>
+    </ec:options>
+
+    <ec:titlebox title="Contact Information" options=@options>
+        <ec:obj_addressList if=@mode.is(contactAddresses)/>
+        <ec:obj_emailAddressList if=@mode.is(contactEmailAddresses)/>
+        <ec:obj_phoneNumberList if=@mode.is(contactPhones)/>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_addressList style="width:98%;" type="tComponent">
+    <ec:case if=@act.is(delete)>                           
+        <ec:data xx procedure="pr_contactAddress_delete" connection=@connection>
+            <addressID>@svr[param/addressID].asInt</addressID>
+            <contactID>@contactID.asInt</contactID>
+        </ec:data>
+        @logAction(3|@LTID|@XID|Address ID: @addressID.asInt record deleted)
+    </ec:case> 
+
+    @comment(use @contactID var to lookup data and create new vw_contactAddresses using it)
+    <ec:data dt_addressList connection=@connection>
+        SELECT addressID, recipient, company, address1, address2, city, territoryName, territoryCode, zipcode, countryName, countryCode
+        FROM vw_contactAddresses
+        WHERE ownedByContactID = @contactID.alt(0).asInt
+    </ec:data>
+    
+    <ec:var options/>
+    <ec:options>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_newAddress_dialog"><ec:icon title="Add New Address" icon="plus"/></a>
+    </ec:options>
+    <ec:titlebox title="Addresses" options=@options>
+        <div style="display:flex; flex-wrap:wrap; justify-content:flex-start;">
+            <ec:loop data=@dt_addressList>
+                <ec:data yy connection=@connection>
+                    SELECT IIF(primaryShipAddressID = @rs[addressID].alt(0).asInt, 1, 0) AS shippingBit,
+                           IIF(primaryBillAddressID = @rs[addressID].alt(0).asInt, 1, 0) AS billingBit
+                    FROM contacts
+                    WHERE contactID = @contactID.alt(0).asInt AND (primaryShipAddressID = @rs[addressID].alt(0).asInt OR primaryBillAddressID = @rs[addressID].alt(0).asInt)
+                </ec:data>
+                <ec:var billCheck = @yy[1/billingBIT].alt(0)/>
+                <ec:var shipCheck = @yy[1/shippingBIT].alt(0)/>
+
+                <div class="addressCard" id="address-@rs[addressID]" @if(@any(@billCheck.is(1)|@shipCheck.is(1))|style="border-color:#d18800;")>
+                    <div class="addressCard-content">
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" addressID="@rs[addressID]" loader="#address-@rs[addressID]" ecid="obj_addressList" act="delete" confirm="Are you sure you want to delete this address?"><ec:icon title="Delete Address" icon="remove" size="xsml"/></a>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" addressID="@rs[addressID]" ecid="obj_editAddress_dialog"><ec:icon title="Edit Address" icon="pencil" size="sml"/></a>
+                        <span>@rs[recipient]&nbsp;&nbsp;</span><br/>
+                        <ec:case if=@iv(@rs[company])><span>@rs[company]</span><br/></ec:case>
+                        <span>@rs[address1]</span><br/>
+                        <ec:case if=@iv(@rs[address2])><span>@rs[address2]</span><br/></ec:case>
+                        <span>@rs[city], @rs[territoryName] @rs[zipcode]</span><br/>
+                        <span>@rs[countryName]</span><br/>
+                        <ec:case if=@nv(@rs[company])><span>&nbsp;</span><br/></ec:case>
+                        <ec:case if=@nv(@rs[address2])><span>&nbsp;</span><br/></ec:case>
+                    </div>
+                    <div class="addressCard-footer">
+                        <ec:case if=@billCheck.is(1)><ec:icon title="Billing address" icon="credit-card" size="med" color="#d18800"/></ec:case>
+                        <ec:case if=@shipCheck.is(1)><ec:icon title="Primary shipping address" icon="ship-truck" size="med" color="#d18800"/></ec:case>
+                    </div>
+                </div>
+            </ec:loop>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_editAddress_dialog title="Modify Address" type="tDialogForm">
+    <ec:var addressID = @svr[param/addressID]/>
+    <ec:var recipient = @svr[param/recipient]/>
+    <ec:var company = @svr[param/company]/>
+    <ec:var address1 = @svr[param/address1]/>
+    <ec:var address2 = @svr[param/address2]/>
+    <ec:var city = @svr[param/city]/>
+    <ec:var territoryID = @svr[param/territoryID]/>
+    <ec:var zipcode = @svr[param/zipcode]/>
+    <ec:var countryID = @svr[param/countryID].alt(222) rem='set to USA by default'/>
+    <ec:var billingAddress = @svr[param/billingAddress]/>
+    <ec:var shippingAddress = @svr[param/shippingAddress]/>
+
+
+    <ec:case if=@all(@state.is(respond)|@iv(@addressID)|@iv(@recipient)|@iv(@address1)|@iv(@city)|@iv(@territoryID)|@iv(@zipcode)|@iv(@countryID))>
+        <ec:data xx procedure="pr_contactAddress_edit" connection=@connection>
+            <addressID>@addressID.asInt</addressID>
+            <contactID>@contactID.asInt</contactID>
+            <recipient>@recipient</recipient>
+            <company>@company</company>
+            <address1>@address1</address1>
+            <address2>@address2</address2>
+            <city>@city</city>
+            <territoryID>@territoryID.asInt</territoryID>
+            <zipcode>@zipcode.replace(-|).asInt</zipcode>
+            <countryID>@countryID.asInt</countryID>
+            <billingAddress>@billingAddress.alt(0).asBool</billingAddress>
+            <shippingAddress>@shippingAddress.alt(0).asBool</shippingAddress>
+        </ec:data>
+        @logAction(3|@LTID|@XID|Edited address ID: @addressID.asInt)
+        @close()
+        @obj_addressList.refresh()
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_countriesSelect connection=@connection>
+            SELECT countryID, name
+            FROM vw_countries
+        </ec:data>
+
+        <ec:data dt_territoriesSelect connection=@connection>
+            SELECT territoryID, name
+            FROM vw_territories
+            WHERE 1=1 @countryID.alt(222).asInt.with(AND countryID = |) 
+        </ec:data>
+
+        <ec:data yy connection=@connection>
+            SELECT IIF(primaryShipAddressID = @addressID.alt(0).asInt, 1, 0) AS shippingBit,
+                   IIF(primaryBillAddressID = @addressID.alt(0).asInt, 1, 0) AS billingBit
+            FROM contacts
+            WHERE contactID = @contactID.alt(0).asInt AND (primaryShipAddressID = @addressID.alt(0).asInt OR primaryBillAddressID = @addressID.alt(0).asInt)
+        </ec:data>
+        <ec:var billCheck = @yy[1/billingBIT].alt(0)/>
+        <ec:var shipCheck = @yy[1/shippingBIT].alt(0)/>
+
+        <ec:data dt_address connection=@connection>
+            SELECT recipient, company, address1, address2, city, territoryID, zipcode, countryID
+            FROM vw_contactAddresses
+            WHERE addressID = @addressID.asInt
+        </ec:data>
+        <ec:var address=@dt_address[1]/>
+
+        <input type="hidden" name="addressID" id="addressID" value="@addressID"/>
+        <ec:case if=@iv(@countryID.nullifblank)>
+            <ec:input_text title="Recipient" id="recipient" name="recipient" fieldValue=@recipient.alt(@address[recipient]) placeholder="John Doe" require/>
+            <ec:input_text title="Company" id="company" name="company" fieldValue=@company.alt(@address[company]) placeholder="Example Inc."/><br/>
+            <ec:input_text title="Address 1" id="address1" name="address1" fieldValue=@address1.alt(@address[address1]) placeholder="Street Name / Number" require/>
+            <ec:input_text title="Address 2" id="address2" name="address2" fieldValue=@address2.alt(@address[address2]) placeholder="Unit / Suite Number"/><br/>
+            <ec:input_text title="City" id="city" name="city" fieldValue=@city.alt(@address[city]) placeholder="City Name" require/>
+            <ec:input_select title="Territory / State" id="territoryID" name="territoryID" fieldValue=@territoryID.alt(@address[territoryID]) options=@dt_territoriesSelect require/><br/>
+            <ec:input_zip title="Zip Code" id="zipcode" name="zipcode" fieldValue=@zipcode.alt(@address[zipcode]) require/><br/>
+        </ec:case>
+
+        <ec:input_select title="Country" onchange="document.getElementById('select_territoryID').value = '';" class="submitOnChange" id="countryID" name="countryID" fieldValue=@countryID.alt(@address[countryID]) options=@dt_countriesSelect require/>
+
+        <ec:case if=@iv(@countryID.nullifblank)>
+            <br/><br/>
+            <ec:input_checkbox title="Set Primary Shipping Address?" id="shippingAddress" name="shippingAddress" fieldValue=@shippingAddress.alt(@if(@shipCheck.is(1)|1))/>
+            &nbsp;&nbsp;&nbsp;
+            <ec:input_checkbox title="Set Primary Billing Address?" id="billingAddress" name="billingAddress" fieldValue=@billingAddress.alt(@if(@billCheck.is(1)|1))/>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_newAddress_dialog title="New Address" type="tDialogForm">
+    <ec:var recipient = @svr[param/recipient]/>
+    <ec:var company = @svr[param/company]/>
+    <ec:var address1 = @svr[param/address1]/>
+    <ec:var address2 = @svr[param/address2]/>
+    <ec:var city = @svr[param/city]/>
+    <ec:var territoryID = @svr[param/territoryID]/>
+    <ec:var zipcode = @svr[param/zipcode]/>
+    <ec:var countryID = @svr[param/countryID].alt(222) rem='set to USA by default'/>
+    <ec:var billingAddress = @svr[param/billingAddress]/>
+    <ec:var shippingAddress = @svr[param/shippingAddress]/>
+
+    <ec:case if=@all(@state.is(respond)|@iv(@recipient)|@iv(@address1)|@iv(@city)|@iv(@territoryID)|@iv(@zipcode)|@iv(@countryID))>
+        <ec:data xx procedure="pr_contactAddress_new" connection=@connection>
+            <contactID>@contactID.asInt</contactID>
+            <ownerLEID>@ownerLEID.asInt</ownerLEID>
+            <recipient>@recipient</recipient>
+            <company>@company</company>
+            <address1>@address1</address1>
+            <address2>@address2</address2>
+            <city>@city</city>
+            <territoryID>@territoryID.asInt</territoryID>
+            <zipcode>@zipcode.replace(-|).asInt</zipcode>
+            <countryID>@countryID.asInt</countryID>
+            <billingAddress>@billingAddress.alt(0).asBool</billingAddress>
+            <shippingAddress>@shippingAddress.alt(0).asBool</shippingAddress>
+        </ec:data>
+
+        @logAction(2|@LTID|@XID|Address record created)
+        @close()
+        @obj_addressList.refresh()
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_countriesSelect connection=@connection>
+            SELECT countryID, name
+            FROM vw_countries
+        </ec:data>
+
+        <ec:data dt_territoriesSelect connection=@connection>
+            SELECT territoryID, name
+            FROM vw_territories
+            WHERE 1=1 @countryID.alt(222).asInt.with(AND countryID = |) 
+        </ec:data>
+
+        <ec:case if=@iv(@countryID.nullifblank)>
+            <ec:input_text title="Recipient" id="recipient" name="recipient" fieldValue=@recipient placeholder="John Doe" require/>
+            <ec:input_text title="Company" id="company" name="company" fieldValue=@company placeholder="Example Inc."/><br/>
+            <ec:input_text title="Address 1" id="address1" name="address1" fieldValue=@address1 placeholder="Street Name / Number" require/>
+            <ec:input_text title="Address 2" id="address2" name="address2" fieldValue=@address2 placeholder="Unit / Suite Number"/><br/>
+            <ec:input_text title="City" id="city" name="city" fieldValue=@city placeholder="City Name" require/>
+            <ec:input_select title="Territory / State" id="territoryID" name="territoryID" fieldValue=@territoryID options=@dt_territoriesSelect require/><br/>
+            <ec:input_zip title="Zip Code" id="zipcode" name="zipcode" fieldValue=@zipcode require/><br/>
+        </ec:case>
+
+        <ec:input_select title="Country" class="submitOnChange" id="countryID" name="countryID" fieldValue=@countryID options=@dt_countriesSelect require/>
+
+        <ec:case if=@iv(@countryID.nullifblank)>
+            <br/><br/>
+            <ec:input_checkbox title="Set Primary Shipping Address?" id="shippingAddress" name="shippingAddress" fieldValue=@shippingAddress/>
+            &nbsp;&nbsp;&nbsp;
+            <ec:input_checkbox title="Set Primary Billing Address?" id="billingAddress" name="billingAddress" fieldValue=@billingAddress/>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_emailAddressList style="width:98%;" type="tComponent">
+    <ec:case if=@act.is(delete)>                           
+        <ec:data xx procedure="pr_contactEmailAddress_delete" connection=@connection>
+            <emailAddressID>@svr[param/emailAddressID].asInt</emailAddressID>
+            <contactID>@contactID.asInt</contactID>
+        </ec:data>
+        @logAction(4|@LTID|@XID|Email record deleted)
+    </ec:case>
+
+    <ec:data dt_emailsList connection=@connection>
+        SELECT emailAddressID, emailAddress
+        FROM vw_contactEmailAddresses
+        WHERE ownedByContactID = @contactID.alt(0).asInt
+    </ec:data>
+
+    <ec:var titleHint/>
+    <ec:titleHint if=@LTID.is(1)>These are additional email addresses that may be used to reach the user, send them order updates, etc... do not use for critical or private account information exchange. User's "primary" email address should be set to match their account email address. At this time, user's cannot add their own additional email addresses. Requests to add additional email addresses must be completed through their primary account email or via phone call using their primary phone number set by the user.</ec:titleHint>
+    <ec:titleHint if=@LTID.is(2)>These are additional email addresses that may be used to reach an employee. For example, retired/terminated employees may no longer have access to their work email which is set as their account email. Only use the "primary" email address for any critical or private information exchange.</ec:titleHint>
+    <ec:var options/>
+    <ec:options>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_newEmail_dialog"><ec:icon title="Add New Email" icon="plus"/></a>
+    </ec:options>
+    <ec:titlebox title="Email Addresses @if(@iv(@titleHint.nullifblank)|@hint(@titleHint))" options=@options>
+        <div style="display:flex; flex-wrap:wrap; justify-content:flex-start;">
+            <ec:loop data=@dt_emailsList>
+                <ec:data yy connection=@connection>
+                    SELECT IIF(primaryEmailAddressID = @rs[emailAddressID].alt(0).asInt, 1, 0) AS primaryBit
+                    FROM contacts
+                    WHERE contactID = @contactID.alt(0).asInt AND primaryEmailAddressID = @rs[emailAddressID].alt(0).asInt
+                </ec:data>
+                <ec:var primaryCheck = @yy[1/primaryBit].alt(0)/>
+
+                <div class="emailCard" id="email-@rs[emailAddressID]" @if(@primaryCheck.is(1)|style="border-color:#d18800;")>
+                    <div class="emailCard-content">
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" emailAddressID="@rs[emailAddressID]" loader="#email-@rs[emailAddressID]" ecid="obj_emailAddressList" act="delete" confirm="Are you sure you want to delete this email address?"><ec:icon title="Delete Email Address" icon="remove" size="xsml"/></a>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" emailAddressID="@rs[emailAddressID]" ecid="obj_editEmail_dialog"><ec:icon title="Edit Email Address" icon="pencil" size="sml"/></a>
+                        <span style="padding-right:5px;">@rs[emailAddress]</span><br/>
+                    </div>
+                    <div class="emailCard-footer">
+                        <ec:case if=@primaryCheck.is(1)><ec:icon title="Primary email address" icon="envelope" size="med" color="#d18800"/>@hint(This address is always used for critical account notifications, account recovery, and other related emails.)</ec:case>
+                    </div>
+                </div>
+            </ec:loop>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_editEmail_dialog title="Modify Email Address" type="tDialogForm">
+    <ec:var emailAddressID = @svr[param/emailAddressID]/>
+    <ec:var emailAddress = @svr[param/emailAddress]/>
+    <ec:var primaryPhone = @svr[param/primaryPhone]/>
+
+
+    <ec:case if=@all(@state.is(respond)|@iv(@emailAddressID)|@iv(@emailAddress))>
+        <ec:data xx procedure="pr_contactEmailAddress_edit" connection=@connection>
+            <emailAddressID>@emailAddressID.asInt</emailAddressID>
+            <contactID>@contactID.asInt</contactID>
+            <emailAddress>@emailAddress</emailAddress>
+            <primaryPhone>@primaryPhone.alt(0).asBool</primaryPhone>
+        </ec:data>
+        @logAction(3|@LTID|@XID|Edited email address)
+        @close()
+        @obj_emailAddressList.refresh()
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>                    
+        <ec:data yy connection=@connection>
+            SELECT IIF(primaryEmailAddressID = @emailAddressID.alt(0).asInt, 1, 0) AS primaryBit
+            FROM contacts
+            WHERE contactID = @contactID.alt(0).asInt AND primaryEmailAddressID = @emailAddressID.alt(0).asInt
+        </ec:data>
+        <ec:var primaryCheck = @yy[1/primaryBit].alt(0)/>
+        
+        <ec:data dt_emailAddress connection=@connection>
+            SELECT emailAddress
+            FROM vw_contactEmailAddresses
+            WHERE emailAddressID = @emailAddressID.alt(0).asInt
+        </ec:data>
+        <ec:var email=@dt_emailAddress[1]/>
+        
+        <br/>
+        <input type="hidden" id="emailAddressID" name="emailAddressID" value="@emailAddressID"/>
+        <ec:input_email title="Email Address" id="emailAddress" name="emailAddress" fieldValue=@emailAddress.alt(@email[emailAddress]) placeholder="john.doe@chr(64)example.com" require/>
+        <br/><br/>
+        <ec:input_checkbox title="Set as primary email address?" id="primaryEmail" name="primaryEmail" fieldValue=@primaryEmail.alt(@primaryCheck) hintContent="Use this address for critical account notifications, account recovery, and other related emails?"/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_newEmail_dialog title="New Email Address" type="tDialogForm">
+    <ec:var emailAddress = @svr[param/emailAddress]/>
+    <ec:var primaryEmail = @svr[param/primaryEmail]/>
+
+    <ec:case if=@all(@state.is(respond)|@iv(@emailAddress))>
+        <ec:data xx procedure="pr_contactEmailAddress_new" connection=@connection>
+            <contactID>@contactID.asInt</contactID>
+            <ownerLEID>@ownerLEID.asInt</ownerLEID>
+            <emailAddress>@emailAddress</emailAddress>
+            <primaryEmail>@primaryEmail.alt(0).asBool</primaryEmail>
+        </ec:data>
+        @logAction(2|@LTID|@XID|Email record created: @emailAddress)
+        @close()
+        @obj_emailAddressList.refresh()
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>       
+        <br/>
+        <ec:input_text title="Email Address" id="emailAddress" name="emailAddress" fieldValue=@emailAddress placeholder="john.doe@chr(64)example.com" require/>
+        <br/><br/>
+        <ec:input_checkbox title="Set as primary email address?" id="primaryEmail" name="primaryEmail" fieldValue=@primaryEmail hintContent="Use this address for critical account notifications, account recovery, and other related emails?"/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_phoneNumberList style="width:98%;" type="tComponent">
+    <ec:case if=@act.is(delete)>                           
+        <ec:data xx procedure="pr_contactPhoneNumber_delete" connection=@connection>
+            <phoneNumberID>@svr[param/phoneNumberID].asInt</phoneNumberID>
+            <contactID>@contactID.asInt</contactID>
+        </ec:data>
+        @logAction(4|@LTID|@XID|Phone record deleted)
+    </ec:case>
+
+    <ec:data dt_phoneNumberList connection=@connection>
+        SELECT phoneNumberID, recipient, typeDescription, phoneNumber, phoneNumberExtension
+        FROM vw_contactPhoneNumbers
+        WHERE ownedByContactID = @contactID.alt(0).asInt
+    </ec:data>
+    
+    <ec:var options/>
+    <ec:options>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_newPhoneNumber_dialog"><ec:icon title="Add New Phone Number" icon="plus"/></a>
+    </ec:options>
+    <ec:titlebox title="Phone Numbers" options=@options>
+        <div style="display:flex; flex-wrap:wrap; justify-content:flex-start;">
+            <ec:loop data=@dt_phoneNumberList>
+                <ec:data yy connection=@connection>
+                    SELECT IIF(primaryPhoneNumberID = @rs[phoneNumberID].alt(0).asInt, 1, 0) AS primaryBit
+                    FROM contacts
+                    WHERE contactID = @contactID.alt(0).asInt AND primaryPhoneNumberID = @rs[phoneNumberID].alt(0).asInt
+                </ec:data>
+                <ec:var primaryCheck = @yy[1/primaryBit].alt(0)/>
+
+                <div class="phoneCard" id="phone-@rs[phoneNumberID]" @if(@primaryCheck.is(1)|style="border-color:#d18800;")>
+                    <div class="phoneCard-content">
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" phoneNumberID="@rs[phoneNumberID]" loader="#phone-@rs[phoneNumberID]" ecid="obj_phoneNumberList" act="delete" confirm="Are you sure you want to delete this phone number?"><ec:icon title="Delete Phone Number" icon="remove" size="xsml"/></a>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" phoneNumberID="@rs[phoneNumberID]" ecid="obj_editPhoneNumber_dialog"><ec:icon title="Edit Phone Number" icon="pencil" size="sml"/></a>
+                        <span>@rs[recipient] (@rs[typeDescription])&nbsp;&nbsp;</span><br/>
+                        <span>@rs[phoneNumber] @if(@iv(@rs[phoneNumberExtension])|ext. @rs[phoneNumberExtension])</span>
+                    </div>
+                    <div class="phoneCard-footer">
+                        <ec:case if=@primaryCheck.is(1)><ec:icon title="Primary phone number" icon="earphone" size="med" color="#d18800"/></ec:case>
+                    </div>
+                </div>
+            </ec:loop>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_editPhoneNumber_dialog title="Modify Phone Number" type="tDialogForm">
+    <ec:var phoneNumberID = @svr[param/phoneNumberID]/>
+    <ec:var recipient = @svr[param/recipient]/>
+    <ec:var phoneNumberTypeID = @svr[param/phoneNumberTypeID]/>
+    <ec:var phoneNumber = @svr[param/phoneNumber]/>
+    <ec:var phoneNumberExtension = @svr[param/phoneNumberExtension]/>
+    <ec:var primaryPhone = @svr[param/primaryPhone]/>
+
+
+    <ec:case if=@all(@state.is(respond)|@iv(@recipient)|@iv(@phoneNumberTypeID)|@iv(@phoneNumber))>
+        <ec:data xx procedure="pr_contactPhoneNumber_edit" connection=@connection>
+            <phoneNumberID>@phoneNumberID.asInt</phoneNumberID>
+            <contactID>@contactID.asInt</contactID>
+            <recipient>@recipient</recipient>
+            <phoneNumberTypeID>@phoneNumberTypeID.asInt</phoneNumberTypeID>
+            <phoneNumber>@phoneNumber</phoneNumber>
+            <phoneNumberExtension>@phoneNumberExtension</phoneNumberExtension>
+            <primaryPhone>@primaryPhone.alt(0).asBool</primaryPhone>
+        </ec:data>
+        @logAction(3|@LTID|@XID|Edited phone number)
+        @close()
+        @obj_phoneNumberList.refresh()
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_phoneNumberTypesSelect connection=@connection>
+            SELECT phoneNumberTypeID, [description] FROM contactPhoneNumberTypes
+        </ec:data>
+                    
+        <ec:data yy connection=@connection>
+            SELECT IIF(primaryPhoneNumberID =@phoneNumberID.alt(0).asInt, 1, 0) AS primaryBit
+            FROM contacts
+            WHERE contactID = @contactID.alt(0).asInt AND primaryPhoneNumberID = @phoneNumberID.alt(0).asInt
+        </ec:data>
+        <ec:var primaryCheck = @yy[1/primaryBit].alt(0)/>
+        
+        <ec:data dt_phoneNumber connection=@connection>
+            SELECT recipient, phoneNumberTypeID, phoneNumber, phoneNumberExtension
+            FROM vw_contactPhoneNumbers
+            WHERE phoneNumberID = @phoneNumberID.alt(0).asInt
+        </ec:data>
+        <ec:var number=@dt_phoneNumber[1]/>
+        
+        <br/>
+        <input type="hidden" id="phoneNumberID" name="phoneNumberID" value="@phoneNumberID"/>
+        <ec:input_text title="Recipient" id="recipient" name="recipient" fieldValue=@recipient.alt(@number[recipient]) placeholder="John Doe" require/>
+        <ec:input_select title="Number Type" id="phoneNumberTypeID" name="phoneNumberTypeID" fieldValue=@phoneNumberTypeID.alt(@number[phoneNumberTypeID]) options=@dt_phoneNumberTypesSelect require/><br/><br/>
+        <ec:input_tel title="Phone Number" id="phoneNumber" name="phoneNumber" fieldValue=@phoneNumber.alt(@number[phoneNumber]) require/>
+        <ec:input_number title="Ext." id="phoneNumberExtension" name="phoneNumberExtension" min="0000" max="9999" pattern="[0-9]{0,4}" placeholder="9999" fieldValue=@phoneNumberExtension.alt(@number[phoneNumberExtension])/>
+        <br/><br/>
+        <ec:input_checkbox title="Set as primary phone number?" id="primaryPhone" name="primaryPhone" fieldValue=@primaryPhone.alt(@primaryCheck)/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_newPhoneNumber_dialog title="New Phone Number" type="tDialogForm">
+    <ec:var recipient = @svr[param/recipient]/>
+    <ec:var phoneNumberTypeID = @svr[param/phoneNumberTypeID]/>
+    <ec:var phoneNumber = @svr[param/phoneNumber]/>
+    <ec:var phoneNumberExtension = @svr[param/phoneNumberExtension]/>
+    <ec:var primaryPhone = @svr[param/primaryPhone]/>
+
+
+    <ec:case if=@all(@state.is(respond)|@iv(@recipient)|@iv(@phoneNumberTypeID)|@iv(@phoneNumber))>
+        <ec:data xx procedure="pr_contactPhoneNumber_new" connection=@connection>
+            <contactID>@contactID.asInt</contactID>
+            <ownerLEID>@ownerLEID.asInt</ownerLEID>
+            <recipient>@recipient</recipient>
+            <phoneNumberTypeID>@phoneNumberTypeID.asInt</phoneNumberTypeID>
+            <phoneNumber>@phoneNumber</phoneNumber>
+            <phoneNumberExtension>@phoneNumberExtension</phoneNumberExtension>
+            <primaryPhone>@primaryPhone.alt(0).asBool</primaryPhone>
+        </ec:data>
+        @logAction(2|@LTID|@XID|Phone record created: @phoneNumber @phoneNumberExtension)
+        @close()
+        @obj_phoneNumberList.refresh()
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_phoneNumberTypesSelect connection=@connection>
+            SELECT phoneNumberTypeID, [description] FROM contactPhoneNumberTypes
+        </ec:data>
+        
+        <br/>
+        <ec:input_text title="Recipient" id="recipient" name="recipient" fieldValue=@recipient placeholder="John Doe" require/>
+        <ec:input_select title="Number Type" id="phoneNumberTypeID" name="phoneNumberTypeID" fieldValue=@phoneNumberTypeID options=@dt_phoneNumberTypesSelect require/><br/><br/>
+        <ec:input_tel title="Phone Number" id="phoneNumber" name="phoneNumber" fieldValue=@phoneNumber require/>
+        <ec:input_number title="Ext." id="phoneNumberExtension" name="phoneNumberExtension" min="0000" max="9999" pattern="[0-9]{0,4}" placeholder="9999" fieldValue=@phoneNumberExtension.alt(@number[phoneNumberExtension])/>
+        <br/><br/>
+        <ec:input_checkbox title="Set as primary phone number?" id="primaryPhone" name="primaryPhone" fieldValue=@primaryPhone/>
+    </ec:case>
+</ec:object>

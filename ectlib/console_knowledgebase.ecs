@@ -1,0 +1,331 @@
+@share
+<ec:module comp_widgets/>
+<ec:module comp_input_entity/>
+<ec:module comp_scriptHandler/>
+
+<ec:pluginsReset/>
+<ec:pluginAdd name="widget" function=@widget.asReference/>
+
+<ec:var fkeywords = @svr[param/fkeywords].nullifblank/>
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+<ec:var femployeeID = @svr[param/X_femployeeID].nullifblank/>
+<ec:var fdepreciated = @svr[param/fdepreciated].alt(false)/>
+
+<ec:style>
+    .titlebox_content {& ol, & ul {margin-left: 20px;}}
+</ec:style>
+
+<ec:object dt_knowledgebase page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>knowledgebaseID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT knowledgebaseID, parentKnowledgebaseID, date, depreciated, employeeID, firstName, lastName
+            FROM vw_kb_records
+            WHERE websiteID = @websiteID.asInt
+            
+            @if(@fdepreciated.isnull|AND (depreciated = 0 OR depreciated = 1))
+            @if(@fdepreciated.is(true)|AND (depreciated = 1))
+            @if(@fdepreciated.is(false)|AND (depreciated = 0))
+
+            @if(@iv(@fkeywords)|AND FREETEXT((description, keywords), 'NEAR(@sqlesc(@fkeywords))'))
+            @if(@iv(@fdate_start)|AND CAST(date AS DATE) @chr(62)= @sqlstr(@fdate_start.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fdate_end)|AND CAST(date AS DATE) @chr(60)= @sqlstr(@fdate_end.formatdate(yyyy-mm-dd)))
+            @if(@iv(@femployeeID)|AND employeeID = @femployeeID.asInt)
+            <ec:case if=@all(@nv(@fkeywords)|@nv(@fdate_start)|@nv(@fdate_end)|@nv(@femployeeID)|@fdepreciated.is(false)) rem="only show root knowledgebase if there is no search">AND parentKnowledgebaseID IS NULL</ec:case>
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT knowledgebaseID, parentKnowledgebaseID, description, date, knowledgebaseContent, depreciated, employeeID, firstName, lastName, iconURL, iconDescription
+            FROM vw_knowledgebase
+            WHERE websiteID = @websiteID.asInt AND knowledgebaseID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="ASC">COALESCE(dbo.fn_knowledgebase_oldestAncestor(knowledgebaseID), parentKnowledgebaseID, knowledgebaseID)</sort>
+    <order>COALESCE(dbo.fn_knowledgebase_oldestAncestor(knowledgebaseID), parentKnowledgebaseID, knowledgebaseID) DESC, knowledgebaseID ASC, date DESC</order>
+</ec:object>
+<ec:object obj_knowledgebase_pageNavigator dataObj=@dt_knowledgebase type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_knowledgebaseRecords dataObj=@dt_knowledgebase type="tComponent">
+    <ec:titlebox title="Knowledgebase Records"  options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>KB#</th>
+                <th>Date</th>
+                <th style="min-width: 30vw;">Tag / Title</th>
+                <th>&nbsp;</th>
+                <th style="text-align: left;">Author</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=@LTID&xid=@rs[knowledgebaseID]">
+                    <td>@rs[knowledgebaseID]</td>
+                    <td>@rs[date].formatdate(dd MMM yyyy)</td>
+                    <td><ec:xBreadCrumbs knowledgebaseID=@rs[knowledgebaseID] noMargin width="98%"/></td>
+                    <td>@if(@rs[depreciated].is(true)|&nbsp;@chr(40)Depreciated@chr(41)|&nbsp;)</td>
+                    <td style="text-align: left;"><a href="/console?ltid=2&xid=@rs[employeeID]" rel="nofollow"><i>@rs[firstName] @rs[lastName]</i></a></td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_knowledgebase_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_knowledgebaseRecord dataObj=@dt_knowledgebase type="tComponent">
+    <ec:var kb=@dataObj.dataDef[data/1]/>
+    <ec:var authorAnchor/><ec:authorAnchor><a href="/console?ltid=2&xid=@kb[employeeID]" rel="nofollow">@kb[firstName] @kb[lastName]</a></ec:authorAnchor>
+    <ec:var revealKeywordsBtn/><ec:revealKeywordsBtn><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_keywordsList">View Keywords</a></ec:revealKeywordsBtn>
+
+    <ec:titlebox title="@kb[description] (KB)" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@kb[iconURL]" alt="@kb[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID"/>
+                <ec:displayField title="Title" content="@kb[description]"/>
+                <ec:displayField title="Date" content="@kb[date].formatdate(dd MMM yyyy)"/>
+                <ec:displayField title="Author" content=@authorAnchor/>
+                <ec:displayField title="Keywords" content=@revealKeywordsBtn/>
+                <ec:displayField title="Depreciated?" content=@kb[depreciated] style="@if(@kb[depreciated].is(true)|color:#f0b624;)"/>
+            </div>
+            @obj_breadCrumbs()
+        </div>
+
+        <ec:titlebox title="Knowledgebase Descendants" style="width:98%;">     
+            @obj_childKBList()
+        </ec:titlebox>
+    </ec:titlebox>
+
+    <ec:titlebox title="Content">
+        @runScript(@kb[knowledgebaseContent].decode)
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_keywordsList title="Keywords" buttonCaption="Close" type="tDialogForm">
+    <ec:case if=@not(@closed)>
+        <ec:data dt_keywords connection=@connection>
+            SELECT dbo.fn_sortAlphaString(keywords) AS sortedKeywords FROM vw_kb_records WHERE knowledgebaseID = @XID.asInt.alt(0)
+        </ec:data>
+        <br/><strong>Automatically generated keywords</strong><br/><p class="notice">The KB title, all ancestral keywords, ID, and key phrases such as "knowledgebase".</p><br/><br/>
+
+        @dt_keywords[1/sortedKeywords].lower
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_breadCrumbs type="tComponent">
+    <ec:xBreadCrumbs knowledgebaseID=@XID/>
+</ec:object>
+
+
+<ec:function xBreadCrumbs>
+    <ec:param knowledgebaseID=0 width noMargin/>
+    <ec:data xx connection=@connection>
+        SELECT kb.knowledgebaseID, dbo.fn_knowledgebaseTag(kb.knowledgebaseID, 0) AS description
+        FROM vw_kb_records kb
+        INNER JOIN dbo.tb_knowledgebaseAncestors(@knowledgebaseID) ON kb.knowledgebaseID = dbo.tb_knowledgebaseAncestors.knowledgebaseID
+    </ec:data>
+
+    <ul class="breadcrumb @if(@noMargin.alt(0)|noMarginBreadcrumb)" @width.with(width="|")>
+        <ec:loop data=@xx DESC>
+            <ec:case if=@rs[knowledgebaseID].isnot(@knowledgebaseID)>
+                <li><a href="/console?ltid=@LTID&xid=@rs[knowledgebaseID]&xLTID=@LTID&xXID=@XID" rel="nofollow">@rs[description]&nbsp;&nbsp;<strong>@chr(47)</strong>&nbsp;&nbsp;</a></li>      
+            </ec:case>
+            <ec:case if=@else>
+                <li style="color: var(--link-color-hover);"><strong>@rs[description]</strong></li>      
+            </ec:case>
+        </ec:loop>
+    </ul>
+
+    <ec:include if=@xx.count.isGreaterThan(1) group="headerInclude">
+        <script type="application/ld+json">
+            {
+                "@chr(64)context": "@protocol()@host@svr[request/url]",
+                "@chr(64)type": "BreadcrumbList",
+                "itemListElement": [          
+                    <ec:loop data=@xx DESC>
+                        {
+                            "@chr(64)type": "ListItem",
+                            "position": @index(),
+                            "name": "@rs[description]",
+                            "item": "@protocol()@host()@svr[request/url]?ltid=@LTID&xid=@rs[binLocationID]&xLTID=@LTID&xXID=@XID"
+                        }@if(@not(@rs.isFirst)|,|)
+                    </ec:loop>
+                ]
+            }
+        </script>
+    </ec:include>
+</ec:function>
+
+
+
+
+
+<ec:object obj_childKBList type="tComponent">
+    <ec:var childKBID = @svr[param/childKBID].nullifblank/>
+
+    <ec:case if=@all(@act.is(unlink)|@iv(@childKBID))>
+        <ec:data xx procedure="pr_knowledgebase_changeParent" connection=@connection>
+           <knowledgebaseID>@childKBID.asInt</knowledgebaseID>
+           <parentKnowledgebaseID></parentKnowledgebaseID>
+        </ec:data>
+    </ec:case>
+
+    <ec:data dt_childKBList connection=@connection>
+        SELECT knowledgebaseID, dbo.fn_knowledgebaseTag(knowledgebaseID, 0) AS description
+        FROM vw_knowledgebase
+        @if(@iv(@XID)|WHERE parentKnowledgebaseID = @XID.asInt)
+        ORDER BY description
+    </ec:data>
+
+    <div id="childKBList">
+        <ec:loop data=@dt_childKBList>
+            <div class="childLocationDiv"><span class="anchorify" href="/console?ltid=@LTID&xid=@rs[knowledgebaseID]&xLTID=@LTID&xXID=@XID">@rs[description]</span> <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_childKBList" act="unlink" childKBID="@rs[knowledgebaseID]" confirm="Are you sure you want to unlink this descendant KB from its parent?">&nbsp;<ec:icon title="Remove descendant KB from this knowledgebase" icon="remove" size="tiny" direction="none"/></a></div>
+        </ec:loop>
+        <div class="childLocationDiv"><span class="ajaxClick" ecid="obj_record_new" parentKBID="@XID">New Descendant KB&nbsp;&nbsp;<ec:icon title="" icon="plus" size="tiny" direction="none"/></span></div>
+    </div>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Knowledgebase Entry" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var keywords = @svr[param/keywords].nullifblank/>
+    <ec:var parentKBID = @svr[param/X_parentKB].alt(@svr[param/parentKBID]).nullifblank/>
+    <ec:var kbContent = @svr[param/kbContent].nullifblank/>
+
+    
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@description))>
+            <ec:data xx procedure="pr_knowledgebase_new" connection=@connection>
+                <description>@description</description>
+                <keywords>@keywords</keywords>
+                <authorID>@user.employeeID.asInt</authorID>
+                <parentKBID>@parentKBID.asInt</parentKBID>
+                <kbContent>@kbContent.encode</kbContent>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newKBID = @xx[newKBID].nullifblank/>
+            
+            <ec:case if=@iv(@newKBID)>
+                @logAction(2|@LTID|@newKBID)
+                @notification(Knowledgebase KB-@newKBID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@newKBID)
+                @close()
+            </ec:case>
+            <ec:case if=@else>
+                <ec:set errMsg="An error occurred. Please contact a system administrator."/>
+                @logError(error|obj_newKB_dialog unknown SQL error|101)
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg="A title is required to create a new knowledgebase entry."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="KB Title" id="description" name="description" fieldValue=@description/>
+        <ec:input_entity title="Parent KB" id="parentKB" name="parentKB" fieldLTID=@if(@iv(@parentKBID)|10|@null) fieldXID=@parentKBID filterLTID="10"/><br/><br/>
+        <ec:input_text title="Keywords" id="keywords" name="keywords" containerstyle="width:100%;" style="width:100%;" fieldValue=@keywords hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Avoid adjectives / articles."/><br/><br/>
+        <ec:input_textField title="Content" id="kbContent" name="kbContent" fieldValue=@kbContent/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Knowledgebase Entry" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var keywords = @svr[param/keywords].nullifblank/>
+    <ec:var parentKBID = @svr[param/X_parentKB].alt(@svr[param/parentKBID]).nullifblank/>
+    <ec:var kbContent = @svr[param/kbContent].nullifblank/>
+    <ec:var depreciated = @svr[param/depreciated].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@description))>
+            <ec:data xx procedure="pr_knowledgebase_edit" connection=@connection>
+                <knowledgebaseID>@XID.asInt</knowledgebaseID>
+                <description>@description</description>
+                <keywords>@keywords</keywords>
+                <parentKBID>@parentKBID.asInt</parentKBID>
+                <kbContent>@kbContent.encode</kbContent>
+                <depreciated>@depreciated.asBool</depreciated>
+            </ec:data>
+
+            @logAction(3|@LTID|@XID|Edited knowledgebase)
+            @dt_knowledgebase.refresh()
+            @obj_knowledgebaseRecord.refresh()
+            @close()
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg="A title and author are required to edit a knowledgebase entry."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_kbRec connection=@connection>
+            SELECT description, keywords, parentKnowledgebaseID AS parentKBID, knowledgebaseContent AS kbContent, depreciated
+            FROM vw_knowledgebase
+            WHERE knowledgebaseID = @XID.asInt
+        </ec:data>
+        <ec:var kbRec = @dt_kbRec[1]/>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="KB Title" id="description" name="description" fieldValue=@kbRec[description].alt(@description)/>
+        <ec:input_entity title="Parent KB" id="parentKB" name="parentKB" fieldLTID=@if(@iv(@kbRec[parentKBID].alt(@parentKBID))|10|@null) fieldXID=@kbRec[parentKBID].alt(@parentKBID) filterLTID="10"/><br/><br/>
+        <ec:input_checkbox title="Depreciated?" id="depreciated" name="depreciated" fieldValue=@if(@depreciated.is(true)|1).alt(@if(@kbRec[depreciated].is(true)|1))/><br/><br/>
+        <ec:input_text title="Keywords" id="keywords" name="keywords" fieldValue=@kbRec[keywords].alt(@keywords) containerStyle="width:100%;" style="width:100%;" hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Avoid adjectives / articles."/><br/><br/>
+        <ec:input_textField title="Content" id="kbContent" name="kbContent" fieldValue=@kbRec[kbContent].alt(@kbContent)/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="Keywords" id="fkeywords" name="fkeywords" fieldValue=@fkeywords/> 
+            <ec:input_dateRange title="Date Range" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+            <ec:input_entity title="Author" id="femployeeID" name="femployeeID" fieldLTID=@if(@iv(@femployeeID)|2|@null) fieldXID=@femployeeID filterLTID="2" allowNull/>
+            <ec:input_trueFalse title="Depreciated?" id="fdepreciated" name="fdepreciated" fieldValue=@fdepreciated.alt(false) allowNull/>
+        </ec:consoleSearchBox>
+
+        @obj_knowledgebaseRecords
+    </ec:case>
+    <ec:case if=@iv(@XID)>@obj_knowledgebaseRecord</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@iv(@XID)>
+        <br/> <!-- this break is here to keep spacing consistent between KB and document copy/paste operations -->
+        <a href="javascript:void(0)" rel="nofollow" onclick="alert('This feature is not yet implemented. Need to create tDialog obj to handle this operation');" confirm="Are you sure you want to create a new document from this knowledgebase's content? The document is publicly accessible.">New Doc From KB <ec:icon title="Create a new public document from KB content" icon="plus" size="sml" direction="left"/></a><br/>
+        <a href="javascript:void(0)" rel="nofollow" onclick="alert('This feature is not yet implemented. Need to create tDialog obj to handle this operation');" confirm="In the next step you will choose which document will have its content replaced. Please be advised, this cannot be undone. Continue?">Replace Doc From KB <ec:icon title="Replace public document content using KB content" icon="copy" size="sml" direction="left"/></a><br/>
+    </ec:case>
+</ec:function>

@@ -1,0 +1,125 @@
+@share
+@pageTitle.setValue(Blacklisted IP Addresses)
+
+<ec:var fipaddress = @svr[param/fipaddress].nullifblank/>
+
+<ec:object dt_blacklist page=@page limit=@min(999|@svr[param/perpage].alt(50)) type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey></primaryKey>
+    <sqlSelect>
+        SELECT dbo.fn_IPAddress_toString(ipaddress) AS ipaddress, CAPTCHAScore, errorScore, locationScore, riskScore, aclScore
+        FROM vw_blacklistedIPs
+        WHERE 1=1 @fipaddress.with(AND ipaddress = dbo.fn_IPAddress_toBinary(@fipaddress.trim.with('|')))
+    </sqlSelect>
+    <sort by="DESC">ipAddress</sort>
+</ec:object>
+<ec:object obj_blacklist_pageNavigator dataObj=@dt_blacklist type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_reportBlacklist dataObj=@dt_blacklist type="tComponent">
+    <ec:titlebox title="Blacklisted IP Addresses">
+        <table class="tbl">
+            <tr>
+                <th>IPAddress</th>
+                <th>CAPTCHA Score</th>
+                <th>Error Score</th>
+                <th>Location Score</th>
+                <th>Risk Score</th>
+                <th title="Sum of CAPTCHA, error, location, and risk scores">ACL Score</th>
+                <th>&nbsp;</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr>
+                    <td><a href="/console?ltid=105&xid=6&fipAddress=@rs[ipAddress]" rel="nofollow">@rs[ipAddress]</a></td>
+                    <td>@rs[CAPTCHAScore]</td>
+                    <td>@rs[errorScore]</td>
+                    <td>@rs[locationScore]</td>
+                    <td>@rs[riskScore]</td>
+                    <td><span class="col-left">@rs[aclScore]&nbsp;&nbsp;</span><ec:case if=@rs[aclScore].isgreaterthan(0)><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_blacklistControls" act="resetACL" aclIP="@rs[ipAddress]" loader="#obj_reportBlacklist" confirm="Are you sure you want to reset the ACL Score for this IP Address?"><ec:icon title="Reset ACL Score" icon="repeat" size="tiny" direction="left" style="transform: translateY(3px);"/></a></ec:case></td>
+                    <td><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_blacklistControls" act="removeBan" unbanIP=@rs[ipAddress] loader="#obj_reportBlacklist" confirm="Are you certain you wish to lift the ban on this IP address?"><ec:icon title="Remove ban" icon="remove" size="xsml" direction="right"/></a></td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_blacklist_pageNavigator
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+<ec:object obj_blacklistControls type="tComponent">
+    <ec:case if=@act.is(resetACL)>
+        <ec:data xx procedure="pr_acl_edit" connection=@connection>
+            <ipAddress>@svr[param/aclIP]</ipAddress>
+            <CAPTCHAScore>0</CAPTCHAScore>
+            <errorScore>0</errorScore>
+            <locationScore>0</locationScore>
+            <riskScore>0</riskScore>
+        </ec:data>
+        @logAction(49|||ACL for @svr[param/aclIP] reset)
+        @dt_blacklist.refresh()
+        @obj_reportBlacklist.refresh()
+    </ec:case>
+
+    <ec:case if=@act.is(removeBan)>
+        <ec:data xx procedure="pr_acl_blacklistIP" connection=@connection>
+            <ipAddress>@svr[param/unbanIP]</ipAddress>
+            <blacklist>0</blacklist>
+        </ec:data>
+        @logAction(49|||@svr[param/unbanIP] no longer blacklisted)
+        @dt_blacklist.refresh()
+        @obj_reportBlacklist.refresh()
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_blacklist type="tDialogForm">
+    <ec:case if=@not(@closed)>
+        <ec:case if=@iv(@svr[param/banIP].nullifblank)>
+        <ec:data xx procedure="pr_acl_blacklistIP" connection=@connection>
+            <ipAddress>@svr[param/banIP]</ipAddress>
+            <blacklist>1</blacklist>
+        </ec:data>
+        
+        @close()
+        @dt_blacklist.refresh()
+        @obj_reportBlacklist.refresh()
+
+        @logAction(49|||Blacklisted @svr[param/banIP] from the website)
+        @if(@ipaddress.is(@svr[param/banIP])|@reload)
+        </ec:case>
+
+        <ec:case if=@else>
+            <p class="notice">This ban action is intended to be permanent. Only proceed if you understand the implications.</p><br/><br/>
+            <input type="hidden" id="act" name="act" value="blacklistIP" />
+            <ec:input_text title="IPAddress" id="banIP" name="banIP"/>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <ec:consoleSearchBox>
+        <ec:input_text title="IPAddress" id="fipaddress" name="fipaddress" fieldValue=@fipaddress/>
+    </ec:consoleSearchBox>
+
+    @obj_reportBlacklist
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_blacklist" act="blacklistIP"><ec:icon title="" icon="plus" size="sml" color="#bb5555" direction="left"/>Blacklist IP Address</a><br/>
+    <a href="/console?ltid=105&xid=6" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View Sessions / ACL</a><br/>
+</ec:function>

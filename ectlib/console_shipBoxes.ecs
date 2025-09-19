@@ -1,0 +1,223 @@
+@share
+
+<ec:object dt_shipBoxes page=@page limit=@min(999|@svr[param/perpage].alt(50)) type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>shipBoxID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT shipBoxID, description, shipBoxMaterial, length, width, height, boxWeight, maxWeight, ulineModel, ulinePrice, inActive
+            FROM vw_shipBoxes
+            WHERE websiteID = @websiteID.asInt
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT description, shipBoxMaterial, length, width, height, boxWeight, estimatedWeight, maxWeight, ulineModel, ulinePrice, inActive, iconURL
+            FROM vw_shipBox
+            WHERE websiteID = @websiteID.asInt AND shipBoxID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort>CASE WHEN (description LIKE '\_%' ESCAPE '\' AND inActive = 0) THEN 1 WHEN (description LIKE '\_%' ESCAPE '\' AND inActive = 1) THEN 2 ELSE 3 END, description ASC, length ASC, width ASC, height ASC, shipboxID ASC</sort>
+</ec:object>
+<ec:object obj_shipBoxes_pageNavigator dataObj=@dt_shipBoxes type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_shipBoxes dataObj=@dt_shipBoxes type="tComponent">
+    <ec:titlebox title="Ship Boxes"  options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>Description</th>
+                <th>Dimensions</th>
+                <th>Box Wght.</th>
+                <th>Uline Model / $</th>
+                <th>Capacity</th>
+                <th style="text-align:left;">Material</th>
+            </tr>
+        <ec:loop data=@dataObj.dataDef[data]>
+            <tr @if(@rs[inActive].is(1|true)|style="opacity:.75;")>
+                <td><a href="/console?ltid=@LTID&xid=@rs[shipBoxID]" rel="nofollow">@rs[description]<ec:case if=@rs[inactive].is(true|1)><span style="color: var(--notice-highlight-color);"> (Inactive)</span></ec:case></a></td>
+                <td>@if(@iv(@rs[length])|@rs[length] x @rs[width] x @rs[height])</td>
+                <td>@if(@iv(@rs[boxWeight])|@rs[boxWeight] lbs.)</td>
+                <td><ec:case if=@iv(@rs[ulineModel])><a href="https://www.uline.com/Product/AdvSearchResult?keywords=@rs[ulineModel].urlEncode" rel="nofollow" target="_blank">@rs[ulineModel]</a> @chr(64) $@rs[ulinePrice].alt(0).formatNumber(0.00)/ea</ec:case></td>
+                <td>@if(@iv(@rs[maxWeight])|@rs[maxWeight].formatNumber(00.00) lbs.)</td>
+                <td style="text-align:left;">@rs[shipBoxMaterial]</td>
+            </tr>
+        </ec:loop>
+        </table>
+
+        @obj_shipBoxes_pageNavigator()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_shipBox dataObj=@dt_shipBoxes type="tComponent">
+    <ec:var box=@dataObj.dataDef[data/1]/>
+    <ec:titlebox title="Ship Box" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@box[iconURL]" alt="@box[description]"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID"/>
+                <ec:displayField title="Description" content="@box[description]"/>
+                <ec:displayField title="Material" content="@box[shipBoxMaterial]"/>
+                <ec:displayField title="LxWxH" content="@if(@iv(@box[length].nullifblank)|@box[length] x @box[width] x @box[height]|None @hint(Shipper manually enters dimensions during shipping.))"/>
+                <ec:displayField title="Box Weight" content="@if(@iv(@box[boxWeight])|@box[boxWeight] lbs. @hint(Est. @box[estimatedWeight].formatNumber(0.0000).alt(Unknown) lbs. Actual weight may be different.)|Unknown @hint(Est. @box[estimatedWeight].formatNumber(0.0000).alt(Unknown) lbs.@br()Shipper manually enters weight during shipping.))"/>
+                <ec:displayField title="Capacity" content="@box[maxWeight].alt(unknown) lbs. @hint(How much weight, in pounds, this box can hold.)"/>
+                <ec:var ulineLink/><ec:ulineLink><ec:case if=@iv(@box[ulineModel])><a href="https://www.uline.com/Product/AdvSearchResult?keywords=@box[ulineModel].urlEncode" rel="nofollow" target="_blank">@box[ulineModel]</a> @chr(64) $@box[ulinePrice].alt(0).formatNumber(0.00)/ea</ec:case></ec:ulineLink>
+                <ec:displayField title="Uline Model" content=@ulineLink/>
+                <ec:displayField title="Inactive" content="@box[inActive] @hint(Whether this box is deactivated for shipping or not.)" style="@if(@box[inActive].is(true)|color:#f0b624;)"/>
+            </div>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Box" type="tDialogRecordForm">
+    <ec:var shipBoxMaterialID = @svr[param/shipBoxMaterialID].nullifblank  inactive = @svr[param/inactive]/>
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var length = @svr[param/length].nullifblank  width = @svr[param/width].nullifblank  height = @svr[param/height].nullifblank/>
+    <ec:var boxWeight = @svr[param/boxWeight].nullifblank  maxWeight = @svr[param/maxWeight].nullifblank/>
+    <ec:var ulineModel = @svr[param/ulineModel].nullifblank  ulinePrice = @svr[param/ulinePrice].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@shipBoxMaterialID)|@iv(@description)|@iv(@maxWeight))> 
+            <ec:data xx procedure="pr_shipBox_new" connection=@connection>    
+                <shipBoxMaterialID>@shipBoxMaterialID.asInt</shipBoxMaterialID>
+                <description>@description</description>
+                <length>@length.asFloat</length>
+                <width>@width.asFloat</width>
+                <height>@height.asFloat</height>
+                <boxWeight>@boxWeight.asFloat</boxWeight>
+                <maxWeight>@maxWeight.asFloat</maxWeight>
+                <ulineModel>@ulineModel</ulineModel>
+                <ulinePrice>@ulinePrice.asFloat</ulinePrice>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newBoxID = @xx[newBoxID].nullifblank/>
+
+            <ec:case if=@iv(@newBoxID)>
+                @logAction(2|@LTID|@newBoxID)
+                @notification(Box SHB-@newBoxID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@newBoxID)
+                @close()
+            </ec:case>
+            <ec:case if=@else>
+                <ec:set errMsg = "An error occurred. Please contact a system administrator."/>
+                @logError(error|obj_newShipBox_dialog unknown SQL error|101)
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "Description, material, and weight capacity are all required to edit a box."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_materialsSelect connection=@connection>
+            SELECT shipBoxMaterialID, shipBoxMaterial FROM vw_shipBoxMaterials_select
+        </ec:data>
+
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Description" id="description" name="description" fieldValue=@description) require/>
+        <ec:input_select title="Material" id="shipBoxMaterialID" name="shipBoxMaterialID" fieldValue=@shipBoxMaterialID options=@dt_materialsSelect require/><br/><br/>
+        <ec:input_number title="Length" id="length" name="length" fieldValue=@length step=".1" min=".0625" max="144"/>
+        <ec:input_number title="Width" id="width" name="width" fieldValue=@width step=".1" min=".0625" max="144"/>
+        <ec:input_number title="Height" id="height" name="height" fieldValue=@height step=".1" min=".0625" max="144"/>
+        <ec:input_number title="Box Weight" id="boxWeight" name="boxWeight" fieldValue=@boxWeight step=".1" min=".0625" max="100"/>
+        <ec:input_number title="Max Weight" id="maxWeight" name="maxWeight" fieldValue=@maxWeight step="1" min=".0625" max="5500" require/><br/><br/>
+        <ec:input_text title="Uline Model" id="ulineModel" name="ulineModel" fieldValue=@ulineModel/>
+        <ec:input_money title="Uline Price" id="ulinePrice" name="ulinePrice" fieldValue=@ulinePrice/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Box" type="tDialogRecordForm">
+    <ec:var shipBoxMaterialID = @svr[param/shipBoxMaterialID].nullifblank  inactive = @svr[param/inactive]/>
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var length = @svr[param/length].nullifblank  width = @svr[param/width].nullifblank  height = @svr[param/height].nullifblank/>
+    <ec:var boxWeight = @svr[param/boxWeight].nullifblank  maxWeight = @svr[param/maxWeight].nullifblank/>
+    <ec:var ulineModel = @svr[param/ulineModel].nullifblank  ulinePrice = @svr[param/ulinePrice].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@shipBoxMaterialID)|@iv(@description)|@iv(@maxWeight))>  
+            <ec:data xx procedure="pr_shipBox_edit" connection=@connection>    
+                <shipBoxID>@XID.asInt</shipBoxID>
+                <shipBoxMaterialID>@shipBoxMaterialID.asInt</shipBoxMaterialID>
+                <description>@description</description>
+                <length>@length.asFloat</length>
+                <width>@width.asFloat</width>
+                <height>@height.asFloat</height>
+                <boxWeight>@boxWeight.asFloat</boxWeight>
+                <maxWeight>@maxWeight.asFloat</maxWeight>
+                <ulineModel>@ulineModel</ulineModel>
+                <ulinePrice>@ulinePrice.asFloat</ulinePrice>
+                <inActive>@inActive.alt(0).asBool</inActive>
+            </ec:data>
+            
+            @logAction(3|@LTID|@XID|Edited shipBox)
+            @dt_shipBoxes.refresh()
+            @obj_shipBox.refresh()
+            @close()
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "Description, material, and weight capacity are all required to edit a box."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_box connection=@connection>
+            SELECT shipBoxID, shipBoxMaterialID, description, length, width, height, boxWeight, estimatedWeight, maxWeight, ulineModel, ulinePrice, inActive
+            FROM vw_shipBox
+            WHERE websiteID = @websiteID.asInt AND shipBoxID = @XID.asInt
+        </ec:data>
+        <ec:var box = @dt_box[1]/>
+
+        <ec:data dt_materialsSelect connection=@connection>
+            SELECT shipBoxMaterialID, shipBoxMaterial FROM vw_shipBoxMaterials_select
+        </ec:data>
+
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Description" id="description" name="description" fieldValue=@description.alt(@box[description]) require/>
+        <ec:input_select title="Material" id="shipBoxMaterialID" name="shipBoxMaterialID" fieldValue=@shipBoxMaterialID.alt(@box[shipBoxMaterialID]) options=@dt_materialsSelect require/>
+        <ec:input_checkbox title="Inactive?" id="inactive" name="inactive" fieldValue=@inactive.alt(@if(@box[inactive].is(1|true)|1))/><br/><br/>
+        <ec:input_number title="Length" id="length" name="length" fieldValue=@length.alt(@box[length]) step=".1" min=".0625" max="144"/>
+        <ec:input_number title="Width" id="width" name="width" fieldValue=@width.alt(@box[width]) step=".1" min=".0625" max="144"/>
+        <ec:input_number title="Height" id="height" name="height" fieldValue=@height.alt(@box[height]) step=".1" min=".0625" max="144"/>
+        <ec:input_number title="Box Weight @hint(Est. @box[estimatedWeight].formatNumber(0.0000).alt(Unknown) lbs. Actual weight may be different. Do not use this number to fill the input.)" id="boxWeight" name="boxWeight" fieldValue=@boxWeight.alt(@box[boxWeight]) step=".1" min=".0625" max="100"/>
+        <ec:input_number title="Max Weight" id="maxWeight" name="maxWeight" fieldValue=@maxWeight.alt(@box[maxWeight]) step="1" min=".0625" max="5500" require/><br/><br/>
+        <ec:input_text title="Uline Model" id="ulineModel" name="ulineModel" fieldValue=@ulineModel.alt(@box[ulineModel])/>
+        <ec:input_money title="Uline Price" id="ulinePrice" name="ulinePrice" fieldValue=@ulinePrice.alt(@box[ulinePrice])/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>@obj_shipBoxes</ec:case>
+    <ec:case if=@iv(@XID)>@obj_shipBox</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@nv(@XID)><a href="#" rel="nofollow"><ec:icon title="View ecreport of the most popular boxes used in shipments." icon="graph" size="sml" direction="left"/>Most Popular Boxes</a></ec:case>
+    <ec:case if=@iv(@XID)><a href="#" rel="nofollow"><ec:icon title="View shipments that used this box." icon="ship-truck" size="med" direction="left"/>Shipments Using This Box</a></ec:case>
+</ec:function>

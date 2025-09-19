@@ -1,0 +1,345 @@
+@share
+<ec:case if=@iV(@XID)>
+    <ec:module comp_contactCards/>
+</ec:case>
+
+<ec:var fname = @svr[param/fname].nullifblank/>
+<ec:var fphoneNumber = @svr[param/fphoneNumber].nullifblank/>
+<ec:var fzipcode = @svr[param/fzipcode].nullifblank/>
+
+<ec:object dt_organizations page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>organizationID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT organizationID, name AS organizationName, city, zipcode, name AS territoryName, countryCode, phoneNumber, phoneNumberExtension
+            FROM vw_organizations
+            WHERE 1=1 AND websiteID = @websiteID.asInt
+
+            @if(@iv(@fname)|AND name LIKE @sqlstr(%@fname%))
+            @if(@iv(@fphoneNumber)|AND dbo.fn_stripNonNumeric(phoneNumber) LIKE dbo.fn_stripNonNumeric(@sqlstr(%@fphoneNumber%)))
+            @if(@iv(@fzipcode)|AND zipcode LIKE @sqlstr(@fzipcode%))
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT name AS organizationName, iconURL, iconDescription
+            FROM vw_organization
+            WHERE 1=1 AND websiteID = @websiteID.asInt
+            AND organizationID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">organizationID</sort>
+</ec:object>
+<ec:object obj_organization_pageNavigator dataObj=@dt_organizations type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_organizations dataObj=@dt_organizations type="tComponent">
+    <ec:titlebox title="Organizations"  options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>Organization</th>
+                <th>Phone Number</th>
+                <th style="text-align:left;">Location</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=4&xid=@rs[organizationID]">
+                    <td>@rs[organizationName]</td>
+                    <td>@rs[phoneNumber] @if(@iv(@rs[phoneNumberExtension])|ext. @rs[phoneNumberExtension])</td>
+                    <td style="text-align:left;">@if(@iv(@rs[city])|@rs[city],&nbsp;)@if(@iv(@rs[territoryName])|@rs[territoryName]&nbsp;)@if(@iv(@rs[zipcode])|@rs[zipcode],&nbsp;)@if(@iv(@rs[countryCode])|@rs[countryCode])</td>
+                </tr>
+            </ec:loop>
+        </table>
+        @obj_organization_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_organization dataObj=@dt_organizations type="tComponent">
+    <ec:var org=@dataObj.dataDef[data/1]/>
+    <ec:data dt_orgMembers connection=@connection>
+        SELECT COUNT(userID) AS membersCount FROM vw_user WHERE organizationID = @XID.alt(0)
+    </ec:data>
+    <ec:var membersLink/><ec:membersLink><a href="/console?ltid=1&forganizationID=@XID">@dt_orgMembers[1/membersCount].alt(0)</a></ec:membersLink>
+
+    <ec:titlebox title="Organization" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@org[iconURL]" alt="@org[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content=@XID/>
+                <ec:displayField title="Organization" content=@org[organizationName]/>
+                <ec:displayField title="Members" content=@membersLink/>
+            </div>
+        </div>
+    </ec:titlebox>
+
+    @obj_contactCard()
+</ec:object>
+
+
+
+
+
+<ec:object dt_orgAssets page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>assetID</primaryKey>
+    <sqlSelect>
+        SELECT assetID, assetDescription, aquisitionDate, aquisitionPrice, referenceNumber, assetTypeDescription
+        FROM vw_assets
+        WHERE 1=1 AND aquiredFromOrganizationID = @XID.asInt
+    </sqlSelect>
+    <sort by="desc">aquisitionDate</sort>
+</ec:object>
+<ec:object obj_assets_pageNavigator dataObj=@dt_orgAssets type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_oragnizationAssets dataObj=@dt_orgAssets type="tComponent">
+    <ec:var assetOptions/>
+    <ec:assetOptions>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_asset_new"><ec:icon title="New Asset" icon="plus"/></a>
+    </ec:assetOptions>
+    <ec:titlebox title="Assets From Organization" options=@assetOptions>
+        <table class="tbl">
+            <tr>
+                <th>AT#</th>
+                <th>Description</th>
+                <th>Asset Type</th>
+                <th>Reference</th>
+                <th>Amount</th>
+                <th>Date</th>
+                <th>Linked To</th>
+            </tr>
+
+
+            <ec:loop data=@dataObj.dataDef[data]>
+                <ec:data dt_assetShortcuts connection=@connection>
+                    SELECT dest_shortcutID, dest_ltid, dest_xid, dest_description, dest_iconURL, readOnly FROM (
+                        SELECT dest_shortcutID, dest_ltid, dest_xid, dest_description, dest_iconURL, readOnly = 0 FROM dbo.tb_shortcuts(dbo.fn_linkedEntity_getID(6,@rs[assetID].asInt.alt(0))) ts1
+                    ) t
+
+                    WHERE dbo.fn_accessLevel(@user.userID.asInt.alt(NULL), @user.employeeID.asInt.alt(NULL), dest_ltid, dest_xid) >= 1 --only show if employee has at least view access
+            
+                    ORDER BY (CASE
+                    WHEN t.dest_ltid = 7 AND t.readOnly = 0 THEN 6
+                    WHEN t.dest_ltid = 11 AND t.readOnly = 0 THEN 5
+                    WHEN (t.dest_ltid != 7 OR t.dest_ltid != 11) AND t.readOnly = 0 THEN 4
+            
+                    WHEN t.dest_ltid = 7 AND t.readOnly = 1 THEN 3 --notes are at bottom
+                    WHEN t.dest_ltid = 11 AND t.readOnly = 1 THEN 2 --external links are just above notes
+                    ELSE 1 END --regular console links appear first
+                    ), t.dest_ltid
+                </ec:data>
+
+
+                <tr class="anchorify" href="/console?ltid=6&xid=@rs[assetID]&xLTID=@LTID&xXID=@XID">
+                    <td>AT@rs[assetID]</td>
+                    <td>@rs[assetDescription]</td>
+                    <td>@rs[assetTypeDescription]</td>
+                    <td>@rs[referenceNumber]</td>
+                    <td>@rs[aquisitionPrice].formatnumber($0.00)</td>
+                    <td>@rs[aquisitionDate].formatdate(dd MMM yyyy)</td>
+                    <td>
+                        <ec:var currentAssetID = @rs[assetID]/>
+                        <ec:loop data=@dt_assetShortcuts>
+                            <ec:case if=@rs[dest_ltid].is(7) rem="note">
+                                <ec:data dt_note connection=@connection>
+                                    SELECT dbo.fn_stripTags(noteContent) AS content FROM notes WHERE noteID = @rs[dest_xid].asInt
+                                </ec:data>
+                                <img title="@dt_note[1/content]" src="@rs[dest_iconURL]" height="24px" alt="@dt_note[1/content]"/>
+                            </ec:case>
+                            <ec:case if=@rs[dest_ltid].is(11) rem="external link">
+                                <ec:data dt_externalURL connection=@connection>
+                                    SELECT externalLinkDescription, externalLinkURL FROM externalLinks WHERE externalLinkID = @rs[dest_xid].asInt
+                                </ec:data>
+                                <a href="@dt_externalURL[1/externalLinkURL].urldecode" rel="nofollow"><img src="@rs[dest_iconURL]" height="28px" alt="external link" title="@rs[dest_description]"/></a>
+                            </ec:case>
+                            <ec:case if=@rs[dest_ltid].isnot(11|7) rem="everything else"><a href="/console?ltid=@rs[dest_ltid]&xid=@rs[dest_xid]&xltid=@LTID&xxid=@currentAssetID" rel="nofollow"><img class="anchorify" src="@rs[dest_iconURL]" height="28px" alt="@rs[dest_ltid]-img" title="@rs[dest_description]"/></a></ec:case>
+                        </ec:loop>
+                    </td>
+                </tr>
+            </ec:loop>
+        </table>
+        @obj_assets_pageNavigator()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Organization" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@description)>
+            <ec:data xx procedure="pr_organization_new" connection=@connection>
+                <description>@description</description>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newOrganizationID = @xx[newOrganizationID].nullifblank/>
+            
+            <ec:case if=@iv(@newOrganizationID)>
+                @logAction(2|@LTID|@newOrganizationID)
+                @notification(Organization ORG-@newOrganizationID() created successfully||1)    
+                @redirect(/console?ltid=@LTID&xid=@newOrganizationID)
+                @close()
+            </ec:case>
+            <ec:case if=@nv(@newOrganizationID)>
+                <ec:set errMsg = "An error occurred. Pleaes contact a system administrator."/>
+                @logError(error|obj_newOrganization_dialog unknown SQL error|101)
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A name / description is required to create an organization"/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Organization Description" id="description" name="description" fieldValue=@description require/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Organization" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@iv(@description)>
+            <ec:data xx procedure="pr_organization_edit" connection=@connection>
+                <organizationID>@XID.asInt</organizationID>
+                <description>@description</description>
+            </ec:data>
+
+            @logAction(3|@LTID|@XID|Edited organization)
+            @dt_organizations.refresh()
+            @obj_organization.refresh()
+            @close
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A name / description is required to edit an organization"/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_organization connection=@connection>
+            SELECT name AS description
+            FROM vw_organization
+            WHERE organizationID = @XID.asInt
+        </ec:data>
+        <ec:var wrh = @dt_organization[1]/>
+        
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Organization Description" id="description" name="description" fieldValue=@wrh[description].alt(@description) require/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_asset_new title="New Asset" type="tDialogForm">
+    <ec:var assetAssetTypeID = @svr[param/assetAssetTypeID].nullifblank/>
+    <ec:var assetDescription = @svr[param/assetDescription].nullifblank/>
+    <ec:var assetReference = @svr[param/assetReference].nullifblank/>
+    <ec:var assetAmount = @svr[param/assetAmount].nullifblank/>
+    <ec:var assetDate = @svr[param/assetDate].asDate.nullifblank/>
+    <ec:var assetMemo = @svr[param/assetMemo].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@XID)|@iv(@assetAssetTypeID)|@iv(@assetDescription))> 
+            <ec:data xx procedure="pr_asset_new" connection=@connection>    
+                <organizationID>@XID.asInt</organizationID>
+                <assetTypeID>@assetAssetTypeID.asInt</assetTypeID>
+                <description>@assetDescription</description>
+                <referenceNumber>@assetReference</referenceNumber>
+                <aquisitionPrice>@assetAmount.asFloat</aquisitionPrice>
+                <aquisitionDate>@assetDate.asDate</aquisitionDate>
+                <memo>@assetMemo.encode</memo>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newAssetID = @xx[newAssetID].nullifblank/>
+
+            <ec:case if=@iv(@newAssetID)>
+                @logAction(2|@LTID|@newAssetID)
+                @notification(Asset AT-@newAssetID() created successfully)
+                @dt_orgAssets.refresh()
+                @obj_oragnizationAssets.refresh()
+                @close()
+            </ec:case>
+            <ec:case if=@else>
+                <ec:set errMsg = "An error occurred. Please contact a system administrator."/>
+                @logError(error|obj_newAsset_dialog unknown SQL error|101)
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "Organization, asset type, and a description are all required to add a new asset."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_assetTypesSelect connection=@connection>
+            SELECT assetTypeID, assetTypeDescription FROM assetTypes
+        </ec:data>
+        <ec:data dt_organizationsSelect connection=@connection>
+            SELECT organizationID, name
+            FROM vw_organizations
+            WHERE websiteID = @websiteID.asInt AND organizationID = @XID.asInt
+        </ec:data>
+
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Description" id="assetDescription" name="assetDescription" fieldValue=@assetDescription/>
+        <ec:input_select title="Asset Type" id="assetAssetTypeID" name="assetAssetTypeID" fieldValue=@assetAssetTypeID options=@dt_assetTypesSelect/>
+        <ec:input_select title="Organization" id="assetOrganizationID" name="assetOrganizationID" fieldValue=@XID options=@dt_organizationsSelect readOnly/><br/><br/>
+
+        <ec:input_text title="Reference Number" id="assetReference" name="assetReference" fieldValue=@assetReference/>
+        <ec:input_date title="Aquisition Date" id="assetDate" name="assetDate" fieldValue=@assetDate/>
+        <ec:input_money title="Amount" id="assetAmount" name="assetAmount" fieldValue=@assetAmount/><br/><br/>
+        <ec:input_textField title="Memo" id="assetMemo" name="assetMemo" fieldValue=@assetMemo/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="Organization Name" id="fname" name="fname" fieldValue=@fname placeholder="Example Co."/>
+            <ec:input_tel id="fphoneNumber" name="fphoneNumber" fieldValue=@fphoneNumber/>
+            <ec:input_text title="Zip Code" id="fzipcode" name="fzipcode" fieldValue=@fzipcode placeholder="84321"/>
+        </ec:consoleSearchBox>
+
+        @obj_organizations
+    </ec:case>
+    <ec:case if=@iv(@XID)>
+        @obj_organization
+        @obj_oragnizationAssets
+    </ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

@@ -1,0 +1,510 @@
+@share
+<ec:module comp_tasks/>
+<ec:module comp_timeClock/>
+
+<ec:case if=@nv(@lib_consoleCalled)>
+    <ec:var lib_consoleCalled = 1 global/>
+
+    <ec:var consoleSearchBox = @xConsoleSearchBox.asReference global/>
+    <ec:var defaultListOptions = @xDefaultListOptions.asReference global/>
+    <ec:var defaultRecordOptions = @xDefaultRecordOptions.asReference global/>
+
+    <ec:style>
+        .consoleSearchBox {
+            width: 96%;
+            min-height: 48px;
+            margin:0px auto 13px auto;
+            padding:5px;
+            border-radius: 5px;
+            box-shadow: var(--box-shadow-light);
+        
+            & .consoleSearchBox_formContents {display:flex; flex-wrap:wrap; justify-content:flex-start; align-items: flex-start;}
+            & .consoleSearchBox_formFooter {
+                display:flex; flex-wrap:wrap; justify-content:flex-end; align-items: flex-end;
+                position:absolute; bottom:0px; right:0px;
+            }
+            & .formfield {margin:5px 7px;}
+        
+            <ec:case if=@userSettings[theme].is(light)>
+                background-color: aliceblue;
+            </ec:case>
+
+            <ec:case if=@userSettings[theme].is(dark)>
+                background-color: var(--neutral-blue-header);
+            </ec:case>
+        }
+
+        .recordShortcut {
+            display: inline-block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space :nowrap;
+            max-width: 14ch;
+            vertical-align: bottom;
+        }
+    </ec:style>
+</ec:case>
+
+
+
+
+
+<ec:function xConsoleSearchBox>
+    <ec:param action/>
+    <div class="consoleSearchBox">
+        <form @if(@iv(@action)|action="@action") style="position:relative; width:100%; display:grid; grid-template-columns: calc(100% - 110px) 110px;">
+            <div class="consoleSearchBox_formContents">
+                <input type="hidden" name="ltid" id="ltid" value="@LTID"/>
+                <input type="hidden" name="xid" id="xid" value="@XID"/>
+                @sender.execute
+            </div>
+            <div class="consoleSearchBox_formFooter">
+                <ec:input_reset class="searchReset" id="searchReset"/>
+                <ec:input_submit class="searchSubmit" id="searchSubmit"/>
+            </div>
+        </form>
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:function xDefaultListOptions>
+    <ec:case if=@all(@accessLevel.isGreatAs(3)|@app.is(console))><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_record_new"><ec:icon title="Add record" icon="plus" size="med"/></a></ec:case>
+</ec:function>
+
+
+
+
+
+<ec:function xDefaultRecordOptions>
+    <ec:case if=@accessLevel.isGreatAs(2)><a @if(@LTID.isnot(105)|/console?ltid=@LTID|/console?ltid=@LTID&xid=@XID).with(href="|")  rel="nofollow" onclick="if(!window.event.ctrlKey){addLoader(undefined, 'body');}"><ec:icon title="View Other Records" icon="th-list" size="med"/></a></ec:case>
+    <ec:case if=@all(@accessLevel.isGreatAs(5)|@app.is(console)|@LTID.isnot(105))><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_deleteRecord" confirm="Are you sure you want to delete this record? This action cannot be undone!"><ec:icon title="Delete record?" icon="remove-sign" size="med"/></a></ec:case>
+    <ec:case if=@all(@accessLevel.isGreatAs(4)|@app.is(console)|@LTID.isnot(105))><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_record_edit"><ec:icon title="Edit This Record" icon="pencil" size="med"/></a></ec:case>
+</ec:function>
+
+
+
+
+
+<ec:object obj_deleteRecord type="tComponent">
+    <ec:var doRedirect = @svr[param/doRedirect].alt(1).asBool/>
+    <ec:var recordLTID = @svr[param/recordLTID].alt(@LTID)/>
+    <ec:var recordXID  = @svr[param/recordXID].alt(@XID)/>
+
+    <ec:case>
+        <ec:case if=@accessLevel.alt(0).isGreatAs(5)>
+            <ec:data xx procedure="pr_record_delete" connection=@connection>
+                <LTID>@recordLTID.asInt</LTID>
+                <XID>@recordXID.asInt</XID>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            @logAction(4|@LTID|@XID)
+
+            <ec:case if=@not(@doRedirect)>
+                @notification(@xx[message].alt(Item deleted)|3)
+            </ec:case>
+            <ec:case if=@doRedirect rem="default is to redirect to list records page for current linkedTable type...">
+                @notification(@xx[message].alt(Record deleted. Redirecting...)||1)
+                @redirect(/console?ltid=@LTID)
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>@throw(Access Denied|Access Denied To Delete Record|You are currently not allowed to delete this record. Please contact a system administator if you think this is in error.|401|44)</ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_history type="tComponent">
+    <ec:case if=@state.is(refresh)>
+        <ec:data dt_history connection=@connection>
+            SELECT TOP(25) LTID, XID, description, iconURL, maxDate, ROW_NUMBER() OVER (ORDER BY maxDate DESC, LTID ASC, XID ASC) AS occurNum FROM (
+                SELECT AL.LTID, AL.XID, dbo.fn_entityName(LTID, XID) AS description, dbo.fn_entityImage(LE.linkedEntityID, 1) AS iconURL, MAX(AL.actionDate) AS maxDate
+                FROM vw_actionLog AL WITH (NOLOCK)
+                LEFT JOIN linkedEntities LE ON AL.LTID = LE.toLTID AND AL.XID = LE.toXID
+                
+                WHERE AL.actionID IN (1,2) AND AL.actionDate > (GETDATE() - 1) AND LE.websiteID = @websiteID.asInt.alt(0) AND AL.userID = @user.userID.alt(0) AND (
+                    (NOT(AL.LTID = @LTID.asInt.alt(0) AND <ec:case if=@iv(@XID)>AL.XID = @XID.asInt.alt(0)</ec:case><ec:case if=@nv(@XID)>AL.XID IS NULL</ec:case>)) OR 
+                    (AL.LTID = @LTID.asInt.alt(0) AND (NOT(<ec:case if=@iv(@XID)>AL.XID = @XID.asInt.alt(0)</ec:case><ec:case if=@nv(@XID)>AL.XID IS NULL</ec:case>) <ec:case if=@iv(@XID)>OR AL.XID IS NULL</ec:case>))
+                )
+                GROUP BY LTID, XID, linkedEntityID
+            ) aTable WHERE dbo.fn_accessLevel(@user.userID.asInt.alt(NULL), @user.employeeID.asInt.alt(NULL), LTID, XID) >= 1
+        </ec:data>
+
+        <ul style="overflow-y: auto; max-height:40vh;">
+            <ec:loop data=@dt_history>
+                <ec:var if=@iv(@rs[ltid]) href="/console?ltid=@rs[ltid]@if(@iv(@rs[xid])|@rs[xid].with(&xid=|))"/>
+                <ec:var if=@nv(@rs[ltid]) href="@rs[url].urlDecode"/>
+                
+                <li title="@rs[description]">
+                    <div class="shortcut shortcut-history shadowOnHover anchorify" href="@href">
+                        <img src="@rs[iconURL]" alt="@rs[ltid]-img" style="height:24px;"/>
+                        <p>&nbsp;@rs[description]</p>
+                    </div>
+                </li>
+            </ec:loop>
+        </ul>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_notifications renderAfterPageLoad type="tComponent" rem="pop-up notification boxes for new notifications">
+    <ec:data dt_notifications connection=@connection>
+        SELECT notificationID, notificationContent, acknowledged
+        FROM vw_notification_quickList
+        WHERE toLEID = dbo.fn_linkedEntity_getID(2, @user.employeeID.alt(0).asInt)
+        AND acknowledged = 0
+        ORDER BY sendDate DESC --newer are seen first (bottom of the alerts box)
+    </ec:data>
+
+    <ec:data xx connection=@connection rem="mark notifications as read/acnkowledged">
+        UPDATE notifications
+        SET acknowledged = 1
+        WHERE notificationID IN (SELECT notificationID FROM vw_notification_quickList WHERE toLEID = dbo.fn_linkedEntity_getID(2, @user.employeeID.alt(0).asInt))
+
+        SELECT 1
+    </ec:data>
+
+    <ec:loop dt_notifications if=@dt_notifications.count.isnot(0)>
+        @notification(@rs[notificationContent])
+    </ec:loop>
+</ec:object>
+@obj_notifications()
+
+
+
+
+
+<ec:object obj_notifications_list type="tComponent" style="margin:0px; width:100%;" rem="list of notifications viewable in quick panel or elsewhere">
+    <ec:data dt_notifications connection=@connection>
+        SELECT notificationID, notificationContent, acknowledged
+        FROM vw_notification_quickList
+        WHERE toLEID = dbo.fn_linkedEntity_getID(2, @user.employeeID.alt(0).asInt)
+        ORDER BY sendDate DESC --newer on top of quickPanel notifications list
+    </ec:data>
+
+    <ec:titlebox title="Notifications @quantityBadge(@dt_notifications.count)" style="min-width:100%;">
+        <ec:case if=@dt_notifications.count.is(0)>
+            <span>All caught up for now! @hint(You don't have any new notifications.)</span>
+        </ec:case>
+        
+        <ec:case if=@dt_notifications.count.isNot(0)>
+            <ec:loop data=@dt_notifications>
+                <div class="quickNotification" id="quickNotification-@rs[notificationID]">
+                    <span class="quickNotification-options">
+                        <a href="javascript:void(0)" class="ajaxClick" ecid="obj_notification_dismiss" notificationID="@rs[notificationID]" loader="#obj_notifications_list"><ec:icon title="Dismiss" icon="remove" size="xsml" style="margin-top:1px;"/></a>
+                        <a href="javascript:void(0)" class="ajaxClick" ecid="obj_notification_remindLater" notificationID="@rs[notificationID]"><ec:icon title="Remind me later" icon="stopwatch" size="sml"/></a>
+                    </span>
+                    <span class="quickNotification-content">@rs[notificationContent].alt(Notification error.)</span>
+                </div>
+            </ec:loop>
+        </ec:case>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_quickPanel style="min-height:182px;" type="tComponent">
+    <ec:case if=@all(@iv(@act)|@svr[param/ecid].is(obj_quickPanel))>
+        <ec:case if=@act.is(quickClock)>
+            @comment(start and end times are NULL intentionally. For designated times, these values are passed in)
+            <ec:data xx procedure="pr_timeEntry_clocking" connection=@connection>
+                <employeeID>@employee.employeeID.asInt</employeeID>
+                <isTimeClockEntry>1</isTimeClockEntry>
+                <taskID>@NULL</taskID>
+                <latitude>@svr[param/cs_latitude].asNumber</latitude>
+                <longitude>@svr[param/cs_longitude].asNumber</longitude>
+                <startTime></startTime>
+                <endTime></endTime>
+            </ec:data>
+            @employee.clockState.setValue(@xx[returnState].alt(@employee.clockState))
+            
+            <ec:case if=@iv(@xx[errorMessage])>
+                @notification(@xx[errorMessage])
+                @logError(Time Clock Error|@xx[errorMessage]|101)
+            </ec:case>
+            <ec:case if=@nv(@xx[errorMessage]) rem="log clock action and a time span notification IF clocking out">
+                <ec:data dt_latestEntry connection=@connection>
+                    SELECT DATEDIFF(hh, startDateTime, endDateTime) AS hours, DATEDIFF(mi, startDateTime, endDateTime)%60 AS minutes
+                    FROM vw_timeEntries_work
+                    WHERE employeeID = @employee.employeeID.asInt AND endDateTime IS NOT NULL
+                    ORDER BY timeEntryID DESC
+                </ec:data>
+                <ec:var timeDif = @dt_latestEntry[1]/>
+
+                @if(@employee.clockState.alt(0).is(0|false)|@logAction(7|2|@employee.employeeID.alt(@XID)|@chr(64) @now.formatDate(mm/dd/yyyy hh:nn am/pm))|@logAction(8|2|@employee.employeeID.alt(@XID)|@chr(64) @now.formatDate(mm/dd/yyyy hh:nn am/pm)))
+                @if(@employee.clockState.is(0|false)|@notification(You clocked out with @timeDif[hours].alt(0).asInt hour@if(@timeDif[hours].alt(0).asInt.isnot(1)|s|) and @timeDif[minutes].alt(0).asInt minute@if(@timeDif[minutes].alt(0).asInt.isnot(1)|s|)@chr(46)))
+            </ec:case>
+        </ec:case>
+
+        @comment(refresh any sort of time clock based components that are registered with quickPanel)
+        @refreshRegisteredComponents()
+    </ec:case>
+
+
+
+    <ec:case if=@state.is(refresh) rem="only load if employee loads it">
+        <style>
+            .aTaskItem:not(:last-child) {
+                margin-bottom:5px;
+            }
+
+            .quickDescTask {display:inline-block; max-width:278px; margin-left:9px; }
+
+            .quickCompleteTask, .quickClockTask, .quickViewTask {& .icndiv {margin-top:2px;}}
+            .quickClockTask .icndiv {margin-left:0px; margin-right:9px;}
+            .quickEditTask .icndiv {margin-top:3px;}
+            .quickViewTask .icndiv {margin-top:3px;}
+        </style>
+
+        <ec:data dt_clockedIn connection=@connection>
+            ;WITH lastTimeEntry AS (
+                SELECT employeeID, MAX(startDateTime) AS latestStartTime
+                FROM vw_timeEntries_work
+                GROUP BY employeeID
+            ) 
+
+            SELECT emp.employeeID, emp.userID, ISNULL(emp.preferredName, dbo.fn_entityName_public(2, emp.employeeID)) AS name
+            FROM vw_timeEntries_work time
+            LEFT JOIN employees emp ON time.employeeID = emp.employeeID
+            JOIN lastTimeEntry LTE ON time.employeeID = LTE.employeeID AND time.startDateTime = LTE.latestStartTime
+            WHERE (time.startDateTime IS NOT NULL AND time.startDateTime < GETDATE() AND time.endDateTime IS NULL) OR ((endDateTime > GETDATE()))                
+        </ec:data>
+
+        <ec:var clockOptions/>
+        <ec:clockOptions>
+            <ec:case if=@employee.clockState.is(0|false)>
+                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_timeClock" act="clockIn" loader="#tb_timeclock"><ec:icon title="Clock into work" icon="clock" size="sml" style="margin-top:2px; margin-right:2px;"/></a>
+            </ec:case>
+        </ec:clockOptions>
+
+        <ec:titlebox title="Time Clock" style="min-width:100%;" options=@clockOptions>
+            <ec:loop data=@dt_clockedIn>
+                <a href="/console?ltid=2&xid=@rs[employeeID]&xLTID=@LTID&xXID=@XID" rel="nofollow" target="_blank" title="View @rs[name]'s employee profile">@rs[name]</a>
+                <ec:case if=@rs[employeeID].isnot(@employee.employeeID)><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_quickSwitchLogin" targetEmployeeID="@rs[employeeID]" targetUserID="@rs[userID]"><ec:icon title="Quick switch account login to @rs[name]" icon="log-in" size="sml"/></a></ec:case>
+                <ec:case if=@rs[employeeID].is(@employee.employeeID)><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_timeClock" act="clockOut" loader="#tb_timeclock"><ec:icon title="Clock out of work" icon="clock" size="sml" color="var(--notice-highlight-color) !important"/></a></ec:case>
+                <br/>
+            </ec:loop>
+            <ec:case if=@dt_clockedIn.count.is(0)>
+                <span>No one is currently clocked in.</span>
+            </ec:case>
+        </ec:titlebox>
+
+
+        <ec:data dt_tasks connection=@connection>
+            SELECT tasks.taskID, tasks.completeDate, tasks.dueDate, tasks.description, tasks.hasMemo, IIF(TE.startDatetime IS NOT NULL, 1, 0) AS isClockedIn,
+            COUNT(Case WHEN tasks.completeDate IS NULL THEN 1 END) OVER () AS incompleteTaskCount
+            FROM vw_tasks_quickPanel tasks
+            LEFT JOIN timeEntries TE ON tasks.taskID = TE.taskID AND (endDateTime IS NULL OR endDateTime > GETDATE()) AND TE.deleted = 0 AND TE.employeeID = @employee.employeeID.alt(0).asInt
+            WHERE websiteID = @websiteID.asInt AND assignedToEmployeeID = @employee.employeeID.alt(0).asInt
+
+            ORDER BY
+            CASE WHEN tasks.completeDate IS NULL THEN 1 ELSE 0 END DESC,                                    --not has a complete date
+            CASE WHEN tasks.recurCode IS NOT NULL THEN 1 ELSE 0 END DESC,                                   --is recurring task
+            CASE WHEN tasks.assignedToProjectID IS NULL THEN 1 ELSE 0 END DESC,                             --is independent task
+            CASE WHEN tasks.dueDate IS NOT NULL THEN 1 ELSE 0 END DESC,                                     --has a due date
+            tasks.dueDate ASC, tasks.completeDate DESC, tasks.taskID ASC                                    --final oderers
+        </ec:data>
+
+        <ec:var taskOptions/>
+        <ec:taskOptions>
+            <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_task_new" X_assignedToEmployeeID="@user.employeeID"><ec:icon title="New task" icon="plus" direction="right" size="sml" style="margin-top:2px; margin-right:-2px;"/></a>
+            <a href="/console?ltid=253&X_fassignedToEmployeeID=@employee.employeeID()&fordered=true&fcomplete=false" target="_blank" rel="nofollow"><ec:icon title="Open your task list" icon="tasks" direction="right" size="med"/></a>
+        </ec:taskOptions>
+
+        <ec:titlebox title="Task List @quantityBadge(@dt_tasks[1/incompleteTaskCount])" id="tb_tasklist" style="min-width:100%;" options=@taskOptions()>
+            <ec:loop data=@dt_tasks>
+                <div class="aTaskItem">
+                    <a href="javascript:void(0)" rel="nofollow" class="ajaxClick quickCompleteTask" ecid="obj_task_toggleState" taskID="@rs[taskID]" loader="#tb_tasklist"><ec:icon title="@if(@iv(@rs[completeDate].nullifblank)|Task was completed @rs[completeDate].formatDate(yyyy mm-dd)|This task is uncomplete)" icon="@if(@iv(@rs[completeDate].nullifblank)|check|unchecked) " direction="left" size="sml"/></a>
+                    <a href="javascript:void(0)" rel="nofollow" class="ajaxClick quickClockTask" ecid="obj_taskTimeClock" taskID="@rs[taskID]" loader="#tb_tasklist"><ec:icon title="Clock @if(@rs[isClockedIn].is(1|true)|out of|into) task" icon="clock" direction="left" size="sml" color=@if(@rs[isClockedIn].is(1|true)|var(--notice-highlight-color) !important)/></a>
+                    <p class="quickDescTask" title="@if(@rs[dueDate].alt(@today).isLessThan(@today)|Overdue! Was due @rs[dueDate].formatDate(dd mmmm)@chr(46)|@if(@rs[dueDate].alt(@nextWorkDay).asDate.is(@today)|Due today!|@if(@iv(@rs[dueDate])|Due on @rs[dueDate].formatDate(dd mmmm)@chr(46)|No due date.)))" @if(@iv(@tsk[completeDate])|color:green;|@if(@tsk[dueDate].alt(@today).asDate.isLessThan(@today)|color:red;|@if(@tsk[dueDate].alt(@nextWorkDay).asDate.is(@today)|color:var(--notice-highlight-color);))).with(style="|")>@rs[description]</p>
+                    
+                    @comment(Either open memo dialog or edit dialog, depending on permission level)
+                    <ec:case if=@taskEditLevel(@rs[taskID]).isLessAs(0)>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick quickViewTask" ecid="obj_taskMemo_dialog" taskID="@rs[taskID].asInt"><ec:icon title="@if(@rs[hasMemo].asBool|View memo and details about this task|View details about this task)" icon="file" direction="right" size="sml" color="@if(@rs[hasMemo].asBool|var(--notice-highlight-color) !important|)"/></a>
+                    </ec:case>
+                    <ec:case if=@taskEditLevel(@rs[taskID]).isGreaterThan(0)>
+                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick quickEditTask" ecid="obj_task_edit" taskID="@rs[taskID].asInt"><ec:icon title="@if(@rs[hasMemo].asBool|View and edit memo or details about this task|View and edit details about this task)" icon="file" direction="right" size="sml" color="@if(@rs[hasMemo].asBool|var(--notice-highlight-color) !important|)"/></a>
+                    </ec:case>
+                </div>
+            </ec:loop>
+        </ec:titlebox><br/>
+    
+        <div id="notificationsList" style="display:block; width:100%; border-top:1px solid #d5d5d5;">
+            <!-- NOTIFICATIONS LIST --><br/>
+            @obj_notifications_list()
+        </div>
+
+        @if(@iv(@obj_task_notifications_countBadge)|@obj_task_notifications_countBadge.refresh())
+    </ec:case>
+</ec:object>
+@obj_task_new.registerComponent(@obj_quickPanel)
+@obj_task_edit.registerComponent(@obj_quickPanel)
+@obj_taskTimeClock.registerComponent(@obj_quickPanel)
+@obj_task_toggleState.registerComponent(@obj_quickPanel)
+
+
+@comment(obj_quickPanel has to exist before it can register components... which is why time clock registrations aren't in comp_timeClock)
+@obj_timeClock.registerComponent(@obj_quickPanel)
+@obj_newClockTime.registerComponent(@obj_quickPanel)
+@obj_editClockTime.registerComponent(@obj_quickPanel)
+@obj_breakTime.registerComponent(@obj_quickPanel)
+@obj_designateClockTime.registerComponent(@obj_quickPanel)
+@obj_deleteClockTime.registerComponent(@obj_quickPanel)
+
+
+
+
+
+<ec:object obj_quickSwitchLogin title="Quick Switch Account" type="tDialogForm">
+    <ec:var targetEmployeeID = @svr[param/targetEmployeeID].nullifblank/>
+    <ec:var targetUserID = @svr[param/targetUserID].nullifblank/>
+    <ec:var quickPin = @svr[param/quickPin].nullifblank/>
+
+    <ec:case if=@all(@iv(@targetUserID)|@iv(@targetEmployeeID))>
+        <ec:case if=@state.is(respond)>
+            <ec:case if=@iv(@quickPin)>
+                <ec:data xx procedure="pr_employee_validatePin" connection=@connection>
+                    <employeeID>@targetEmployeeID.asInt</employeeID>
+                    <userID>@targetUserID.asInt</userID>
+                    <quickPin>@quickPin.left(4).asString.nullifblank</quickPin>
+                </ec:data>
+                <ec:set errMsg = @xx[errorMessage].nullifblank/>
+                <ec:var isValid = @xx[valid].alt(0).asBool/>
+
+                @if(@iv(@errMsg)|@notification(@errMsg))
+                <ec:case if=@isValid()>
+                    @user.forceLogin(@targetUserID|@user.sessionID|@user.persist)
+                    @close()
+                    @reload()
+                </ec:case>
+            </ec:case>
+            <ec:case if=@else>
+                @notification(Please provide a pin number.)
+            </ec:case>
+        </ec:case>
+
+        
+        <ec:case if=@not(@closed)>
+            <ec:data dt_emp connection=@connection>
+                SELECT preferredName
+                FROM vw_employee
+                WHERE employeeID = @targetEmployeeID.asInt
+            </ec:data>
+            <ec:var emp = @dt_emp[1]/>
+
+            <br/><h3>Quick Switch To @emp[preferredName]</h3>
+            <input type="hidden" id="targetEmployeeID" name="targetEmployeeID" value="@targetEmployeeID.asInt"/>
+            <input type="hidden" id="targetUserID" name="targetUserID" value="@targetUserID.asInt"/>
+            <ec:input_number title="Employee Pin:" id="quickPin" name="quickPin" inline min="0000" max="9999"/>
+        </ec:case>
+    </ec:case>
+
+    
+    <ec:case if=@else>
+        @close()
+        @notification(An error occurred while using quick switch employee login. Please contact a system administator.)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_task_notifications_countBadge renderAfterPageLoad placeholder=@quantityBadge(x) style="display:inline-block; margin-left:-5px; min-height:0px;" type="tComponent">
+    <ec:data dt_taskCount connection=@connection>
+        SELECT COUNT(taskID) AS taskCount
+        FROM tasks
+        WHERE assignedToEmployeeID = @employee.employeeID.alt(0) AND completeDate IS NULL AND CAST(startDate AS DATE) <= CAST(GETDATE() AS DATE)
+    </ec:data>
+
+    <ec:data dt_notificationCount connection=@connection>
+        SELECT COUNT(notificationID) AS notificationCount
+        FROM vw_notification_quickList
+        WHERE toLEID = dbo.fn_linkedEntity_getID(2, @user.employeeID.alt(0).asInt)
+    </ec:data>
+        
+    @quantityBadge(@calc(@dt_taskCount[1/taskCount].alt(0) + @dt_notificationCount[1/notificationCount]))
+</ec:object>
+
+
+
+
+
+<ec:object obj_notification_dismiss type="tComponent">
+    <ec:var notificationID = @svr[param/notificationID].asInt/>
+
+    <ec:case if=@iv(@notificationID)>
+        <ec:data xx procedure="pr_notification_dismiss" connection=@connection>
+            <notificationID>@notificationID.asInt</notificationID>
+            <userLEID>@user.LEID.asInt</userLEID>
+            <employeeLEID>@employee.LEID.asInt</employeeLEID>
+        </ec:data>
+        <ec:set errMsg = @xx[errorMessage].nullifblank/>
+
+        <ec:case if=@nv(@errMsg)>
+            @obj_notifications_list.refresh()
+            @obj_notifications.refresh()
+            @obj_task_notifications_countBadge.refresh()
+        </ec:case>
+        <ec:case if=@else>
+            @notification(@errMsg)
+        </ec:case>
+    </ec:case>
+    <ec:case if=@else>
+        @notification(An error occurred while dismissing the notification. Please contact a system administator.)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_notification_remindLater title="Remind Me Later" type="tDialogForm">
+    <ec:var notificationID = @svr[param/notificationID].asInt/>
+    <ec:var remindOnDate = @svr[param/remindOnDate].asDate.nullifblank/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@notificationID)|@iv(@remindOnDate))>
+            <ec:data xx procedure="pr_notification_remind" connection=@connection>
+                <notificationID>@notificationID.asInt</notificationID>
+                <userLEID>@user.LEID.asInt</userLEID>
+                <employeeLEID>@employee.LEID.asInt</employeeLEID>
+                <remindDate>@remindOnDate.asDate</remindDate>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+            
+            <ec:case if=@nv(@errMsg)>
+                @obj_notifications_list.refresh()
+                @obj_notifications.refresh()
+                @obj_task_notifications_countBadge.refresh()
+                @close()
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg="A date is required to set a notification reminder."/>
+        </ec:case>
+    </ec:case>
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_notification connection=@connection>
+            SELECT notificationContent, resendDate
+            FROM notifications
+            WHERE notificationID = @notificationID.asInt.alt(0)
+        </ec:data>
+        <ec:var aRec=@dt_notification[1]/>
+
+        @if(@iv(@errMsg.nullifblank)|@notification(@errMsg))
+        <input type="hidden" id="notificationID" name="notificationID" value="@notificationID"/>
+        <ec:input_textArea title="Notification" id="notification" name="notification" fieldValue=@aRec[notificationContent] readOnly/>
+        <ec:input_date title="Remind On" id="remindOnDate" name="remindOnDate" fieldValue=@remindOnDate.alt(@aRec[resendDate]).alt(@today.add(1)).formatDate(mm/dd/yyyy) require/>
+    </ec:case>
+</ec:object>

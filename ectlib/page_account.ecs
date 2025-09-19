@@ -1,0 +1,1005 @@
+@share
+@pageFound.set(1)
+
+@if(@nv(@user.userID)|@var(returnto|/account) @var(returnto|@returnto.urlencode) @redirect(/login?returnto=@returnto))
+
+@LTID.set(1) @XID.set(@user.userID) @LEID.set(@getLEID(@LTID|@XID))
+@logAction(1|1|@user.userID|)
+
+<ec:data dt_contactID connection=@connection>
+    SELECT TOP 1 contactID
+    FROM contacts WHERE ownerLEID = @LEID.asInt.alt(0)
+</ec:data>
+<ec:var contactID=@dt_contactID[1/contactID].alt(0)/>
+
+<ec:var pageTitle="Your Account"/>
+<ec:set pageTitle="Account Information"   if=@opt.is(account-info)/>
+<ec:set pageTitle="Contact Information"   if=@opt.is(contact-info)/>
+<ec:set pageTitle="Notification Settings" if=@opt.is(notification-settings)/>
+<ec:set pageTitle="Review Products"       if=@opt.is(review-products)/>
+<ec:set pageTitle="Order History"         if=@opt.is(orders)/>
+<ec:set pageTitle="Browsing History"      if=@opt.is(history)/>
+<ec:set pageTitle="Payment Center"        if=@opt.is(payment-center)/>
+<ec:set pageTitle="Settings"              if=@opt.is(settings)/>
+
+
+
+
+
+<ec:style>
+    .optionCard {
+        display:inline-block;
+        width:400px; height:90px;
+        border-radius:11px;
+        padding:11px; margin:8px 3px;
+        transition: background-color .25s, color .25s;
+
+        
+        & .optionCard-img {height:68px; display:inline-block; vertical-align:top; margin-right:15px; max-width:78px;}
+        & .optionCard-content {height:80px; width:240px; display:inline-block;
+            & h3 {margin-bottom:8px;}
+            & span {font-size:.94rem; font-family:calibri;}}
+
+
+        <ec:case if=@userSettings[theme].is(light)>
+            background-color:#fafafa;
+            box-shadow:var(--box-shadow-light);
+            border-left:1px solid rgba(0,0,0,.05);
+            & .optionCard-content {& span {color:grey;}}
+
+            &:hover {background-color:#f7f7f7;}
+        </ec:case>
+
+        <ec:case if=@userSettings[theme].is(dark)>
+            background-color:#313131;
+            box-shadow:var(--box-shadow);
+            border-left:1px solid #45484a;
+            & .optionCard-content {& span {color:white;}}
+            
+            &:hover {background-color:#414141;}
+        </ec:case>
+    }
+</ec:style>
+
+
+
+
+
+<ec:object obj_account_information type="tComponent">
+    <h2>Account Information</h2>
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+    <table style="width:100%;">
+        <tr style="text-align:left;">
+            <th>Name @hint(This is your first and last name.)</th>
+            <th>Display Name @hint(This is your display name which appears on product reviews, forums, and anywhere else publicly visible.)</th>
+            <td rowspan="2" style="text-align:right;"><a href="javascript:void(0)" rel="nofollow" class="btn btn-info ajaxClick" style="margin:0;" ecid="obj_accountInfo_edit" option="name">&nbsp;&nbsp;Edit&nbsp;&nbsp;</a></td>
+        </tr>
+        <tr>
+            <td>@user.firstName @user.lastName</td>
+            <td>@user.displayName</td>
+        </tr>
+    </table>
+
+    <br/><hr/><br/>
+
+    <table style="width:100%;">
+        <tr style="text-align:left;">
+            <th>Email @hint(Your email is kept confidential in accordance with our Terms of Service.)</th>
+            <td rowspan="2" style="text-align:right;"><a href="javascript:void(0)" rel="nofollow" class="btn btn-info ajaxClick" style="margin:0;" ecid="obj_accountInfo_edit" option="email">&nbsp;&nbsp;Edit&nbsp;&nbsp;</a></td>
+        </tr>
+        <tr>
+            <td>@user.email</td>
+        </tr>
+    </table>
+
+    <br/><hr/><br/>
+
+    <ec:data dt_organization connection=@connection>
+        SELECT organizations.name
+        FROM vw_user
+        LEFT JOIN organizations ON vw_user.organizationID = organizations.organizationID
+        WHERE userID = @user.userID.asInt.alt(0)
+    </ec:data>
+
+    <ec:data dt_profImg connection=@connection>
+        SELECT dbo.fn_entityImage(@LEID,1) AS profImg
+    </ec:data>
+    
+    <ec:case if=@iv(@dt_organization[1/name].nullifblank)>
+        <table style="width:100%;">
+            <tr style="text-align:left;">
+                <th>Company @hint(This is the name of the company you may choose to represent while using our website.)</th>
+            </tr>
+            <tr>
+                <td>@dt_organization[1/name]</td>
+            </tr>
+        </table>
+
+        <br/><hr/><br/>
+    </ec:case>
+
+    <table style="width:100%;">
+        <tr style="text-align:left;">
+            <th>Password @hint(Passwords are encrypted to protect you and your data.)</th>
+            <td rowspan="2" style="text-align:right;"><a href="javascript:void(0)" rel="nofollow" class="btn btn-info ajaxClick" style="margin:0;" ecid="obj_accountInfo_edit" option="password">&nbsp;&nbsp;Edit&nbsp;&nbsp;</a></td>
+        </tr>
+        <tr>
+            <td>-- Hidden for your security --</td>
+        </tr>
+    </table>
+
+    <br/><hr/><br/>
+
+    <style>
+        #profileIcon_tbl img {height:68px; border-radius:50%; border:1px solid #222;}
+    </style>
+
+    <table id="profileIcon_tbl" style="width:100%;">
+        <tr style="text-align:left;">
+            <th><img id="recordIcon" src="@dt_profImg[1/profImg].alt(/imgs-default/account.png)"/>@hint(This is your public profile image which appears on product reviews, forums, and anywhere else publicly visible.)</th>
+            <td style="text-align:right;"><a href="javascript:void(0)" rel="nofollow" class="btn btn-info ajaxClick" style="margin:0;" ecid="obj_entityImage_edit">&nbsp;&nbsp;Edit&nbsp;&nbsp;</a></td>
+        </tr>
+    </table>
+    </ec:titlebox>
+</ec:object>
+
+
+
+<ec:object obj_contact_information type="tComponent">
+    <style>
+        .contactCard {
+            width:98%;
+            margin:9px auto;
+            padding:5px;
+            border:1px solid var(--box-border-color);
+            border-radius:5px;
+            & table {width: 100%;}
+
+            <ec:case if=@userSettings[theme].is(light)>
+                background-color:white;
+            </ec:case>
+
+            <ec:case if=@userSettings[theme].is(dark)>
+                background-color:#45484a;
+            </ec:case>()
+        }
+
+        #phoneGrid {
+            display:grid; grid-template-columns: 100%;
+            @media screen and (min-width: 710px){& {grid-template-columns: 50% 50%;}}
+            @media screen and (min-width: 982px){& {grid-template-columns: 100%;}}
+            @media screen and (min-width: 1330px){& {grid-template-columns: 50% 50%;}}
+            @media screen and (min-width: 1600px){& {grid-template-columns: 33% 33% 33%;}}
+        }
+        
+        #addressGrid {
+            display:grid; grid-template-columns: 100%;
+            @media screen and (min-width: 480px){& {grid-template-columns: 50% 50%;}}
+            @media screen and (min-width: 1600px){& {grid-template-columns: 33% 33% 33%;}}
+        }
+    </style>
+
+
+    <h2>Contact Information</h2>
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+        <ec:data dt_phoneNumbers connection=@connection>
+            SELECT phoneNumberID, recipient, typeDescription, phoneNumber, phoneNumberExtension
+            FROM vw_contactPhoneNumbers
+            WHERE ownedByContactID = @contactID.alt(0).asInt
+        </ec:data>
+
+        <div style="width:100%">
+            <h3 style="display:inline-block">Phone Numbers</h3>
+            <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" act="newPhone" ecid="obj_contactInfo_new"><ec:icon title="New phone number" icon="plus"/></a>
+        </div>
+
+        <div id="phoneGrid">
+            <ec:loop data=@dt_phoneNumbers>
+                <ec:data yy connection=@connection>
+                    SELECT IIF(primaryPhoneNumberID = @rs[phoneNumberID].alt(0).asInt, 1, 0) AS primaryBit
+                    FROM contacts
+                    WHERE contactID = @contactID.alt(0).asInt AND primaryPhoneNumberID = @rs[phoneNumberID].alt(0).asInt
+                </ec:data>
+                <ec:var primaryCheck = @yy[1/primaryBit].alt(0)/>
+
+                <div class="contactCard" id="phone-@rs[phoneNumberID]" @if(@primaryCheck.is(1)|style="border-color:#d18800;" title="Primary phone number")>
+                    <table>
+                        <tr>
+                            <th style="text-align:left; padding-bottom:4px;" colspan="2">@rs[recipient] - @rs[typeDescription] <ec:case if=@primaryCheck.is(1)><ec:icon title="Primary phone number" icon="earphone" size="med" color="#d18800" direction="right" style="transform:translateY(-1px);"/></ec:case></th>
+                        </tr>
+                        <tr style="margin-top:3px;">
+                            <td>@rs[phoneNumber]@rs[phoneNumberExtension].with(@br()ext.&nbsp;|)</td>
+                            <td style="text-align:right;">
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick btn btn-sml btn-info" act="editPhone" phoneNumberID="@rs[phoneNumberID]" ecid="obj_contactInfo_edit">&nbsp;&nbsp;Edit&nbsp;&nbsp;</a>
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick btn btn-sml btn-danger" itemType="phoneNumber" act="deletePhone" phoneNumberID="@rs[phoneNumberID]" ecid="obj_contactInfo_delete" loader="#phone-@rs[phoneNumberID]">&nbsp;Delete&nbsp;</a>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </ec:loop>
+        </div>
+    </ec:titlebox><br/>
+    
+
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+        <ec:data dt_addresses connection=@connection>
+            SELECT addressID, recipient, company, address1, address2, city, territoryName, territoryCode, zipcode, countryName, countryCode
+            FROM vw_contactAddresses
+            WHERE ownedByContactID = @contactID.alt(0).asInt
+        </ec:data>
+
+        <div style="width:100%">
+            <h3 style="display:inline-block">Addresses</h3>
+            <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" act="newAddress" ecid="obj_contactInfo_new"><ec:icon title="New address" icon="plus"/></a>
+        </div>
+        
+        <div id="addressGrid">
+            <ec:loop data=@dt_addresses>
+                <ec:data yy connection=@connection>
+                    SELECT IIF(primaryShipAddressID = @rs[addressID].alt(0).asInt, 1, 0) AS shippingBit,
+                           IIF(primaryBillAddressID = @rs[addressID].alt(0).asInt, 1, 0) AS billingBit
+                    FROM contacts
+                    WHERE contactID = @contactID.alt(0).asInt AND (primaryShipAddressID = @rs[addressID].alt(0).asInt OR primaryBillAddressID = @rs[addressID].alt(0).asInt)
+                </ec:data>
+                <ec:var billCheck = @yy[1/billingBIT].alt(0)/>
+                <ec:var shipCheck = @yy[1/shippingBIT].alt(0)/>
+
+                <div class="contactCard" id="address-@rs[addressID]" @if(@any(@billCheck.is(1)|@shipCheck.is(1))|style="border-color:#d18800;")>
+                    <table>
+                        <tr><td colspan="2">@rs[recipient]</td></tr>
+                        <ec:case if=@iv(@rs[company])><tr><td colspan="2">@rs[company]</td></tr></ec:case>
+                        <tr><td colspan="2">@rs[address1]</td></tr>
+                        <ec:case if=@iv(@rs[address2])><tr><td>@rs[address2]</td></tr></ec:case>
+                        <tr><td colspan="2">@rs[city], @rs[territoryName] @rs[zipcode]</td></tr>
+                        <tr><td colspan="2">@rs[countryName]</td></tr>
+                        <ec:case if=@nv(@rs[company])><tr><td colspan="2">&nbsp;</td></tr></ec:case>
+                        <ec:case if=@nv(@rs[address2])><tr><td colspan="2">&nbsp;</td></tr></ec:case>
+                        <tr>
+                            <td style="padding-right:3px;">
+                                <ec:case if=@billCheck.is(1)><ec:icon title="Billing address" icon="credit-card" size="med" color="#d18800" direction="left" style="transform:translateY(3px);"/></ec:case>
+                                <ec:case if=@shipCheck.is(1)><ec:icon title="Deafult shipping address" icon="ship-truck" size="med" color="#d18800" direction="left" style="transform:translateY(3px);"/></ec:case>
+                            </td>
+                            <td style="text-align:right;">
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick btn btn-sml btn-info" addressID="@rs[addressID]" act="editAddress" ecid="obj_contactInfo_edit">&nbsp;&nbsp;Edit&nbsp;&nbsp;</a>
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick btn btn-sml btn-danger" addressID="@rs[addressID]" act="deleteAddress" ecid="obj_contactInfo_delete" loader="#address-@rs[addressID]">&nbsp;Delete&nbsp;</a>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </ec:loop>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+<ec:object obj_notification_settings type="tComponent">
+    <h2>Notification Preferences</h2>
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+        
+    </ec:titlebox><br/>
+</ec:object>
+
+
+
+<ec:object obj_review_products type="tComponent">
+    <h2>Review Your Past Purchases</h2>
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+        
+    </ec:titlebox>
+</ec:object>
+
+
+
+<ec:object obj_order_history type="tComponent">
+    <h2>Order History</h2>
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+        Order
+    </ec:titlebox>
+
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+        Order
+    </ec:titlebox>
+</ec:object>
+
+
+
+<ec:object obj_browsing_history type="tComponent">
+    <h2>Browsing History</h2>
+</ec:object>
+
+
+
+<ec:object obj_payment_center type="tComponent">
+    <h2>Payment Center</h2>
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+        <h3>Balance Due: $0.00</h3>
+    </ec:titlebox>
+
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+        <h2>Payment Methods</h2>
+        
+    </ec:titlebox><br/>
+
+    <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+        <h2>Account Ledger</h3>
+        
+    </ec:titlebox>
+</ec:object>
+
+
+
+<ec:object obj_cacheButton type="tComponent">
+    <ec:case if=@all(@state.is(refresh)|@act.is(clear))>
+        <ec:data xx procedure="pr_sessionStorage_clear" connection=@connection>
+            <sessionID>@user.sessionID.asInt.alt(0)</sessionID>
+            <tag>@NULL</tag>
+        </ec:data>
+        @reload()
+    </ec:case>
+
+    <ec:data dt_cacheCount connection=@connection>
+        SELECT COUNT(sessionStorageID) AS cacheCount FROM sessionStorage WHERE sessionID = @user.sessionID.asInt.alt(0)
+    </ec:data>
+    <a href="javascript:void(0)" class="btn btn-warning btn-sml ajaxClick" ecid="obj_cacheButton" act="clear" loader="body" confirm="Clear your cached items and reload page?">Clear Cache (@dt_cacheCount[1/cacheCount])</a>@hint(If settings aren't taking effect as expected after reloading the page, click clear cache and contact a system administrator if the issue persists.)
+</ec:object>
+
+
+
+<ec:function aSetting>
+    <ec:param settingID settingTypeID settingValueID tag/>
+
+    <ec:data dt_values connection=@connection>
+        SELECT settingValueID, value FROM settingValues WHERE settingTypeID = @settingTypeID.asInt.alt(0)
+    </ec:data>
+
+    <ec:data dt_memo connection=@connection>
+        SELECT memo FROM settingTypes WHERE settingTypeID = @settingTypeID.asInt.alt(0)
+    </ec:data>
+
+    <div class="aSetting" id="setting-@settingTypeID()">
+        <form>
+            <input type="hidden" id="settingName" name="settingName" value="@tag"/>
+            <input type="hidden" id="settingID" name="settingID" value="@settingID"/>
+            <input type="hidden" id="settingTypeID" name="settingTypeID" value="@settingTypeID"/>
+            <input type="hidden" id="act" name="act" value="modify"/>
+            <ec:input_select title="@tag" id="settingValueID"  name="settingValueID" class="submitOnChange" loader="#setting-@settingTypeID()" fieldValue=@settingValueID options=@dt_values hintContent=@dt_memo[1/memo]/>
+        </form>
+    </div>
+</ec:function>
+
+
+
+<ec:object obj_settings type="tComponent">
+    <ec:style>
+        .settingsMenu {display:flex; flex-wrap:wrap;}
+        .aSetting {display:inline-block; margin-right:11px;}
+    </ec:style>
+
+
+    <ec:case if=@all(@state.is(respond)|@act.is(modify))>
+        <ec:var settingName = @svr[param/settingName].nullifblank/>
+        <ec:var settingID = @svr[param/settingID].nullifblank/>
+        <ec:var settingTypeID = @svr[param/settingTypeID].nullifblank/>
+        <ec:var settingValueID = @svr[param/settingValueID].nullifblank/>
+
+        <ec:case if=@iv(@settingID)>
+            <ec:data xx procedure="sp_setting_edit" connection=@connection>
+                <userID>@user.userID.asInt</userID>
+                <settingID>@settingID.asInt</settingID>
+                <settingTypeID>@settingTypeID.asInt</settingTypeID>
+                <settingValueID>@settingValueID.asInt</settingValueID>
+            </ec:data>
+        </ec:case>
+
+        <ec:case if=@nv(@settingID)>
+            <ec:data xx procedure="sp_setting_new" connection=@connection>
+                <userID>@user.userID.asInt</userID>
+                <settingTypeID>@settingTypeID.asInt</settingTypeID>
+                <settingValueID>@settingValueID.asInt</settingValueID>
+            </ec:data>
+            <ec:set settingID = @xx[settingID].nullifblank/>
+        </ec:case>
+
+        <ec:set errMsg = @xx[errorMessage].nullifblank/>
+        <ec:case if=@iv(@errMsg)>@notification(@errMsg)</ec:case>
+
+        <ec:case if=@nv(@errMsg)>
+            <ec:var settingValue = @xx[settingValue].nullifblank/>
+            @userSettings[].store(@settingName.replace(@chr(32)|)|@settingValue).hide()
+            @userSettings[@settingName.replace(@chr(32)|)].storeAttribute(settingID|@settingID).hide()
+            @userSettings[@settingName.replace(@chr(32)|)].storeAttribute(settingTypeID|@settingTypeID).hide()
+            @userSettings[@settingName.replace(@chr(32)|)].storeAttribute(settingValueID|@settingValueID).hide()
+            @userSettings[@settingName.replace(@chr(32)|)].storeAttribute(date|@now).hide()
+
+            <ec:data xx procedure="pr_sessionStorage_clear" connection=@connection>
+                <sessionID>@user.sessionID.asInt.alt(0)</sessionID>
+                <tag>settings@user.sessionID.asInt.alt(0)</tag>
+            </ec:data>
+            <ec:var selector="#setting-@settingTypeID()" content="@aSetting(@settingID|@settingTypeID|@settingValueID|@settingName)"/>
+            @responder.replace(@selector|@content)
+            @obj_cacheButton.refresh()
+
+            <ec:script>document.getElementById('settingsMessage').innerText = 'Settings saved. Continue changing settings or reload to apply changes.';</ec:script>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@act.isnot(modify)>
+        <h2>Settings</h2>
+        <ec:titlebox style="width:100%; padding:11px; border-radius:7px;">
+            <ec:data dt_settings connection=@connection>
+                SELECT settingID, settingTypeID, settingValueID, value, tag, isEmployeeSetting
+                FROM vw_settings
+                WHERE userID = @user.userID.asInt.alt(0) AND isEmployeeSetting = 0
+        
+                UNION
+        
+                SELECT NULL AS settingID, t1.settingTypeID, t2.settingValueID, t2.value, t1.description AS tag, t1.isEmployeeSetting
+                FROM settingTypes t1
+                LEFT JOIN settingValues t2 ON t1.settingTypeID = t2.settingTypeID
+                WHERE t2.isDefault = 1  AND isEmployeeSetting = 0 AND NOT EXISTS (SELECT 1 FROM vw_settings WHERE settingTypeID = t1.settingTypeID AND userID = @user.userID.asInt.alt(0))
+        
+                ORDER BY isEmployeeSetting DESC, tag ASC
+            </ec:data>
+        
+            <p class="notice" id="settingsMessage"></p><br/>
+            <div class="settingsMenu">
+                <ec:loop data=@dt_settings>
+                    @aSetting(@rs[settingID]|@rs[settingTypeID]|@rs[settingValueID]|@rs[tag])  
+                </ec:loop>
+            </div><br/>
+
+            @obj_cacheButton()
+        </ec:titlebox>
+    </ec:case>
+</ec:object>
+
+
+
+<ec:function optionCard>
+    <ec:param imgUrl title description href/>
+    <a class="optionCard" href="@href.nullifblank.alt(#)" rel="nofollow">
+        <img class="optionCard-img" src="@imgUrl.nullifblank.alt(#)"/>
+        <div class="optionCard-content">
+            <h3>@title.nullifblank</h3>
+            <span>@description.nullifblank</span>
+        </div>
+    </a>
+</ec:function>
+
+
+
+
+
+<ec:object obj_accountInfo_edit title="Edit Account Information" type="tDialogForm">
+    <ec:var opt=@svr[param/option].nullifblank/>
+    <ec:var fname=@svr[param/fname].nullifblank lname=@svr[param/lname].nullifblank dname=@svr[param/dname].nullifblank/>
+    <ec:var email=@svr[param/email].nullifblank/>
+    <ec:var password=@svr[param/password].nullifblank newPassword=@svr[param/newPassword].nullifblank newPassword2=@svr[param/newPassword2].nullifblank/>
+
+    <ec:case>
+        <ec:case if=@opt.is(name)>
+            <ec:case if=@state.is(respond)>
+                <ec:data xx procedure="sp_user_edit" connection=@connection>
+                    <userID>@user.userID.asInt</userID>
+                    <sessionID>@user.sessionID.asInt</sessionID>
+                    <firstName>@fname</firstName>
+                    <lastName>@lname</lastName>
+                    <displayName>@dname</displayName>
+                    <email>@email</email>
+                    <password>@password</password>
+                    <newPassword>@newPassword</newPassword>
+                </ec:data>
+                <ec:set errMsg = @xx[errorMssage].nullifblank/>
+                <ec:case if=@iv(@errMsg)>@notification(@errMsg)</ec:case>
+
+                <ec:case if=@nv(@errMsg)>
+                    @user.userData()
+                    @obj_account_information.refresh()
+                    @close()
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@not(@closed)>
+                <br/>
+                <input type="hidden" id="option" name="option" value="name"/>
+                <ec:input_text title="First Name" id="fname" name="fname" fieldValue="@fname.alt(@user.firstName.nullifblank)" placeholder="John / Jane" required/>
+                <ec:input_text title="Last Name" id="lname" name="lname" fieldValue="@lname.alt(@user.lastName.nullifblank)" placeholder="Doe" required/>
+                <ec:input_text title="Display Name" id="dname" name="dname" fieldValue="@dname.alt(@user.displayName.nullifblank)" placeholder="John / Jane D." hintContent="This is your display name which appears on product reviews, forums, and anywhere else publicly visible."/>
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@opt.is(email)>
+            <ec:case if=@state.is(respond)>
+                <ec:data xx procedure="sp_user_edit" connection=@connection>
+                    <userID>@user.userID.asInt</userID>
+                    <sessionID>@user.sessionID.asInt</sessionID>
+                    <firstName>@fname</firstName>
+                    <lastName>@lname</lastName>
+                    <displayName>@dname</displayName>
+                    <email>@email</email>
+                    <password>@password</password>
+                    <newPassword>@newPassword</newPassword>
+                </ec:data>
+                <ec:set errMsg = @xx[errorMessage].nullifblank/>
+                <ec:case if=@iv(@errMsg)>@notification(@errMsg)</ec:case>
+
+                <ec:case if=@nv(@errMsg)>
+                    @user.userData()
+                    @obj_account_information.refresh()
+                    @close()
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@not(@closed)>
+                <br/>
+                <input type="hidden" id="option" name="option" value="email"/>
+                <ec:input_text title="Email Address" id="email" name="email" fieldValue="@email.alt(@user.email.nullifblank)" placeholder="john.doe@example.com" hintContent="Your email is kept confidential in accordance with our Terms of Service."/>
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@opt.is(password)>
+            <ec:case if=@state.is(respond)>
+                <ec:case if=@all(@newPassword2.is(@newPassword)|@iv(@newPassword))>
+                    <ec:case if=@validPassword(@newPassword)>
+
+
+                        <ec:data xx procedure="sp_user_edit" connection=@connection>
+                            <userID>@user.userID.asInt</userID>
+                            <sessionID>@user.sessionID.asInt</sessionID>
+                            <firstName>@fname</firstName>
+                            <lastName>@lname</lastName>
+                            <displayName>@dname</displayName>
+                            <email>@email</email>
+                            <password>@password</password>
+                            <newPassword>@newPassword</newPassword>
+                        </ec:data>
+
+                        <ec:set errMsg = @xx[errorMessage].nullifblank/>
+                        <ec:case if=@iv(@errMsg)>@notification(@errMsg)</ec:case>
+
+                        <ec:case if=@nv(@errMsg)>
+                            @notification(Password updated successfully.)
+                            @close()
+                        </ec:case>
+                    </ec:case>
+                    <ec:case if=@else>@notification(Please provide a new password that matches the password rules.)</ec:case>
+                </ec:case>
+
+                <ec:case if=@else rem="passwords do not match">
+                    @notification(New password and confirm new password must match, and cannot be blank, in order to set a new password.)
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@not(@closed)>
+                <br/>
+                <input type="hidden" id="option" name="option" value="password"/>
+                <ec:input_password title="Current Password" id="password" name="password" fieldValue="" placeholder="" hintContent="Passwords are encrypted to protect you and your data."/><br/><br/>
+                <ec:input_password title="New Password" id="newPassword" name="newPassword" fieldValue="" placeholder="" hintContent="Password must include at least one lowercase letter, one uppercase letter, one number, one symbol, and be six to twenty characters in length."/>
+                <ec:input_password title="Confirm Password" id="newPassword2" name="newPassword2" fieldValue="" placeholder=""/>
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@opt.is(profileImage)>
+            <br/><p class="notice">This feature is still under construction. Thank you for your patience in awaiting the profile images feature.</p>    
+        
+            <ec:case if=@not(@closed)>
+                <input type="hidden" id="option" name="option" value="profileImage"/>
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else rem="no option selected">@close()</ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_contactInfo_new title="New @if(@act.is(newAddress)|Address|Phone Number)" type="tDialogForm">
+    <input type="hidden" id="act" name="act" value="@act"/>
+
+    <ec:case if=@act.is(newPhone)>
+        <ec:var recipient = @svr[param/recipient]/>
+        <ec:var phoneNumberTypeID = @svr[param/phoneNumberTypeID]/>
+        <ec:var phoneNumber = @svr[param/phoneNumber]/>
+        <ec:var phoneNumberExtension = @svr[param/phoneNumberExtension]/>
+        <ec:var primaryPhone = @svr[param/primaryPhone]/>
+    
+    
+        <ec:case if=@all(@state.is(respond)|@iv(@recipient)|@iv(@phoneNumberTypeID)|@iv(@phoneNumber))>
+            <ec:data xx procedure="sp_contactPhoneNumber_new" connection=@connection>
+                <contactID>@contactID.asInt</contactID>
+                <ownerLEID>@LEID.asInt</ownerLEID>
+                <recipient>@recipient</recipient>
+                <phoneNumberTypeID>@phoneNumberTypeID.asInt</phoneNumberTypeID>
+                <phoneNumber>@phoneNumber</phoneNumber>
+                <phoneNumberExtension>@phoneNumberExtension</phoneNumberExtension>
+                <primaryPhone>@primaryPhone.alt(0).asBool</primaryPhone>
+            </ec:data>
+            @logAction(2|1|@user.userID|Phone record created from account: @phoneNumber @phoneNumberExtension)
+            @close()
+            @obj_contact_information.refresh()
+        </ec:case>
+    
+    
+        <ec:case if=@not(@closed)>
+            <ec:data dt_phoneNumberTypesSelect connection=@connection>
+                SELECT phoneNumberTypeID, [description] FROM contactPhoneNumberTypes
+            </ec:data>
+            
+            <br/>
+            <ec:input_text title="Recipient" id="recipient" name="recipient" fieldValue=@recipient placeholder="John Doe" require/>
+            <ec:input_select title="Number Type" id="phoneNumberTypeID" name="phoneNumberTypeID" fieldValue=@phoneNumberTypeID options=@dt_phoneNumberTypesSelect require/><br/><br/>
+            <ec:input_tel title="Phone Number" id="phoneNumber" name="phoneNumber" fieldValue=@phoneNumber require/>
+            <ec:input_number title="Ext." id="phoneNumberExtension" name="phoneNumberExtension" min="0000" max="9999" pattern="[0-9]{0,4}" placeholder="9999" fieldValue=@phoneNumberExtension.alt(@number[phoneNumberExtension])/>
+            <br/><br/>
+            <ec:input_checkbox title="Set as primary phone number?" id="primaryPhone" name="primaryPhone" fieldValue=@primaryPhone/>
+        </ec:case>
+    </ec:case>
+
+
+
+    <ec:case if=@act.is(newAddress)>
+        <ec:var recipient = @svr[param/recipient]/>
+        <ec:var company = @svr[param/company]/>
+        <ec:var address1 = @svr[param/address1]/>
+        <ec:var address2 = @svr[param/address2]/>
+        <ec:var city = @svr[param/city]/>
+        <ec:var territoryID = @svr[param/territoryID]/>
+        <ec:var zipcode = @svr[param/zipcode]/>
+        <ec:var countryID = @svr[param/countryID].alt(222) rem='set to USA by default'/>
+        <ec:var billingAddress = @svr[param/billingAddress]/>
+        <ec:var shippingAddress = @svr[param/shippingAddress]/>
+
+        <ec:case if=@all(@state.is(respond)|@iv(@recipient)|@iv(@address1)|@iv(@city)|@iv(@territoryID)|@iv(@zipcode)|@iv(@countryID))>\
+            <ec:data xx procedure="sp_contactAddress_new" connection=@connection>
+                <contactID>@contactID.asInt</contactID>
+                <ownerLEID>@LEID.asInt</ownerLEID>
+                <recipient>@recipient</recipient>
+                <company>@company</company>
+                <address1>@address1</address1>
+                <address2>@address2</address2>
+                <city>@city</city>
+                <territoryID>@territoryID.asInt</territoryID>
+                <zipcode>@zipcode.replace(-|).asInt</zipcode>
+                <countryID>@countryID.asInt</countryID>
+                <billingAddress>@billingAddress.alt(0).asBool</billingAddress>
+                <shippingAddress>@shippingAddress.alt(0).asBool</shippingAddress>
+            </ec:data>
+
+            @logAction(2|1|@user.userID|Address record created from account: @recipient @company, @address1 @address2, @city, terID: @territoryID, @zipcode, @cntryID: @countryID and billAddress: @billingAddress.alt(0) and shipAddress: @shippingAddres.alt(0))
+            @close()
+            @obj_contact_information.refresh()
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>
+            <ec:data dt_countriesSelect connection=@connection>
+                SELECT countryID, name
+                FROM vw_countries
+            </ec:data>
+
+            <ec:data dt_territoriesSelect connection=@connection>
+                SELECT territoryID, name
+                FROM vw_territories
+                WHERE 1=1 @countryID.alt(222).asInt.with(AND countryID = |) 
+            </ec:data>
+
+            <ec:case if=@iv(@countryID.nullifblank)>
+                <ec:input_text title="Recipient" id="recipient" name="recipient" fieldValue=@recipient placeholder="John Doe" require/>
+                <ec:input_text title="Company" id="company" name="company" fieldValue=@company placeholder="Example Inc."/><br/>
+                <ec:input_text title="Address 1" id="address1" name="address1" fieldValue=@address1 placeholder="Street Name / Number" require/>
+                <ec:input_text title="Address 2" id="address2" name="address2" fieldValue=@address2 placeholder="Unit / Suite Number"/><br/>
+                <ec:input_text title="City" id="city" name="city" fieldValue=@city placeholder="City Name" require/>
+                <ec:input_select title="Territory / State" id="territoryID" name="territoryID" fieldValue=@territoryID options=@dt_territoriesSelect require/><br/>
+                <ec:input_text title="Zip Code" id="zipcode" name="zipcode" fieldValue=@zipcode placeholder="84321" require/><br/>
+            </ec:case>
+
+            <ec:input_select title="Country" class="submitOnChange" id="countryID" name="countryID" fieldValue=@countryID options=@dt_countriesSelect require/>
+
+            <ec:case if=@iv(@countryID.nullifblank)>
+                <br/><br/>
+                <ec:input_checkbox title="Set Primary Shipping Address?" id="shippingAddress" name="shippingAddress" fieldValue=@shippingAddress/>
+                &nbsp;&nbsp;&nbsp;
+                <ec:input_checkbox title="Set Primary Billing Address?" id="billingAddress" name="billingAddress" fieldValue=@billingAddress/>
+            </ec:case>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_contactInfo_edit title="Edit @if(@act.is(editAddress)|Address|Phone Number)" type="tDialogForm">
+    <input type="hidden" id="act" name="act" value="@act"/>
+
+    <ec:case if=@act.is(editPhone)>
+        <ec:var phoneNumberID = @svr[param/phoneNumberID]/>
+        <ec:var recipient = @svr[param/recipient]/>
+        <ec:var phoneNumberTypeID = @svr[param/phoneNumberTypeID]/>
+        <ec:var phoneNumber = @svr[param/phoneNumber]/>
+        <ec:var phoneNumberExtension = @svr[param/phoneNumberExtension]/>
+        <ec:var primaryPhone = @svr[param/primaryPhone]/>
+
+
+        <ec:case if=@all(@state.is(respond)|@iv(@recipient)|@iv(@phoneNumberTypeID)|@iv(@phoneNumber))>
+            <ec:data xx procedure="sp_contactPhoneNumber_edit" connection=@connection>
+                <phoneNumberID>@phoneNumberID.asInt</phoneNumberID>
+                <contactID>@contactID.asInt</contactID>
+                <recipient>@recipient</recipient>
+                <phoneNumberTypeID>@phoneNumberTypeID.asInt</phoneNumberTypeID>
+                <phoneNumber>@phoneNumber</phoneNumber>
+                <phoneNumberExtension>@phoneNumberExtension</phoneNumberExtension>
+                <primaryPhone>@primaryPhone.alt(0).asBool</primaryPhone>
+            </ec:data>
+
+            <ec:case if=@iv(@xx[errorMessage].nullifblank)>
+                @logError(Denied Edit|User cannot edit phone number because it is not theirs|73)
+                @notification(You cannot edit this phone number because it is not yours!)
+            </ec:case>
+
+            <ec:case if=@nv(@xx[errorMessage].nullifblank)>
+                @logAction(3|@1|@user.userID|Edited phone number from account)
+                @close()
+                @obj_contact_information.refresh()
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>
+            <ec:data dt_phoneNumberTypesSelect connection=@connection>
+                SELECT phoneNumberTypeID, [description] FROM contactPhoneNumberTypes
+            </ec:data>
+
+            <ec:data yy connection=@connection>
+                SELECT IIF(primaryPhoneNumberID = @phoneNumberID.alt(0).asInt, 1, 0) AS primaryBit
+                FROM contacts
+                WHERE contactID = @contactID.alt(0).asInt AND primaryPhoneNumberID = @phoneNumberID.alt(0).asInt
+            </ec:data>
+            <ec:var primaryCheck = @yy[1/primaryBit].alt(0)/>
+
+            <ec:data dt_phoneNumber connection=@connection>
+                SELECT recipient, phoneNumberTypeID, phoneNumber, phoneNumberExtension
+                FROM vw_contactPhoneNumbers
+                WHERE phoneNumberID = @phoneNumberID.alt(0).asInt
+            </ec:data>
+            <ec:var number=@dt_phoneNumber[1]/>
+
+            <ec:case if=@number.count.isGreaterThan(0)>
+                <br/>
+                <input type="hidden" id="phoneNumberID" name="phoneNumberID" value="@phoneNumberID"/>
+                <ec:input_text title="Recipient" id="recipient" name="recipient" fieldValue=@recipient.alt(@number[recipient]) placeholder="John Doe" require/>
+                <ec:input_select title="Number Type" id="phoneNumberTypeID" name="phoneNumberTypeID" fieldValue=@phoneNumberTypeID.alt(@number[phoneNumberTypeID]) options=@dt_phoneNumberTypesSelect require/><br/><br/>
+                <ec:input_tel title="Phone Number" id="phoneNumber" name="phoneNumber" fieldValue=@phoneNumber.alt(@number[phoneNumber]) require/>
+                <ec:input_number title="Ext." id="phoneNumberExtension" name="phoneNumberExtension" min="0000" max="9999" pattern="[0-9]{0,4}" placeholder="9999" fieldValue=@phoneNumberExtension.alt(@number[phoneNumberExtension])/>
+                <br/><br/>
+                <ec:input_checkbox title="Set as primary phone number?" id="primaryPhone" name="primaryPhone" fieldValue=@primaryPhone.alt(@primaryCheck)/>
+            </ec:case>
+
+            <ec:case if=@number.count.is(0) rem="if returned 0 records then the wrong number has been accessed">
+                <br/><p class="notice">An error occurred while attempting to edit the phone number. Please reload the page and try again.</p>
+                <ec:case if=@iv(@aclProfile)>
+                    @aclProfile.errorScore.setValue(@aclProfile.errorScore.add(1))
+                    @aclProfile.ACLRisk.setValue(@aclProfile.ACLRisk.add(1))
+                    @aclProfile.storeACLScore()
+                </ec:case>
+            </ec:case>
+        </ec:case>
+    </ec:case>
+
+
+
+    <ec:case if=@act.is(editAddress)>
+        <ec:var addressID = @svr[param/addressID]/>
+        <ec:var recipient = @svr[param/recipient]/>
+        <ec:var company = @svr[param/company]/>
+        <ec:var address1 = @svr[param/address1]/>
+        <ec:var address2 = @svr[param/address2]/>
+        <ec:var city = @svr[param/city]/>
+        <ec:var territoryID = @svr[param/territoryID]/>
+        <ec:var zipcode = @svr[param/zipcode]/>
+        <ec:var countryID = @svr[param/countryID].alt(222) rem='set to USA by default'/>
+        <ec:var billingAddress = @svr[param/billingAddress]/>
+        <ec:var shippingAddress = @svr[param/shippingAddress]/>
+
+
+        <ec:case if=@all(@state.is(respond)|@iv(@addressID)|@iv(@recipient)|@iv(@address1)|@iv(@city)|@iv(@territoryID)|@iv(@zipcode)|@iv(@countryID))>
+            <ec:data xx procedure="sp_contactAddress_edit" connection=@connection>
+                <addressID>@addressID.asInt</addressID>
+                <contactID>@contactID.asInt</contactID>
+                <recipient>@recipient</recipient>
+                <company>@company</company>
+                <address1>@address1</address1>
+                <address2>@address2</address2>
+                <city>@city</city>
+                <territoryID>@territoryID.asInt</territoryID>
+                <zipcode>@zipcode.replace(-|).asInt</zipcode>
+                <countryID>@countryID.asInt</countryID>
+                <billingAddress>@billingAddress.alt(0).asBool</billingAddress>
+                <shippingAddress>@shippingAddress.alt(0).asBool</shippingAddress>
+            </ec:data>
+            @logAction(2|1|@user.userID|Edited address from account)
+            @close()
+            @obj_contact_information.refresh()
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>
+            <ec:data dt_countriesSelect connection=@connection>
+                SELECT countryID, name
+                FROM vw_countries
+            </ec:data>
+
+            <ec:data dt_territoriesSelect connection=@connection>
+                SELECT territoryID, name
+                FROM vw_territories
+                WHERE 1=1 @countryID.alt(222).asInt.with(AND countryID = |) 
+            </ec:data>
+
+            <ec:data yy connection=@connection>
+                SELECT IIF(primaryShipAddressID = @addressID.alt(0).asInt, 1, 0) AS shippingBit,
+                       IIF(primaryBillAddressID = @addressID.alt(0).asInt, 1, 0) AS billingBit
+                FROM contacts
+                WHERE contactID = @contactID.alt(0).asInt AND (primaryShipAddressID = @addressID.alt(0).asInt OR primaryBillAddressID = @addressID.alt(0).asInt)
+            </ec:data>
+            <ec:var billCheck = @yy[1/billingBIT].alt(0)/>
+            <ec:var shipCheck = @yy[1/shippingBIT].alt(0)/>
+
+            <ec:data dt_address connection=@connection>
+                SELECT recipient, company, address1, address2, city, territoryID, zipcode, countryID
+                FROM vw_contactAddresses
+                WHERE addressID = @addressID.asInt
+            </ec:data>
+            <ec:var address=@dt_address[1]/>
+
+            <ec:case if=@address.count.isGreaterThan(0)>
+                <input type="hidden" name="addressID" id="addressID" value="@addressID"/>
+                <ec:case if=@iv(@countryID.nullifblank)>
+                    <ec:input_text title="Recipient" id="recipient" name="recipient" fieldValue=@recipient.alt(@address[recipient]) placeholder="John Doe" require/>
+                    <ec:input_text title="Company" id="company" name="company" fieldValue=@company.alt(@address[company]) placeholder="Example Inc."/><br/>
+                    <ec:input_text title="Address 1" id="address1" name="address1" fieldValue=@address1.alt(@address[address1]) placeholder="Street Name / Number" require/>
+                    <ec:input_text title="Address 2" id="address2" name="address2" fieldValue=@address2.alt(@address[address2]) placeholder="Unit / Suite Number"/><br/>
+                    <ec:input_text title="City" id="city" name="city" fieldValue=@city.alt(@address[city]) placeholder="City Name" require/>
+                    <ec:input_select title="Territory / State" id="territoryID" name="territoryID" fieldValue=@territoryID.alt(@address[territoryID]) options=@dt_territoriesSelect require/><br/>
+                    <ec:input_text title="Zip Code" id="zipcode" name="zipcode" fieldValue=@zipcode.alt(@address[zipcode]) placeholder="84321" require/><br/>
+                </ec:case>
+
+                <ec:input_select title="Country" onchange="document.getElementById('select_territoryID').value = '';" class="submitOnChange" id="countryID" name="countryID" fieldValue=@countryID.alt(@address[countryID]) options=@dt_countriesSelect require/>
+
+                <ec:case if=@iv(@countryID.nullifblank)>
+                    <br/><br/>
+                    <ec:input_checkbox title="Set Primary Shipping Address?" id="shippingAddress" name="shippingAddress" fieldValue=@shippingAddress.alt(@if(@shipCheck.is(1)|1))/>
+                    &nbsp;&nbsp;&nbsp;
+                    <ec:input_checkbox title="Set Primary Billing Address?" id="billingAddress" name="billingAddress" fieldValue=@billingAddress.alt(@if(@billCheck.is(1)|1))/>
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@address.count.is(0) rem="if returned 0 records then the wrong address has been accessed">
+                <br/><p class="notice">An error occurred while attempting to edit the address. Please reload the page and try again.</p>
+                <ec:case if=@iv(@aclProfile)>
+                    @aclProfile.errorScore.setValue(@aclProfile.errorScore.add(1))
+                    @aclProfile.ACLRisk.setValue(@aclProfile.ACLRisk.add(1))
+                    @aclProfile.storeACLScore()
+                </ec:case>
+            </ec:case>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_contactInfo_delete type="tComponent">
+    <ec:case if=@state.is(refresh)>
+        <ec:case if=@act.is(deletePhone)>
+            <ec:var phoneNumberID = @svr[param/phoneNumberID].nullifblank/>
+            <ec:data xx procedure="sp_contactPhoneNumber_delete" connection=@connection>
+                <phoneNumberID>@phoneNumberID.asInt</phoneNumberID>
+                <contactID>@contactID.asInt</contactID>
+            </ec:data>
+
+            <ec:case if=@iv(@xx[errorMessage].nullifblank)>
+                @logError(Account Phone Number Deletion Error|@xx[errorMessage|101)
+                @notification(@xx[errorMessage])
+                <ec:case if=@iv(@aclProfile)>
+                    @aclProfile.errorScore.setValue(@aclProfile.errorScore.add(1))
+                    @aclProfile.ACLRisk.setValue(@aclProfile.ACLRisk.add(1))
+                    @aclProfile.storeACLScore()
+                </ec:case>
+            </ec:case>
+            <ec:case if=@else>
+                @logAction(4|1|@user.userID|Deleted phone number (ID: @phoneNumberID) from account)
+                @obj_contact_information.refresh()
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@act.is(deleteAddress)>
+            <ec:var addressID = @svr[param/addressID].nullifblank/>
+            <ec:data xx procedure="sp_contactAddress_delete" connection=@connection>
+                <addressID>@addressID.asInt</addressID>
+                <contactID>@contactID.asInt</contactID>
+            </ec:data>
+
+            <ec:case if=@iv(@xx[errorMessage].nullifblank)>
+                @logError(Account Address Deletion Error|@xx[errorMessage|101)
+                @notification(@xx[errorMessage])
+                <ec:case if=@iv(@aclProfile)>
+                    @aclProfile.errorScore.setValue(@aclProfile.errorScore.add(1))
+                    @aclProfile.ACLRisk.setValue(@aclProfile.ACLRisk.add(1))
+                    @aclProfile.storeACLScore()
+                </ec:case>
+            </ec:case>
+            <ec:case if=@else>
+                @logAction(4|1|@user.userID|Deleted address (ID: @addressID) from account)
+                @obj_contact_information.refresh()
+            </ec:case>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:webpage title=@pageTitle.alt(Your Account)>
+    <ec:metaTag name="description" content="View and edit information about your account with @host"/>
+    <ec:metaTag name="og:description" content="View and edit information about your account with @host"/>
+    <ec:metaTag name="og:image" content="/imgs-default/account.png"/>
+
+    <ec:var menuItems/>
+    <ec:menuItems>
+        <li class="anchorify" rel="nofollow" href="/account">Account</li>
+        <li class="anchorify" rel="nofollow" href="/account?opt=orders">Order History</li>
+        <li class="anchorify" rel="nofollow" href="/account?opt=history">Browsing History</li>
+        <li class="anchorify" rel="nofollow" href="#">Watchlist</li>
+        <li class="anchorify" rel="nofollow" href="/doc/faq-and-help">Help</li>
+        <li class="anchorify" rel="nofollow" href="/login?act=logout">Logout</li>
+        <ec:case if=@iv(@user.employeeID)>
+            <br/><hr/><br/>
+            <li class="anchorify" href="/console?ltid=1&xid=@user.userID">Edit User</li>
+            <li class="anchorify" href="/console">Console</li>
+        </ec:case>
+    </ec:menuItems>
+    <ec:topbar bannerIcon=@siteSettings[topbarIcon] rMenuContent=@menuItems/>
+
+
+    <div id="primaryContent" class="col col-75 col-center">
+        <ec:case>
+            <div class="col col-65 col-center">
+                <ec:case if=@opt.is(account-info|contact-info|notification-settings|review-products|orders|history|payment-center|settings)>
+                    @backButtonBar(Go to account home|/account)<br desktop/><br/>
+                </ec:case>
+                <ec:obj_account_information if=@opt.is(account-info)/>
+                <ec:obj_contact_information if=@opt.is(contact-info)/>
+                <ec:obj_notification_settings if=@opt.is(notification-settings)/>
+                <ec:obj_review_products if=@opt.is(review-products)/>
+                <ec:obj_order_history if=@opt.is(orders)/>
+                <ec:obj_browsing_history if=@opt.is(history)/>
+                <ec:obj_payment_center if=@opt.is(payment-center)/>
+                <ec:obj_settings if=@opt.is(settings)/>
+            </div>
+
+            <ec:case if=@else>
+                <br/><br/><br/>
+                <div class="col col-95 col-center" style="display:flex; flex-wrap:wrap; justify-content:space-between;">
+                    <ec:optionCard imgUrl="/imgs-default/icon_account.svg" title="Account Information" href="/account?opt=account-info" description="Update your name, email, password, and other information."/>
+                    <ec:optionCard imgUrl="/imgs-default/icon_map.svg" title="Contact Information" href="/account?opt=contact-info" description="Add, edit, or remove addresses and phone numbers."/>
+                    <ec:optionCard imgUrl="/imgs-default/icon_notification.svg" title="Notification Preferences" href="/account?opt=notification-settings" description="Subscribe or unsubscribe from certain notifications and announcements."/>
+                    <ec:optionCard imgUrl="/imgs-default/icon_5stars.svg" title="Review Products" href="/account?opt=review-products" description="Help others find the best products by reviewing your past purchases."/>
+                    <ec:optionCard imgUrl="/imgs-default/icon_orders.svg" title="Order History" href="/account?opt=orders" description="See and manage your past purchases and returns."/>
+                    <ec:optionCard imgUrl="/imgs-default/icon_cards.svg" title="Payment Center" href="/account?opt=payment-center" description="Manage payment methods, view transactions, and pay on your account."/>
+                    <ec:optionCard imgUrl="/imgs-default/icon_settings.svg" title="Settings" href="/account?opt=settings" description="View and change settings relevant to your website experience."/>
+                </div>
+            </ec:case>
+        </ec:case>
+    </div>
+    @bottombar()
+</ec:webpage>

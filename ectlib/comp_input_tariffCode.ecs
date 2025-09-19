@@ -1,0 +1,154 @@
+@share
+<ec:module lib_pageFunctions/>
+
+<ec:case if=@nv(@comp_input_tariffCode_called)>
+    <ec:var comp_input_tariffCode_called = 1 global/>
+    <ec:var input_tariffCode = @xInput_tariffCode.asReference global/>
+</ec:case>
+
+
+
+<ec:style>
+    .inputTariffCode .tariffCodeLabel {
+        width:auto;
+        min-width:169px;
+        height:24px;
+        padding:1px 7px;
+        margin: 3px 9px 3px 0px;
+        border-radius:5px;
+
+        <ec:case if=@userSettings[theme].is(light)>
+            border:1px solid #f3d8b6;
+            background-color: #fffde8;
+        </ec:case>
+        <ec:case if=@userSettings[theme].is(dark)>
+            background-color: #6d6858; border:1px solid #9d8d78;
+        </ec:case>
+    }
+
+    .xTariffCodeLabel {position: relative;}
+    .xTariffCodeLabel span {position: relative; top:2px; left:3px; margin-right:19px;}
+
+    .inputTariffCodeSearchBtn {position: absolute; right:-16px; top:-10px;}
+
+    .tariffCodeSearchList {
+        list-style-type:none;
+        min-height:188px;
+        overflow:auto;
+        
+        & .shortcut {
+            color:var(--link-color);
+            transition: color .25s;
+            &:hover {color:var(--link-color-hover); cursor:pointer;}
+        }
+    }
+</ec:style>
+
+
+
+
+
+<ec:function xInput_tariffCode>
+    <ec:param fieldValue id class name title require hintContent containerStyle style disabled/>
+
+    <div class="formfield inputTariffCode" @containerStyle.with(style="|")>
+        <label style="display:inline-block;" for="inputTariffCode_@id">@title.alt(HS TariffCode) @if(@iv(@hintContent)|@hint(@hintContent))</label><br/>
+        <div class="tariffCodeLabel" id="d_@id" @style.with(style="|")>
+            <ec:xTariffCodeLabel tariffCodeID=@fieldValue.nullifblank el_ID=@ID disabled=@disabled.alt(0)/>
+        </div>
+        <input id="tariffCode_@ID" name="@name.alt(tariffCode)" type="hidden" value="@fieldValue.nullifblank"/>
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:function xTariffCodeLabel>
+    <ec:param tariffCodeID el_ID disabled/>
+    <ec:data dt_tariffCode connection=@connection>
+        SELECT tariffCodeID, CONCAT(tariffCode, ' ', description) AS description
+        FROM tariffCodes
+        WHERE 1=1 AND tariffCodeID = @tariffCodeID.alt(0)
+    </ec:data>
+    <ec:var tariffCode = @dt_tariffCode[1]/>
+    
+    <div class="xTariffCodeLabel">
+        <span>@tariffCode[description]</span>
+        <ec:case if=@all(@iv(@tariffCode[description].nullifblank)|@not(@disabled.alt(0)))><a href="javascript:void(0)" rel="nofollow" id="deselect_@tariffCodeID" class="ajaxClick btn btn-default btn-sml inputTariffCodeSearchBtn" ecid="obj_tariffCodeDeselect" inputID="@el_ID" loader="#d_@el_ID" type="button"><ec:icon title="Deselect HS Tariff Code" icon="remove" size="sml" direction="center" style="margin-right:0px;"/></a></ec:case>
+        <ec:case if=@all(@nv(@tariffCode[description].nullifblank)|@not(@disabled.alt(0)))><a href="javascript:void(0)" rel="nofollow" class="ajaxClick btn btn-default btn-sml inputTariffCodeSearchBtn" ecid="obj_tariffCodeLookup" inputID="@el_ID" type="button"><ec:icon title="Lookup HS Tariff Code" icon="search" size="sml" direction="center" style="margin-right:0px;"/></a></ec:case>
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:object obj_tariffCodeLookup title="HS Tariff Code Lookup" type="tDialogForm" buttonCaption="Search" style="width:65%;" containerStyle="z-index:997;">
+    <ec:var inputID = @svr[param/inputID].nullifblank/>
+    <ec:var fkeywords = @svr[param/fkeywords].trim.nullifblank/>
+    <ec:var targetTariffID = @svr[param/targetTariffID].asInt.nullifblank/>
+    
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@act.is(pick)>
+            <ec:script if=@iv(@inputID.nullifblank)>
+                document.getElementById('tariffCode_@inputID').value = '@targetTariffID';
+            </ec:script>
+            <ec:var aTag="#d_@inputID" aLabel=@xTariffCodeLabel(@targetTariffID|@inputID)/>
+            
+            @responder.update(@aTag|@aLabel)
+            @close()
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_tariffCodes connection=@connection>
+            <ec:case if=@iv(@fkeywords.nullifblank)>
+                DECLARE @chr(64)searchPhrase NVARCHAR(999), @chr(64)tariffCode NVARCHAR(999)
+                SELECT @chr(64)searchPhrase = @sqlstr(NEAR@chr(40)@fkeywords@chr(41))
+                SELECT @chr(64)tariffCode = REPLACE(dbo.fn_stripNonNumeric(@chr(64)searchPhrase), '-', '')
+
+                SELECT DISTINCT tariffCodeID, CONCAT(tariffCode, ' ', description) AS description
+                FROM tariffCodes
+                WHERE 1=1 AND tariffCode IS NOT NULL
+            
+                AND FREETEXT((description, tariffCode), @chr(64)searchPhrase)
+                <ec:case if=@fkeywords.contains(1|2|3|4|5|6|7|8|9|0)>AND CONTAINS(tariffCode, @chr(64)tariffCode)</ec:case>
+            </ec:case>
+            <ec:case if=@else>
+                SELECT 1 WHERE 1=0
+            </ec:case>
+        </ec:data>
+
+        <br/>
+        <input type="hidden" id="inputID" name="inputID" value="@inputID"/>
+        <ec:input_text title="Search" name="fkeywords" id="fkeywords" fieldValue="@fkeywords"/><br/><br/>
+        
+        <ul class="tariffCodeSearchList">
+            <ec:loop data=@dt_tariffCodes>
+                <div class="shortcut shadowOnHover ajaxClick" act="pick" targetTariffID="@rs[tariffCodeID]" inputID="@inputID">
+                    <span>@rs[description]</span> 
+                </div>
+            </ec:loop>
+
+            <ec:case if=@dt_tariffCodes.count.is(0)>
+                <li>@if(@iv(@fkeywords)|No results for this search.|Begin search by typing keywords or a tariff code.)</li>
+            </ec:case>
+        </ul>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_tariffCodeDeselect type="tComponent">
+    <ec:var inputID=@svr[param/inputID].nullifblank/>
+    <ec:var selector="#d_@inputID" content=@xTariffCodeLabel(@null|@inputID.nullifblank)/>
+
+    @responder.update(@selector|@content)
+    <ec:script>
+        document.getElementById('tariffCode_@inputID').value = '';
+    </ec:script>
+</ec:object>

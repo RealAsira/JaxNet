@@ -1,0 +1,2 @@
+<ec:module command_test if=@cmd.is(test) disable/>
+@stop()

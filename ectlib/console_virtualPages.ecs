@@ -1,0 +1,71 @@
+@share
+
+<ec:object dt_virtualPages page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>virtualPageID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT vp.*
+            FROM virtualPages vp
+            LEFT JOIN linkedEntities LE ON toLTID = 103 AND toXID = vp.virtualPageID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT vp.*, linkedTables.iconURL, linkedTables.description AS iconDescription
+            FROM virtualPages vp
+            LEFT JOIN linkedTables ON 103 = linkedTables.linkedTableID
+            LEFT JOIN linkedEntities LE ON toLTID = 103 AND toXID = vp.virtualPageID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            AND vp.virtualPageID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">vp.virtualPageID</sort>
+</ec:object>
+<ec:object obj_virtualPages_pageNavigator dataObj=@dt_virtualPages type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_virtualPages dataObj=@dt_virtualPages type="tComponent">
+    <ec:titlebox title="Virtual Pages"  options=@defaultListOptions()>
+        <table class="tbl">
+            
+        </table>
+        @obj_virtualPages_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_virtualPage dataObj=@dt_virtualPages type="tComponent">
+    <ec:var vp=@dataObj.dataDef[data/1]/>
+    <ec:titlebox title="Virtual Page" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@vp[iconURL]" alt="@vp[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+
+            </div>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>@obj_virtualPages</ec:case>
+    <ec:case if=@iv(@XID)>@obj_virtualPage</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

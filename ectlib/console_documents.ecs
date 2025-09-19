@@ -1,0 +1,369 @@
+@share
+<ec:module comp_widgets/>
+<ec:module comp_input_entity/>
+<ec:module comp_scriptHandler/>
+
+<ec:pluginsReset/>
+<ec:pluginAdd name="widget" function=@widget.asReference/>
+
+<ec:var fkeywords = @svr[param/fkeywords].nullifblank/>
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+<ec:var femployeeID = @svr[param/X_femployeeID].nullifblank/>
+<ec:var fhidden = @svr[param/fhidden].alt(false)/>
+
+<ec:style>
+    .titlebox_content {& ol, & ul {margin-left: 20px;}}
+</ec:style>
+
+<ec:object dt_documents page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>documentID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT documentID, parentDocumentID, date, isHidden, employeeID, firstName, lastName
+            FROM vw_documents
+            WHERE websiteID = @websiteID.asInt
+
+            @if(@fhidden.isnull|AND (isHidden = 0 OR isHidden = 1))
+            @if(@fhidden.is(true)|AND (isHidden = 1))
+            @if(@fhidden.is(false)|AND (isHidden = 0))
+            
+            @if(@iv(@fkeywords)|AND FREETEXT((description, keywords), 'NEAR(@sqlesc(@fkeywords))'))
+            @if(@iv(@fdate_start)|AND CAST(date AS DATE) @chr(62)= @sqlstr(@fdate_start.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fdate_end)|AND CAST(date AS DATE) @chr(60)= @sqlstr(@fdate_end.formatdate(yyyy-mm-dd)))
+            @if(@iv(@femployeeID)|AND employeeID = @femployeeID.asInt)
+            <ec:case if=@all(@nv(@fkeywords)|@nv(@fdate_start)|@nv(@fdate_end)|@nv(@femployeeID)|@fhidden.is(false)) rem="only show root documents if there is no search">AND parentDocumentID IS NULL</ec:case>
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT documentID, parentDocumentID, description, date, documentContent, allowReplies, isHidden, authorName, firstName, lastName, priority, employeeID, iconURL, iconDescription
+            FROM vw_document
+            WHERE websiteID = @websiteID.asInt AND documentID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="ASC">COALESCE(dbo.fn_document_oldestAncestor(documentID), parentDocumentID, documentID)</sort>
+    <order>COALESCE(dbo.fn_document_oldestAncestor(documentID), parentDocumentID, documentID) DESC, documentID ASC, date DESC</order>
+</ec:object>
+<ec:object obj_documents_pageNavigator dataObj=@dt_documents type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_documentRecords dataObj=@dt_documents type="tComponent">
+    <ec:titlebox title="Document Records"  options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>DOC#</th>
+                <th>Date</th>
+                <th style="min-width: 30vw;">Title</th>
+                <th>&nbsp;</th>
+                <th style="text-align: left;">Author</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=@LTID&xid=@rs[documentID]">
+                    <td>@rs[documentID]</td>
+                    <td>@rs[date].formatdate(dd MMM yyyy)</td>
+                    <td><ec:xBreadCrumbs documentID=@rs[documentID] noMargin width="98%"/></td>
+                    <td>@if(@rs[isHidden].is(true)|&nbsp;@chr(40)Hidden@chr(41)|&nbsp;)</td>
+                    <td style="text-align: left;"><a href="/console?ltid=2&xid=@rs[employeeID]" rel="nofollow"><i>@rs[firstName] @rs[lastName]</i></a></td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_documents_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_documentRecord dataObj=@dt_documents type="tComponent">
+    <ec:var doc=@dataObj.dataDef[data/1]/>
+    <ec:var authorAnchor/><ec:authorAnchor><a href="/console?ltid=2&xid=@doc[employeeID]" rel="nofollow">@doc[firstName] @doc[lastName]</a></ec:authorAnchor>
+    <ec:var revealKeywordsBtn/><ec:revealKeywordsBtn><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_keywordsList">View Keywords</a></ec:revealKeywordsBtn>
+
+    <ec:titlebox title="@doc[description] (Doc)" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@doc[iconURL]" alt="@doc[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID"/>
+                <ec:displayField title="Title" content="@doc[description]"/>
+                <ec:displayField title="Date" content="@doc[date].formatdate(dd MMM yyyy)"/>
+                <ec:displayField title="Author" content=@authorAnchor/>
+                <ec:displayField title="Author Public Name" content=@doc[authorName].alt(N/A)/>
+                <ec:displayField title="Keywords" content=@revealKeywordsBtn/>
+                <ec:displayField title="Priority @hint(The document tree is sorted by priority then alphabetical order. The default priority is 0.5 and can be set as 0 through 1.)" content=@doc[priority]/>
+                <ec:displayField title="Allow Comments?" content=@doc[allowReplies] style="@if(@doc[allowReplies].is(false)|color:#f0b624;)"/>
+                <ec:displayField title="Hidden?" content=@doc[isHidden] style="@if(@doc[isHidden].is(true)|color:#f0b624;)"/>
+            </div>
+            @obj_breadCrumbs()
+        </div>
+
+        <ec:titlebox title="Document Siblings" style="width:98%;" DISABLE>
+            @obj_siblingDocList()
+        </ec:titlebox>
+        <ec:titlebox title="Document Descendants" style="width:98%;">
+            @obj_childDocList()
+        </ec:titlebox>
+    </ec:titlebox>
+
+    <ec:titlebox title="Content">
+        @runScript(@doc[documentContent].decode)
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_keywordsList title="Keywords" buttonCaption="Close" type="tDialogForm">
+    <ec:case if=@not(@closed)>
+        <ec:data dt_keywords connection=@connection>
+            SELECT dbo.fn_sortAlphaString(keywords) AS sortedKeywords FROM vw_documents WHERE documentID = @XID.asInt.alt(0)
+        </ec:data>
+        <br/><strong>Automatically generated keywords</strong><br/><p class="notice">The DOC title, all ancestoral keywords, ID, and key phrases such as "document".</p><br/><br/>
+
+        @dt_keywords[1/sortedKeywords].lower
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_breadCrumbs type="tComponent">
+    <ec:xBreadCrumbs documentID=@XID/>
+</ec:object>
+
+
+<ec:function xBreadCrumbs>
+    <ec:param documentID=0 width noMargin/>
+    <ec:data xx connection=@connection>
+        SELECT doc.documentID, dbo.fn_documentTag(doc.documentID, 0) AS description
+        FROM vw_documents doc
+        INNER JOIN dbo.tb_documentAncestors(@documentID.asInt) ON doc.documentID = dbo.tb_documentAncestors.documentID
+    </ec:data>
+
+    <ul class="breadcrumb @if(@noMargin.alt(0)|noMarginBreadcrumb)" @width.with(width="|")>
+        <ec:loop data=@xx DESC>
+            <ec:case if=@rs[documentID].isnot(@documentID)>
+                <li><a href="/console?ltid=@LTID&xid=@rs[documentID]&xLTID=@LTID&xXID=@XID" rel="nofollow">@rs[description]&nbsp;&nbsp;<strong>@chr(47)</strong>&nbsp;&nbsp;</a></li>      
+            </ec:case>
+            <ec:case if=@else>
+                <li style="color: var(--link-color-hover);"><strong>@rs[description]</strong></li>      
+            </ec:case>
+        </ec:loop>
+    </ul>
+</ec:function>
+
+
+
+
+
+<ec:object obj_childDocList type="tComponent">
+    <ec:var childDocID = @svr[param/childDocID].nullifblank/>
+
+    <ec:case if=@all(@act.is(unlink)|@iv(@childDocID))>
+        <ec:data xx procedure="pr_document_changeParent" connection=@connection>
+           <documentID>@childDocID.asInt</documentID>
+           <parentDocumentID></parentDocumentID>
+        </ec:data>
+    </ec:case>
+
+    <ec:data dt_childDocList connection=@connection>
+        SELECT documentID, dbo.fn_documentTag(documentID, 0) AS description
+        FROM vw_document
+        @if(@iv(@XID)|WHERE parentDocumentID = @XID.asInt)
+        ORDER BY priority DESC, description ASC
+    </ec:data>
+
+    <div id="childDocList">
+        <ec:loop data=@dt_childDocList>
+            <div class="childLocationDiv"><span class="anchorify" href="/console?ltid=@LTID&xid=@rs[documentID]&xLTID=@LTID&xXID=@XID">@rs[description]</span> <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_childDocList" act="unlink" childDocID="@rs[documentID]" confirm="Are you sure you want to unlink this descendant document from its parent?">&nbsp;<ec:icon title="Remove descendant doc from this document" icon="remove" size="tiny" direction="none"/></a></div>
+        </ec:loop>
+        <div class="childLocationDiv"><span class="ajaxClick" ecid="obj_record_new" parentDocID="@XID">New Descendant Doc&nbsp;&nbsp;<ec:icon title="" icon="plus" size="tiny" direction="none"/></span></div>
+    </div>
+</ec:object>
+
+
+
+
+
+<ec:object obj_siblingDocList type="tComponent">
+    <ec:data dt_siblingDocList connection=@connection>
+        SELECT documentID, dbo.fn_documentTag(documentID, 0) AS description
+        FROM vw_document
+        WHERE websiteID = @websiteID.asInt
+        @if(@iv(@dt_documents.dataDef[data/1/parentDocumentID].nullifblank)|AND parentDocumentID = @dt_documents.dataDef[data/1/parentDocumentID]|AND parentDocumentID IS NULL)
+        @if(@iv(@XID)|AND documentID != @XID.asInt)
+        ORDER BY priority DESC, description ASC
+    </ec:data>
+
+    <div id="siblingDocList">
+        <ec:loop data=@dt_siblingDocList>
+            <div class="childLocationDiv" style="padding:0px 7px 0px 7px;"><span class="anchorify" href="/console?ltid=@LTID&xid=@rs[documentID]&xLTID=@LTID&xXID=@XID">@rs[description]</span></div>
+        </ec:loop>
+        <div class="childLocationDiv"><span class="ajaxClick" ecid="obj_record_new" parentDocID="@dt_documents.dataDef[data/1/oldestAncestor]">New Sibling Doc&nbsp;&nbsp;<ec:icon title="" icon="plus" size="tiny" direction="none"/></span></div>
+    </div>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Document" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var keywords = @svr[param/keywords].nullifblank/>
+    <ec:var parentDocID = @svr[param/X_parentDoc].alt(@svr[param/parentDocID]).nullifblank/>
+    <ec:var docContent = @svr[param/docContent].nullifblank/>
+    <ec:var docAuthorName = @svr[param/docAuthorName].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@description))>
+            <ec:data xx procedure="pr_document_new" connection=@connection>
+                <description>@description.replace(&|and)</description>
+                <keywords>@keywords</keywords>
+                <authorID>@user.employeeID.asInt</authorID>
+                <parentDocID>@parentDocID.asInt</parentDocID>
+                <docContent>@docContent.encode</docContent>
+                <docAuthorName>@docAuthorName</docAuthorName>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newDocID = @xx[newDocID].nullifblank/>
+                       
+            <ec:case if=@iv(@newDocID)>
+                @logAction(2|@LTID|@newDocID)
+                @notification(Document DOC-@newDocID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@newDocID)
+                @close()
+            </ec:case>
+            <ec:case if=@else>
+                <ec:case if=@iv(@xx[errorMessage].nullifblank)>
+                    <ec:set errMsg = @xx[errorMessage]/>
+                    @logError(New Doc Error|@errMsg|101)
+                </ec:case>
+                <ec:case if=@else>
+                    <ec:set errMsg="An error occurred. Please contact a system administrator."/>
+                    @logError(error|obj_newDoc_dialog unknown SQL error|101)
+                </ec:case>
+            </ec:case>
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg="A title is required to create a new document."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Doc Title" id="description" name="description" fieldValue=@description hintContent="Recommended 32 character limit."/>
+        <ec:input_text title="Author Public Name" id="docAuthorName" name="docAuthorName" fieldValue=@docAuthorName hintContent="Display this name publicly, instead of the author's name."/>
+        <ec:input_entity title="Parent Doc" id="parentDoc" name="parentDoc" fieldLTID=@if(@iv(@parentDocID)|9|@null) fieldXID=@parentDocID filterLTID="9"/><br/><br/>
+        <ec:input_text title="Keywords" id="keywords" name="keywords" containerstyle="width:100%;" style="width:100%;" fieldValue=@keywords hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Avoid adjectives / articles."/><br/><br/>
+        <ec:input_textField title="Content" id="docContent" name="docContent" fieldValue=@docContent/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Document" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var keywords = @svr[param/keywords].nullifblank/>
+    <ec:var parentDocID = @svr[param/X_parentDoc].alt(@svr[param/parentDocID]).nullifblank/>
+    <ec:var docContent = @svr[param/docContent].nullifblank/>
+    <ec:var docAuthorName = @svr[param/docAuthorName].nullifblank/>
+    <ec:var priority = @svr[param/priority].nullifblank/>
+    <ec:var isHidden = @svr[param/isHidden].nullifblank/>
+    <ec:var allowReplies = @svr[param/allowReplies].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@description))>
+            <ec:data xx procedure="pr_document_edit" connection=@connection>
+                <documentID>@XID.asInt</documentID>
+                <description>@description.replace(&|and)</description>
+                <keywords>@keywords</keywords>
+                <parentDocID>@parentDocID.asInt</parentDocID>
+                <docContent>@docContent.encode</docContent>
+                <docAuthorName>@docAuthorName</docAuthorName>
+                <priority>@max(@min(@priority|1)|0).asFloat</priority>
+                <isHidden>@isHidden.asBool</isHidden>
+                <allowReplies>@allowReplies.asBool</allowReplies>
+            </ec:data>
+
+            <ec:case if=@iv(@xx[errorMessage].nullifblank)>
+                <ec:set errMsg = @xx[errorMessage]/>
+                @logError(error|obj_editDoc_dialog unknown SQL error|101)
+            </ec:case>
+            <ec:case if=@else>
+                @logAction(3|@LTID|@XID|Edited document)
+
+                <ec:var selector="#viewOnSite" content/><ec:content><a id="viewOnSite" href="/doc/@description.replace(&|and).lower.replace(@chr(32)|-)">View on Website <ec:icon title="" icon="hyperlink" size="sml" direction="left"/></a></ec:content>
+                @responder.replace(@selector|@content)
+                
+                @dt_documents.refresh()
+                @obj_documentRecord.refresh()
+                @close()
+            </ec:case>
+        </ec:case>
+        
+        <ec:case if=@else>
+            <ec:set errMsg="A title and author are required to edit a document."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_docRec connection=@connection>
+            SELECT description, authorName, keywords, parentDocumentID AS parentDocID, documentContent AS docContent, priority, isHidden, allowReplies
+            FROM vw_document
+            WHERE documentID = @XID.asInt
+        </ec:data>
+        <ec:var docRec = @dt_docRec[1]/>
+        
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Doc Title" id="description" name="description" fieldValue=@docRec[description].alt(@description) hintContent="Recommended 32 character limit."/>
+        <ec:input_text title="Author Public Name" id="docAuthorName" name="docAuthorName" fieldValue=@docRec[authorName].alt(@docAuthorName) hintContent="Display this name publicly, instead of the author's name."/>
+        <ec:input_entity title="Parent Doc" id="parentDoc" name="parentDoc" fieldLTID=@if(@iv(@docRec[parentDocID].alt(@parentDocID))|9|@null) fieldXID=@docRec[parentDocID].alt(@parentDocID) filterLTID="9"/>       
+        <ec:input_number title="Priority" id="priority" name="priority" fieldValue=@docRec[priority].alt(@priority) step=".01" hintContent="The document tree is sorted by priority then alphabetical order. The default priority is 0.5 and can be set as 0 through 1."/><br/>
+        <ec:input_checkbox title="Allow Comments?" id="allowReplies" name="allowReplies" fieldValue=@if(@allowReplies.is(true)|1).alt(@if(@docRec[allowReplies].is(true)|1))/>&nbsp;&nbsp;&nbsp;
+        <ec:input_checkbox title="Hidden?" id="isHidden" name="isHidden" fieldValue=@if(@isHidden.is(true)|1).alt(@if(@docRec[isHidden].is(true)|1))/><br/><br/>
+        <ec:input_text title="Keywords" id="keywords" name="keywords" fieldValue=@docRec[keywords].alt(@keywords) containerStyle="width:100%;" style="width:100%;" hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Avoid adjectives / articles."/><br/><br/>
+        <ec:input_textField title="Content" id="docContent" name="docContent" fieldValue=@docRec[docContent].alt(@docContent)/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="Keywords" id="fkeywords" name="fkeywords" fieldValue=@fkeywords/> 
+            <ec:input_dateRange title="Date Range" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+            <ec:input_entity title="Author" id="femployeeID" name="femployeeID" fieldLTID=@if(@iv(@femployeeID)|2|@null) fieldXID=@femployeeID filterLTID="2" allowNull/>
+            <ec:input_trueFalse title="Hidden?" id="fhidden" name="fhidden" fieldValue=@fhidden.alt(false) allowNull/>
+        </ec:consoleSearchBox>
+
+        @obj_documentRecords
+    </ec:case>
+    <ec:case if=@iv(@XID)>@obj_documentRecord</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@iv(@XID)>
+        <a id="viewOnSite" href="/doc/@dt_documents.dataDef[data/1/description].lower.replace(@chr(32)|-)">View on Website <ec:icon title="" icon="hyperlink" size="sml" direction="left"/></a><br/>
+        <a href="javascript:void(0)" rel="nofollow" onclick="alert('This feature is not yet implemented. Need to create tDialog obj to handle this operation');" confirm="Create a new KB record from this document's content?">New KB From Doc <ec:icon title="Create a new KB record from document content" icon="plus" size="sml" direction="left"/></a><br/>
+        <a href="javascript:void(0)" rel="nofollow" onclick="alert('This feature is not yet implemented. Need to create tDialog obj to handle this operation');" confirm="In the next step you will choose which knowledgebase will have its content replaced. Please be advised, this cannot be undone. Continue?">Replace KB From Doc <ec:icon title="Replace KB content using document content" icon="paste" size="sml" direction="left"/></a><br/>
+    </ec:case>
+</ec:function>

@@ -1,0 +1,402 @@
+@share
+<ec:module comp_highlights/>
+<ec:module comp_input_entity/>
+
+<ec:var fkeywords = @svr[param/fkeywords].nullifblank/>
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+<ec:var fhidden = @svr[param/fhidden].alt(false)/>
+
+<ec:object dt_entityGroups page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>entityGroupID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT entityGroupID, parentEntityGroupID, name, createdOn, isHidden
+            FROM vw_entityGroups
+            WHERE websiteID = @websiteID.asInt
+
+            @if(@fhidden.isnull|AND (isHidden = 0 OR isHidden = 1))
+            @if(@fhidden.is(true)|AND (isHidden = 1))
+            @if(@fhidden.is(false)|AND (isHidden = 0))
+
+            @if(@iv(@fkeywords)|AND FREETEXT((name, keywords), 'NEAR(@sqlesc(@fkeywords))'))
+            @if(@iv(@fdate_start)|AND CAST(createdOn AS DATE) @chr(62)= @sqlstr(@fdate_start.formatdate(yyyy-mm-dd)))
+            @if(@iv(@fdate_end)|AND CAST(createdOn AS DATE) @chr(60)= @sqlstr(@fdate_end.formatdate(yyyy-mm-dd)))
+
+            <ec:case if=@all(@nv(@fkeywords)|@nv(@fdate_start)|@nv(@fdate_end)|@fhidden.is(false)) rem="only show root entityGroup if there is no search">AND parentEntityGroupID IS NULL</ec:case>
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT parentEntityGroupID, name, memo, createdOn, isHidden, iconURL, iconDescription
+            FROM vw_entityGroup
+            WHERE websiteID = @websiteID.asInt AND entityGroupID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">entityGroupID</sort>
+</ec:object>
+<ec:object obj_entityGroups_pageNavigator dataObj=@dt_entityGroups type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_entityGroups dataObj=@dt_entityGroups type="tComponent">
+    <ec:titlebox title="Collections"  options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>&nbsp;</th> <!-- img -->
+                <th style="min-width: 30vw;">Name</th>
+                <th>&nbsp;</th> <!-- isHidden -->
+                <th>Date</th>
+                <th>&nbsp;</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=18&xid=@rs[entityGroupID]">
+                    <td>&nbsp;</td>
+                    <td><ec:xBreadCrumbs entityGroupID=@rs[entityGroupID] noMargin width="98%"/></td>
+                    <td>@if(@rs[isHidden].is(true)|&nbsp;@chr(40)Hidden@chr(41)|&nbsp;)</td>
+                    <td>@rs[createdOn].formatDate(dd MMM yyyy)</td>
+                    <td>
+                        <ec:case if=@iv(@rs[parentEntityGroupID].nullifblank)><a href="/store/@rs[name].replace(@chr(32)|-).lower()"><ec:icon title="View on website" icon="hyperlink" size="sml" direction="right"/></a></ec:case>
+                        <ec:case if=@else>&nbsp;</ec:case>
+                    </td>
+                </tr>
+            </ec:loop>
+        </table>
+
+        @obj_entityGroups_pageNavigator()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_entityGroup dataObj=@dt_entityGroups type="tComponent">
+    <ec:var eg=@dataObj.dataDef[data/1]/>
+    <ec:var revealKeywordsBtn/><ec:revealKeywordsBtn><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_keywordsList">View Keywords</a></ec:revealKeywordsBtn>
+
+    <ec:titlebox title="Collection" options=@defaultRecordOptions()>
+        <div class="displayFields">
+            <ec:displayField title="ID" content="@XID"/>
+            <ec:displayField title="Created" content="@eg[createdOn].formatdate(dd MMM yyyy)"/>
+            <ec:displayField title="Keywords" content=@revealKeywordsBtn/>
+            <ec:displayField title="Hidden?" content=@eg[isHidden] style="@if(@eg[isHidden].is(true)|color:#f0b624;)"/>
+        </div>
+
+        @obj_breadCrumbs()
+
+        <ec:titlebox style="padding:9px; width:98%;" rem="use for entityGroup SEO/description">
+            <img id="recordIcon" src="@eg[iconURL]" alt="@doc[iconDescription]-img" style="height:58px; display:inline-block; vertical-align:top;"/>
+
+            <div style="display:inline-block; vertical-align: middle; margin-left:13px; max-width:calc(100% - 75px); font-family:arial; font-size: .9rem;">
+                <h2 style="display:block;">@eg[name]</h2>
+                <span style="display:block;">@eg[memo].decode</span>
+            </div>
+        </ec:titlebox>
+        
+        <ec:titlebox title="Collection Descendants" style="width:98%;">
+            @obj_childEntityGroupsList()
+        </ec:titlebox>
+    </ec:titlebox>
+
+    <ec:titlebox title="Content">
+       <ec:data dt_highlights connection=@connection>
+            SELECT highlightID
+            FROM vw_highlights
+            WHERE websiteID = @websiteID.asInt
+            AND startDate <= CAST(GETDATE() AS DATE) AND ISNULL(endDate, DATEADD(day, 1, GETDATE())) >= CAST(GETDATE() AS DATE) --starts on the "start date" and ends at the end of the "end date"
+            AND highlightTypeID IN (1,2,3,4,5,6,7,8)
+            AND dispOnEntityGroupID = @XID.alt(0).asInt
+            GROUP BY highlightTypeID, endDate, startDate, highlightID
+            ORDER BY endDate, startDate
+        </ec:data>
+
+        <ec:case if=@dt_highlights.count.isGreaterThan(0)>
+            <h3><u>Highlights</u></h2><br/>
+            <div style="display:flex; flex-wrap:wrap; width:100%; margin:auto; gap:11px;">
+                <ec:loop data=@dt_highlights>
+                    @highlight(@rs[highlightID]|1)
+                </ec:loop>
+            </div>
+            <br/><br/>
+        </ec:case>
+
+
+        <h3><u>Products</u></h2><br/>
+            and variants set to display in this collection
+        <br/><br/><br/>
+
+        <h3><u>Documents</u></h2><br/>
+            documents set to display in this collection
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_keywordsList title="Keywords" buttonCaption="Close" type="tDialogForm">
+    <ec:case if=@not(@closed)>
+        <ec:data dt_keywords connection=@connection>
+            SELECT dbo.fn_sortAlphaString(keywords) AS sortedKeywords
+            FROM vw_entityGroups
+            WHERE websiteID = @websiteID.asInt AND entityGroupID = @XID.asInt.alt(0)
+        </ec:data>
+        <br/><strong>Automatically generated keywords</strong><br/><p class="notice">The group name, all ancestoral keywords, ID, and key phrases such as "collection".</p><br/><br/>
+
+        @dt_keywords[1/sortedKeywords].lower
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_breadCrumbs type="tComponent">
+    <ec:xBreadCrumbs entityGroupID=@XID/>
+</ec:object>
+
+
+<ec:function xBreadCrumbs>
+    <ec:param entityGroupID=0 width noMargin/>
+    <ec:data xx connection=@connection>
+        SELECT eg.entityGroupID, dbo.fn_entityGroupTag(eg.entityGroupID, 0) AS name
+        FROM vw_entityGroups eg
+        INNER JOIN tb_entityGroupAncestors(@entityGroupID.asInt) ON eg.entityGroupID = tb_entityGroupAncestors.entityGroupID
+    </ec:data>
+
+    <ul class="breadcrumb @if(@noMargin.alt(0)|noMarginBreadcrumb)" @width.with(width="|")>
+        <ec:loop data=@xx DESC>
+            <ec:case if=@rs[entityGroupID].isnot(@entityGroupID)>
+                <li><a href="/console?ltid=@LTID&xid=@rs[entityGroupID]&xLTID=@LTID&xXID=@XID" rel="nofollow">@rs[name]&nbsp;&nbsp;<strong>@chr(47)</strong>&nbsp;&nbsp;</a></li>      
+            </ec:case>
+            <ec:case if=@else>
+                <li style="color: var(--link-color-hover);"><strong>@rs[name]</strong></li>      
+            </ec:case>
+        </ec:loop>
+    </ul>
+
+    <ec:include if=@xx.count.isGreaterThan(1) group="headerInclude">
+        <script type="application/ld+json">
+            {
+                "@chr(64)context": "@protocol()@host@svr[request/url]",
+                "@chr(64)type": "BreadcrumbList",
+                "itemListElement": [          
+                    <ec:loop data=@xx DESC>
+                        {
+                            "@chr(64)type": "ListItem",
+                            "position": @index(),
+                            "name": "@rs[name]",
+                            "item": "@protocol()@host()@svr[request/url]?ltid=@LTID&xid=@rs[entityGroupID]&xLTID=@LTID&xXID=@XID"
+                        }@if(@not(@rs.isFirst)|,|)
+                    </ec:loop>
+                ]
+            }
+        </script>
+    </ec:include>
+</ec:function>
+
+
+
+
+<ec:object obj_childEntityGroupsList type="tComponent">
+    <ec:var childGroupID = @svr[param/childGroupID].nullifblank/>
+
+    <ec:case if=@all(@act.is(unlink)|@iv(@childGroupID))>
+        <ec:data xx procedure="pr_entityGroup_changeParent" connection=@connection>
+           <entityGroupID>@childGroupID.asInt</entityGroupID>
+           <parentEntityGroupID></parentEntityGroupID>
+        </ec:data>
+    </ec:case>
+
+    <ec:data dt_childGroupList connection=@connection>
+        SELECT entityGroupID, dbo.fn_entityGroupTag(entityGroupID, 0) AS name
+        FROM vw_entityGroups
+        @if(@iv(@XID)|WHERE parentEntityGroupID = @XID.asInt)
+        ORDER BY name ASC
+    </ec:data>
+
+    <div id="childGroupList">
+        <ec:loop data=@dt_childGroupList>
+            <div class="childLocationDiv"><span class="anchorify" href="/console?ltid=@LTID&xid=@rs[entityGroupID]&xLTID=@LTID&xXID=@XID">@rs[name]</span> <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_childEntityGroupsList" act="unlink" childGroupID="@rs[entityGroupID]" confirm="Are you sure you want to unlink this descendant collection from its parent?">&nbsp;<ec:icon title="Remove descendant from this collection." icon="remove" size="tiny" direction="none"/></a></div>
+        </ec:loop>
+        <div class="childLocationDiv"><span class="ajaxClick" ecid="obj_record_new" parentEntityGroupID="@XID">New Descendant Group&nbsp;&nbsp;<ec:icon title="" icon="plus" size="tiny" direction="none"/></span></div>
+    </div>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Collection" type="tDialogRecordForm">
+    <ec:var parentEntityGroupID = @svr[param/X_parentEntityGroup].alt(@svr[param/parentEntityGroupID]).nullifblank/>
+    <ec:var name = @svr[param/name].nullifblank/>
+    <ec:var memo = @svr[param/memo].nullifblank/>
+    <ec:var keywords = @svr[param/keywords].nullifblank/>
+    <ec:var showEntities = @svr[param/showEntities].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@name)|@iv(@memo)|@iv(@showEntities))>
+            <ec:data xx procedure="pr_entityGroup_new" connection=@connection>
+                <parentEntityGroupID>@parentEntityGroupID.asInt</parentEntityGroupID>
+                <name>@name.replace(&|and)</name>
+                <memo>@memo.encode</memo>
+                <keywords>@keywords</keywords>
+                <showEntities>@showEntities.asInt</showEntities>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+            <ec:var newEGID = @xx[newEntityGroupID].nullifblank/>
+
+            <ec:case if=@iv(@newEGID)>
+                @logAction(2|@LTID|@newEGID)
+                @notification(Collection COL-@newEGID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@newEGID)
+                @close()
+            </ec:case>
+
+            <ec:case if=@else>
+                <ec:case if=@iv(@errMsg)>
+                    @logError(New Collection Error|@errMsg|101)
+                </ec:case>
+                <ec:case if=@else>
+                    <ec:set errMsg="An error occurred. Please contact a system administrator."/>
+                    @logError(error|obj_newEntityGroup_dialog unknown SQL error|101)
+                </ec:case>
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A group name, memo, and descendancy rule are required to create a new collection."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_showEntites format="XML">
+            <option><optionID>0</optionID><description>None</description></option>
+            <option><optionID>1</optionID><description>Children</description></option>
+            <option><optionID>2</optionID><description>All Descendants</description></option>
+        </ec:data>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Name" id="name" name="name" fieldValue=@name maxLength="32" require/>
+        <ec:input_select title="Show Descendants?" id="showEntities" name="showEntities" fieldValue=@showEntities.alt(0) options=@dt_showEntites require/>
+        <ec:input_entity title="Parent Group" id="parentEntityGroup" name="parentEntityGroup" fieldLTID=@if(@iv(@parentEntityGroupID)|18|@null) fieldXID=@parentEntityGroupID filterLTID="18" hintContent="Leave blank to show as website homepage. Only one collection can be displayed as the website homepage. If blank, hidden is overridden as false."/>
+        
+        <br/><br/>
+        <ec:input_text title="Keywords" id="keywords" name="keywords" containerstyle="width:100%;" style="width:100%;" fieldValue=@keywords hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Avoid adjectives / articles."/>
+        <br/>
+        <ec:input_textArea title="Memo" id="memo" name="memo" fieldValue=@memo placeholder="Please provide information about the collection. This information is often the page header on the website."/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Collection" type="tDialogRecordForm">
+    <ec:var parentEntityGroupID = @svr[param/X_parentEntityGroup].alt(@svr[param/parentEntityGroupID]).nullifblank/>
+    <ec:var name = @svr[param/name].nullifblank/>
+    <ec:var memo = @svr[param/memo].nullifblank/>
+    <ec:var keywords = @svr[param/keywords].nullifblank/>
+    <ec:var showEntities = @svr[param/showEntities].nullifblank/>
+    <ec:var isHidden = @svr[param/isHidden].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@name)|@iv(@memo)|@iv(@showEntities))>
+            <ec:data xx procedure="pr_entityGroup_edit" connection=@connection>
+                <entityGroupID>@XID.asInt</entityGroupID>
+                <parentEntityGroupID>@parentEntityGroupID.asInt</parentEntityGroupID>
+                <name>@name.replace(&|and)</name>
+                <memo>@memo.encode</memo>
+                <keywords>@keywords</keywords>
+                <showEntities>@showEntities.asBool</showEntities>
+                <isHidden>@if(@nv(@parentEntityGroupID.nullifblank)|0|@isHidden.asBool)</isHidden>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+            <ec:var newEGID = @xx[newEntityGroupID].nullifblank/>
+
+            <ec:case if=@iv(@xx[errorMessage].nullifblank)>
+                <ec:set errMsg = @xx[errorMessage]/>
+                @logError(error|obj_editDoc_dialog unknown SQL error|101)
+            </ec:case>
+            <ec:case if=@else>
+                @logAction(3|@LTID|@XID|Edited collection)
+
+                <ec:var selector="#viewOnSite" content/><ec:content><a id="viewOnSite" href="/store/@name.replace(&|and).lower.replace(@chr(32)|-)">View on Website <ec:icon title="" icon="hyperlink" size="sml" direction="left"/></a></ec:content>
+                @responder.replace(@selector|@content)
+
+                @dt_entityGroups.refresh()
+                @obj_entityGroup.refresh()
+                @close()
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A group name, memo, and descendancy rule are required to edit the collection."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_egRec connection=@connection>
+            SELECT name, showEntities, parentEntityGroupID, isHidden, keywords, memo
+            FROM vw_entityGroup
+            WHERE websiteID = @websiteID.asInt AND entityGroupID = @XID.asInt
+        </ec:data>
+        <ec:var egRec = @dt_egRec[1]/>
+
+        <ec:data dt_showEntites format="XML">
+            <option><optionID>0</optionID><description>None</description></option>
+            <option><optionID>1</optionID><description>Children</description></option>
+            <option><optionID>2</optionID><description>All Descendants</description></option>
+        </ec:data>
+
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Name" id="name" name="name" fieldValue=@egRec[name].alt(@name) maxLength="32" require/>
+        <ec:input_select title="Show Descendants?" id="showEntities" name="showEntities" fieldValue=@egRec[showEntities].alt(@showEntities).alt(0) options=@dt_showEntites require/>
+        <ec:input_entity title="Parent Group" id="parentEntityGroup" name="parentEntityGroup" fieldLTID=@if(@iv(@egRec[parentEntityGroupID].alt(@parentEntityGroupID).nullifblank)|18|@null) fieldXID=@egRec[parentEntityGroupID].alt(@parentEntityGroupID) filterLTID="18" hintContent="Leave blank to show as website homepage. Only one collection can be displayed as the website homepage. If blank, hidden is overridden as false."/>
+        <ec:input_checkbox title="Hidden?" id="isHidden" name="isHidden" fieldValue=@if(@isHidden.is(true)|1).alt(@if(@egRec[isHidden].is(true)|1))/>
+        
+        <br/><br/>
+        <ec:input_text title="Keywords" id="keywords" name="keywords" containerstyle="width:100%;" style="width:100%;" fieldValue=@egRec[keywords].alt(@keywords) hintContent="Keyword best practices:@br()&nbsp;&nbsp;-Separate using single spaces.@br()&nbsp;&nbsp;-Use words that are precise/accurate.@br()&nbsp;&nbsp;-Include alternative keywords.@br()&nbsp;&nbsp;-Avoid adjectives / articles."/>
+        <br/>
+        <ec:input_textArea title="Memo" id="memo" name="memo" fieldValue=@egRec[memo].alt(@memo) hintContent="An SEO description should be brief but descriptive and accurate of what is in the collection. Do not use keywords; do write a summary." placeholder="Please provide information about the collection. This is the SEO description on the website."/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="Keywords" id="fkeywords" name="fkeywords" fieldValue=@fkeywords/> 
+            <ec:input_dateRange title="Date Range" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+            <ec:input_trueFalse title="Hidden?" id="fhidden" name="fhidden" fieldValue=@fhidden.alt(false) allowNull/>
+        </ec:consoleSearchBox>
+
+        @obj_entityGroups
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>@obj_entityGroup</ec:case>
+</ec:function>
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@iv(@XID)>
+        <ec:var isRootGroup=0/>
+        <ec:set isRootGroup=1 if=@nv(@dt_entityGroups.dataDef[data/1/parentEntityGroupID].nullifblank)/>
+
+        <ec:var aURL = "/store/@dt_entityGroups.dataDef[data/1/name].lower.replace(@chr(32)|-)" if=@not(@isRootGroup.alt(0))/>
+        <ec:var aURL = "/home" if=@isRootGroup.alt(0)/>
+        <a id="viewOnSite" href="@aURL">View on Website <ec:icon title="" icon="hyperlink" size="sml" direction="left"/></a>
+    </ec:case>
+</ec:function>

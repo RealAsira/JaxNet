@@ -1,0 +1,36 @@
+@share
+<ec:module comp_highlights/>
+<ec:module comp_masonry/>
+
+
+
+<ec:function contents>
+  <!-- page contents go here -->
+  <ec:titlebox style="padding:11px;">
+    setup employee bulletin (who is scheduled throughout the week, time off, upcoming holidays (shipping cal?), ERC, employee requests)
+  </ec:titlebox>
+
+
+  <ec:data dt_highlights connection=@connection>
+    SELECT highlightID
+    FROM vw_highlights
+    WHERE websiteID = @websiteID.asInt
+    AND startDate <= CAST(GETDATE() AS DATE) AND ISNULL(endDate, DATEADD(day, 1, GETDATE())) >= CAST(GETDATE() AS DATE) --starts on the "start date" and ends at the end of the "end date"
+    AND highlightTypeID IN (9,10,11,12,13,14,15,16)
+    GROUP BY highlightTypeID, endDate, startDate, highlightID
+    ORDER BY endDate, startDate
+  </ec:data>
+
+
+  <div id="highlightsMasonry" style="width:95%; margin:auto;">
+    <ec:loop data=@dt_highlights>
+      @highlight(@rs[highlightID])
+    </ec:loop>
+  </div>
+  <ec:object obj_highlights_masonry type="tMasonry" container="#highlightsMasonry" itemSelector=".highlightContainer"/>
+</ec:function>
+
+
+<ec:function related>
+  <!-- related menu items go here -->
+</ec:function>

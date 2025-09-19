@@ -1,0 +1,916 @@
+@response_contentType(text/js)
+@pageFound.set(1)
+
+
+
+<ec:function script_main rem="any scripts, variables, etc.. that might be used elsewhere">
+    // clientPosX & clientPosY are mouse position on viewport, clientPosZone is the zone number that the mouse is in
+    var clientPosX, clientPosY, clientPosZone;
+
+    window.onload = (e) => {handleMouseMove(e);}
+    document.onmousemove = handleMouseMove;
+    function handleMouseMove(e) {
+        //assign results to global var
+        clientPosX = e.clientX;
+        clientPosY = e.clientY;
+
+        /*  RESULTING ZONE # DEPENDING ON X AND Y COORDS OF MOUSE AT TIME OF XHINT HOVER (default values shown here)
+                        x
+            |-----------------------|
+            |  1  |     2     |  3  |   0-20%
+            |_____|___________|_____|
+            |     |           |     |   
+        y   |  4  |     5     |  6  |   20-85% 
+            |     |           |     |
+            |_____|           |_____|
+            |  7  |           |  8  |   85-100%
+            |_____|___________|_____|
+             0-10%   15-85%   90-100%
+        */
+
+
+        var eZone = 0;                      //eventZone
+        var xPercent = 0, yPercent = 0;     //convert clientX, clientY to %
+        xPercent = Math.round(clientPosX / window.innerWidth  * 10000) / 100;
+        yPercent = Math.round(clientPosY / window.innerHeight * 10000) / 100;
+
+        //leftBound = % at which left mouseZone boundary is at, etc... these are default values
+        var xLeftBound = 10.0, xRightBound = 90.0, yTopBound = 20.0, yBottomBound = 85.0;
+
+        //modify bounds for mobile
+        if (window.innerWidth <= 982) {
+            xLeftBound = 30.0, xRightBound = 70.0
+        }
+
+        //left column area
+        if (xPercent >= 0.0 && xPercent < xLeftBound) {
+                 if (yPercent >= 0.0 && yPercent < yTopBound)               {eZone = 1}
+            else if (yPercent >= yTopBound && yPercent < yBottomBound)      {eZone = 4}
+            else if (yPercent >= yBottomBound && yPercent < 100.0)          {eZone = 7}
+            else                                                            {eZone = 0}
+        }
+
+
+        //center column area
+        if (xPercent >= xLeftBound && xPercent < xRightBound) {
+                 if (yPercent >= 0.0 && yPercent < yTopBound)               {eZone = 2}
+            else if (yPercent >= yTopBound && yPercent < 100.0)             {eZone = 5}
+            else                                                            {eZone = 0}
+        }
+
+
+        //right column area
+        if (xPercent >= xRightBound && xPercent < 100.0) {
+                 if (yPercent >= 0.0 && yPercent < yTopBound)               {eZone = 3}
+            else if (yPercent >= yTopBound && yPercent < yBottomBound)      {eZone = 6}
+            else if (yPercent >= yBottomBound && yPercent < 100.0)          {eZone = 8}
+            else                                                            {eZone = 0}
+        }
+
+        //assign results to global var
+        clientPosZone = eZone;
+        //@if(@testServer.is(1)|console.log(xPercent, yPercent, eZone);) //comment out when not in use on test server
+    }
+</ec:function>
+
+
+
+
+
+
+
+<ec:function script_draggableElements>
+    //@comment(add class="draggable" to each element to be dragged; add fromLTID="" and fromXID="" on each AND/OR fromGenericID="")
+    //@comment(add class="dragTarget" to each element to be a target; add toLTID="" and toXID="" on eac AND/OR toGenericID=""h)
+    //@comment(on drop, an ajax call is made to the server using to and from LTIDs and XIDs and the genericIDs)
+
+    //select draggable items and targets into list
+    document.addEventListener("DOMContentLoaded", function(event){
+        initializeDrag();
+    });
+
+
+
+
+
+    function initializeDrag(e){
+        let dragItems = document.querySelectorAll('.draggable');
+        let dropTargets = document.querySelectorAll('.dragTarget');
+
+        dropTargets.forEach(function(dropTarget){
+            //add event listeners for each dropTarget
+            dropTarget.addEventListener('dragover', onDragOver);
+            dropTarget.addEventListener('dragenter', onDragEnter);
+            dropTarget.addEventListener('dragleave', onDragLeave);
+            dropTarget.addEventListener('drop', onDrop);
+        });
+
+        dragItems.forEach(function(dragItem){
+            //remove .over class from each draggable item, and give give it the draggable = "true" attribute so it can be moved
+            dragItem.classList.remove('over');
+            dragItem.setAttribute('draggable', 'true');
+
+            //add event listners for when a draggable item starts and ends dragging
+            dragItem.addEventListener('dragstart', onDragStart);
+            dragItem.addEventListener('dragend', onDragEnd);
+        });
+    };
+
+
+
+
+
+    function onDragStart(e){
+        let dragItems = document.querySelectorAll('.draggable');
+        //prevent this item from being dragged into itself
+        if (this.classList.contains('dragTarget')){
+            this.classList.remove('dragTarget')
+            this.classList.add('wasDragTarget');
+
+            //remove event listners so the item ceases to act as a target
+            this.removeEventListener('dragover', onDragOver);
+            this.removeEventListener('dragenter', onDragEnter);
+            this.removeEventListener('dragleave', onDragLeave);
+            this.removeEventListener('drop', onDrop);
+        };
+
+        //remove outline from previous drags
+        dragItems.forEach(function(dragItem){
+            dragItem.style.outline = 'none';
+        });
+
+        //style current drag
+        this.style.opacity = '.4';
+        this.style.outline = '1px dotted #666';
+        
+        //text/html to send full html element
+        if (this.getAttribute('fromLTID') == undefined) {this.setAttribute('fromLTID', 0)}
+        if (this.getAttribute('fromXID') == undefined) {this.setAttribute('fromXID', 0)}
+        if (this.getAttribute('fromGenericID') == undefined) {this.setAttribute('fromGenericID', 0)}
+        if (this.getAttribute('loader') == undefined) {this.setAttribute('loader', 'body')}
+
+        var jsonString = {fromLTID:this.getAttribute('fromLTID'), fromXID:this.getAttribute('fromXID'), fromGenericID:this.getAttribute('fromGenericID'), ecid:this.getAttribute('ecid'), loader:this.getAttribute('loader'), act:this.getAttribute('act')};
+        e.dataTransfer.setData('text', JSON.stringify(jsonString));
+    };
+    
+
+
+
+
+    function onDragEnd(e){
+        //reset element styles
+        this.style.opacity = '1';
+
+        //if has class wasDragTarget, add dragTarget and remove wasDragTarget
+        if (this.classList.contains('wasDragTarget')){
+            this.classList.remove('wasDragTarget');
+            this.classList.add('dragTarget');
+
+            //add event listeners back in so the item acts as a target
+            this.removeEventListener('dragover', onDragOver);
+            this.removeEventListener('dragenter', onDragEnter);
+            this.removeEventListener('dragleave', onDragLeave);
+            this.removeEventListener('drop', onDrop);
+        };
+    };
+
+
+
+
+
+    function onDragOver(e){
+        //prevent drop event from firing when it shouldn't
+        e.preventDefault();
+        return false;
+    };
+
+
+
+
+
+    function onDragEnter(e){
+        //add .over to dragTarget when it is dragged over
+        this.classList.add('over');
+    };
+
+
+
+
+
+    function onDragLeave(e){
+        //remove .over class from dragTarget when not hovered over
+        this.classList.remove('over');
+    };
+
+
+
+
+
+    function onDrop(e){
+        let dropTargets = document.querySelectorAll('.dragTarget');
+        //prevent default behavior and prevent propogration from firing onDrop mutliple times
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        //make sure no dropTargets have the .over class anymore
+        dropTargets.forEach(function(dropTarget){
+            dropTarget.classList.remove('over');
+        });
+        
+        //get to and from entity data and store in variables
+        var fromData = JSON.parse(e.dataTransfer.getData('text'));
+        if (this.getAttribute('act') == undefined) {this.setAttribute('act', 'dragDrop')};
+
+        fromLTID = fromData['fromLTID'];
+        fromXID = fromData['fromXID'];
+        fromGenericID = fromData['fromGenericID'];
+        toLTID = this.getAttribute('toLTID');
+        toXID = this.getAttribute('toXID');
+        toGenericID = this.getAttribute('toGenericID');
+        loader = fromData['loader'];
+        ecid = fromData['ecid'];
+        act = this.getAttribute('act');
+
+        // to/from combo used to identify dragged element vs target... LTID/XID by default, genericID if it is an element without LTID/XID
+
+        ajaxPostDrop();  
+        return false;
+    };
+
+
+
+
+
+    function ajaxPostDrop(e){
+        if (loader == undefined) {loader = 'body'}
+        addLoader(ecid, loader);
+
+        var send_data = {}
+        send_data['fromLTID'] = fromLTID;
+        send_data['fromXID'] = fromXID;
+        send_data['fromGenericID'] = fromGenericID;
+        send_data['toLTID'] = toLTID;
+        send_data['toXID'] = toXID;
+        send_data['toGenericID'] = toGenericID;
+        send_data['ecid'] = ecid;
+        send_data['loader'] = loader;
+        send_data['act'] = act;
+
+        $.ajax({
+            type: 'POST',
+            url: document.URL,
+            aync: true,
+            success: showResponse,
+            data:send_data,
+            complete: initializeDrag
+        });
+    };
+</ec:function>
+
+
+
+
+
+
+
+<ec:function script_fileFolders>
+    function toggleDropdown(e, e2){
+        el = document.getElementById(e);
+        elState = el.style.height;
+        if(elState == '0px'){el.style.height = 'max-content';} else {el.style.height = '0px';};
+
+
+    };
+
+    function fileFolderNavigate(e){
+        el = document.getElementById('leftFolderExplorerMenu');
+        for (const child of el.children){
+            child.parentElement.style.backgroundColor = 'none';
+        };
+
+        
+        if (window.event.ctrlKey){
+        } else {
+            e.parentElement.style.backgroundColor = '#333333';
+            addLoader('obj_fileFolders', '#obj_fileFolders');
+        };
+    };
+</ec:function>
+
+
+
+
+
+
+
+<ec:function script_xHint>
+    window.handleHintPosition = handleHintPosition;
+    function handleHintPosition (nodeID) {        
+        //get hintContent, update position to mouseZone
+        let hintContent = document.getElementById('hintContent-' + nodeID);
+        hintContent.setAttribute('mouseZone', clientPosZone);        
+
+        //get position data and move to body
+        let hintRect = hintContent.getBoundingClientRect();
+        document.body.appendChild(hintContent);
+
+        //apply position data with modifiers depending on mouseZone
+        hintContent.style.position = 'absolute';
+        hintContent.style.top = `${hintRect.top + window.scrollY}px`;
+        
+        //left column
+        if ([1,4,7].includes(clientPosZone)) {
+            @if(@testServer.is(1)|console.log('1,4,7', clientPosZone);)
+            hintContent.style.left = `${hintRect.left + window.scrollX - 9.5}px`;
+        }
+
+        //middle column
+        if ([2,5].includes(clientPosZone)) {
+            @if(@testServer.is(1)|console.log('2,5', clientPosZone);)
+            hintContent.style.left = `${hintRect.left + (hintRect.width * .5) + window.scrollX}px`;
+        }
+        
+        //right column
+        if ([3,6,8].includes(clientPosZone)) {
+            @if(@testServer.is(1)|console.log('3,6,8', clientPosZone);)
+            hintContent.style.left = `${hintRect.left + (hintRect.width *.75) + window.scrollX + 8}px`;
+        }
+
+        setTimeout(() => {hintContent.classList.add('isVisible');}, 50);
+    }
+
+
+    window.handleHintLeave = handleHintLeave;
+    function handleHintLeave (nodeID) {
+        /*  function resets the hintContent once it is not longer hovered over  */
+        let hintContent = document.getElementById('hintContent-' + nodeID);
+        let hintContainer = document.getElementById('xHintContainer-' + nodeID);
+        setTimeout(() => {hintContent.classList.remove('isVisible');}, 50);
+
+        setTimeout(() => {
+            //wait until after opacity is animated to 0 to reset element
+            hintContainer.appendChild(hintContent);
+            hintContent.removeAttribute('style');
+        }, 300);
+    }
+</ec:function>
+
+
+
+
+
+
+
+<ec:function script_notifications>
+    function closeAlert(el){
+        el.classList.remove('opened');
+        setTimeout(() => {
+            el.classList.add('closed');
+            el.remove();
+        }, 650);
+    }
+
+
+
+
+
+    function playNotification(msg, seconds, id, loader, requestType){
+        let played = false;
+        document.addEventListener('visibilitychange', function(){
+            if (!document.hidden && played != true){
+                //PLAY NOTIFICATION on tab load because tab is not focussed on document load
+                run(msg, seconds, id, loader, requestType);
+                played = true;
+            }
+        }, false);
+
+        if (!document.hidden){
+            //PLAY NOTIFICATION on page load because tab is focussed 
+            run(msg, seconds, id, loader, requestType);
+            played = true;
+        }
+
+        function run(msg, seconds, id, loader, requestType){
+            let el = document.createElement('div');
+            el.classList.add('notification');
+            requestType == 'regular' ? el.classList.add('regularNotification') : el.classList.add('ajaxNotification');
+            el.setAttribute('id', id);
+
+            if (msg == undefined){msg = ''};
+            
+            
+            // 1 = big loader, non-closeable  | 0 = normal
+            if (loader == 1){
+                el.innerHTML = `
+                    <a href="javascript:void(0)" rel="nofollow" style="visibility: hidden;"><ec:icon title="Close notification" icon="remove" size="sml" direction="left" style="position:relative; top:3px; left:3px;"/></a>
+                    <span>${msg}</span>
+                    `
+                    addLoader(undefined, 'body');
+                } else {
+                    el.innerHTML = `
+                    <a href="javascript:void(0)" rel="nofollow" onclick="closeAlert(this.parentElement)"><ec:icon title="Close notification" icon="remove" size="sml" direction="left" style="position:relative; top:3px; left:3px;"/></a>
+                    <span>${msg}</span>
+                    `
+                }
+                $('#alerts').prepend(el);
+                let notification = document.getElementById(id);
+                let i = requestType == 'regular' ? $(notification).siblings('.regularNotification').length : $(notification).siblings('.ajaxNotification').length;
+                let timeout = requestType == 'regular' ? (150 * i) + 1050 : (150 * i) + 75;
+                
+                
+                // play open animation
+                setTimeout(() => {
+                    notification.classList.add('opened');
+                }, timeout)
+                
+                
+                // play close animation automatically if not using big loader
+                if (loader == 1){
+                    return;
+                } else {
+                    setTimeout(() => {
+                        notification.classList.remove('opened');
+                        
+                        setTimeout(() =>{
+                            notification.classList.add('closed');
+                            notification.remove();
+                        }, 1050);
+                    }, timeout + (seconds * 1000));
+                }
+            }
+        }
+</ec:function>
+
+
+
+
+
+
+
+<ec:function script_tComponent>
+    (function (){
+        function CustomEvent (event, params){
+            params = params || {bubbles: false, cancelable: false, detail: undefined};
+            var evt = document.createEvent('CustomEvent');
+
+            evt.initCustomEvent(event, params.bubbles, params.cancelable, params.detail);
+            return evt;
+        }
+        CustomEvent.prototype = window.Event.prototype;
+        window.CustomEvent = CustomEvent;
+    })();
+
+
+
+    $(window).on('beforeunload', function(){
+        sessionStorage.setItem('lastReferrer', document.referrer);
+    });
+
+
+
+
+
+
+    $(".disabled a,.disabled").removeAttr('href');
+    $(document).on('click','.anchorify', function(e){
+        var linkTarget = (e.target.hasAttribute('target')) ? e.target.attributes.target.value : undefined;
+        console.log(linkTarget);
+
+        if (e.target.tagName.toUpperCase() !== 'A' && e.target.tagName.toUpperCase() !== 'INPUT' && e.target.tagName.toUpperCase() !== 'DIV' && e.target.tagName.toUpperCase() !== 'IMG' && e.target.tagName.toUpperCase() !== 'I'){ 
+            if (window.event.ctrlKey || linkTarget == '_blank'){
+                //ctrl click on anchorify
+                window.open($(this).attr("href"),'_blank');
+            }
+            else {
+                //click on anchorify
+                window.document.location = $(this).attr("href")
+            }
+        }
+        else {
+            //return on anchorify
+            return
+        }
+    });
+
+
+
+
+
+    $(document).on('click','.storeClick',storeAttributesInDOM);
+    $(document).on('mouseover','.storeMouseOver',storeAttributesInDOM);
+    $(document).on('change','.storeChange',storeAttributesInDOM);
+
+
+
+
+
+    function storeAttributesInDOM(e){
+        e.preventDefault(); //preventing link redirection
+
+    	//getting every attribute - value pair to send_data
+        var el = $(this)[0];
+    	var send_data ={};
+
+    	for (var attr, i=0, attrs=el.attributes, l=attrs.length; i<l; i++){ //>
+    	    attr = attrs.item(i)
+    	    send_data[attr.nodeName] = attr.value;  //add attribute - value pair
+    	}
+
+        if (el.attributes['name']){
+            var aname=el.attributes['name'].value;
+            send_data[aname] = $(this).attr("value")
+        };
+
+    	jQuery.data($('#responderScripts')[0],send_data);
+    };
+
+
+
+
+
+    function storeValue(tag,value){
+        jQuery.data($('#responderScripts')[0],tag,value);
+    };
+
+
+
+
+
+    function getValue(tag){
+        return jQuery.data($('#responderScripts')[0],tag);
+    };
+
+
+
+
+
+    window.forwardParams=forwardParams;
+    function forwardParams(e){
+        var tg=$(e.currentTarget);
+        var DOMStorage=$.data($('#responderScripts')[0]);
+        var send_data = {};
+        if (e.detail != "undefined") for (var key in e.detail){send_data[key] = e.detail[key]};
+
+        send_data['mouseX'] = e.pageX;
+        send_data['mouseY'] = e.pageY;
+        send_data['hashtag'] = window.location.hash.substr(1);
+
+        if(DOMStorage)
+            for (aval in DOMStorage){
+                send_data[aval] = DOMStorage[aval];
+            };
+
+        if (typeof tg[0].attributes != "undefined")
+    	    for (var attr, i=0, attrs=tg[0].attributes, l=attrs.length; i<l; i++){ //>
+    	        attr = attrs.item(i);
+      	        send_data[attr.nodeName] = attr.value;
+            }
+
+    	if (send_data['ecid']===undefined){
+            send_data['ecid']=tg.closest(".tComponent").attr("id");
+            send_data['ecAct']='respond';
+        };
+
+        if (typeof tg.attr("value") != 'undefined'){
+            send_data['value_old'] = tg.attr("value");
+        };
+
+        if (tg.val()) {
+            send_data['value'] = tg.val();
+        };
+
+        return(send_data);
+    };
+
+
+
+
+
+    function addLoader(ecid, selector){
+        if (selector!='none'){
+            const aLoader = document.createElement('div');
+
+            if(selector===undefined||selector=='body'){selector='body'; aLoader.classList.add('bigLoader');}
+            if(selector=='self'){selector='#' + ecid}
+
+            aLoader.classList.add('ecloader');
+            aLoader.setAttribute('id', 'load-' + ecid + '-' + selector.replace('#','').replace('.',''))
+            if ($(selector).css("position") == 'static') {$(selector).css("position", "relative");} // changes to relative for absolute position of the loader, unless a position is already assigned
+            $(selector).append(aLoader);
+
+            /*  added after appended so opacity transition is visible  */
+            setTimeout(() => {
+                $('#load-' + ecid + '-' + selector.replace('#','').replace('.','')).addClass('opened');
+            }, 0);
+        }
+    }
+
+
+
+
+
+    $(document).on("click",".ajaxMouseover, .ajaxClick", postAjaxLink);
+    $('.ajaxHoverIntent').hover(postAjaxLink);
+    $(document).on("change",".ajaxChange", postAjaxLink);
+    $(document).on("keyup",".ajaxKeyUp", postAjaxLink);
+
+
+
+
+
+    window.postAjaxLink=postAjaxLink;
+    function postAjaxLink(e){
+        e.preventDefault();
+        e.stopPropagation();
+
+        var send_data=forwardParams(e);
+        var doProceed=1;
+        @if(@testServer|console.log(send_data);)
+
+        if(send_data['confirm']!=null)
+            if(confirm(send_data['confirm'])==false){
+                doProceed=0
+            };
+
+        if (doProceed){
+            var tcomp = $(this).closest('.tComponent');
+            loaderChoice: if (send_data['loader'] != undefined){  /* the developer specified a selector to use for loader */
+              addLoader(send_data['ecid'], send_data['loader']);
+              break loaderChoice;
+            } else if (!tcomp || !tcomp.attr('id')){              /* no nearest tComponent or it is missing an id */
+              addLoader(send_data['ecid'], undefined);
+              break loaderChoice;
+            } else if (tcomp.attr('id') != send_data['ecid']){    /* nearest tComponent doesn't match ecid */
+              addLoader(send_data['ecid'], undefined)
+              break loaderChoice;
+            } else {                                              /* nearest tComponent matches ecid */
+              addLoader(send_data['ecid'], 'self');    
+              break loaderChoice;
+            }
+
+            $.ajax({
+                type: 'POST',
+                url: document.URL,
+                async: true,
+                data: send_data,
+                success: showResponse,
+                error: failedResponse
+            });
+        };
+    };
+
+
+
+
+
+    $(document).on('change','.submitOnChange',postAjaxForm);
+    $(document).on('click','.submitOnClick, form.ecAjaxForm input[type=submit], form.ecAjaxForm input[type=image], form.ecAjaxForm button[type=submit]', postAjaxForm);
+
+
+
+
+
+    function postAjaxForm(e){
+        //replaced prevent/stop with return false;
+        //e.preventDefault();
+        //e.stopPropagation();
+        var submit = $(this);
+        var form = submit.parents('form');
+        var ecid = submit.closest(".tComponent").attr("id");
+        var send_data = form.serialize();
+
+        var DOMStorage=$.data($('#responderScripts')[0]);
+        if(DOMStorage) for (aVal in DOMStorage){
+    	    send_data+='&'+aVal+'='+encodeURIComponent(DOMStorage[aVal])
+    	};
+
+        send_data+='&submittedBy='+submit.attr('id');
+        if (submit.attr('loader')) {send_data+='&loader='+submit.attr('loader');}
+
+
+        if (onPostAjaxForm(form)==true){
+            send_data += '&ecid=' + ecid;
+            send_data += '&ecAct=respond';
+
+            var options ={
+                url: document.url,
+                success:showResponse,
+                type:'post',
+                resetForm:true,
+                data:send_data
+            };
+
+            addLoader(ecid, submit.attr('loader'));
+            $.ajax(options);
+            return false;
+        };
+    };
+
+
+
+
+
+    function onPostAjaxForm(form){
+        var doProceed=true;
+
+        if (!!$.prototype.valid){
+            doProceed = $(form).valid();
+        }
+        return doProceed;
+    };
+
+
+
+
+
+    window.showResponse=showResponse;
+    function showResponse(responseText, statusText, xhr, $form){
+        @if(@testServer.is(1)|console.log('AJAX returned: ' + responseText.ecid);)
+        ecAjaxUpdate(responseText);
+        ecAjaxReplace(responseText);
+        ecAjaxAppend(responseText);
+        ecAjaxPrepend(responseText);
+        ecAjaxAfter(responseText);
+        ecAjaxBefore(responseText);
+        ecAjaxSetAttribute(responseText);
+        $('.ajaxDisable').attr("disabled", false);
+
+        $('#load-' + responseText.ecid + '-' + responseText.loader.replace('#','').replace('.','')).removeClass('opened');
+        setTimeout(() => {
+            $('#load-' + responseText.ecid + '-' + responseText.loader.replace('#','').replace('.','')).remove();
+        }, 250);
+
+        var event=new CustomEvent(responseText.ecid);
+        document.dispatchEvent(event);
+        document.dispatchEvent(CustomEvent('ajaxResponded'));        
+    };
+
+
+
+
+    window.failedResponse = failedResponse;
+    function failedResponse(xhr, statusText, error) {
+        playNotification('A server error occurred. Please reload, try again, then contact a system administrator if it continues.', 9999, 'ajaxErrorNotification', 1, 'ajax');
+        @if(@testServer.is(1)|console.log(xhr, statusText, error);)
+    }
+
+
+
+
+
+    function ecAjaxUpdate(jsonObj){
+        if (jsonObj) for (x in jsonObj.update){
+            var selector=jsonObj.update[x].selector;
+            var content=jsonObj.update[x].content;
+            $(selector).html(content).trigger('update');
+        }
+    };
+
+
+
+
+
+    function ecAjaxReplace(jsonObj){
+        if (jsonObj) for (x in jsonObj.replace){
+            var selector=jsonObj.replace[x].selector;
+            var content=jsonObj.replace[x].content;
+            $(selector).replaceWith(content).trigger('replace');
+        }
+    };
+
+
+
+
+
+    function ecAjaxAppend(jsonObj){
+        if (jsonObj) for (x in jsonObj.append){
+            var selector=jsonObj.append[x].selector;
+            var content=jsonObj.append[x].content;
+            $(selector).append(content).trigger('append');
+        }
+    };
+
+
+
+
+
+    function ecAjaxPrepend(jsonObj){
+        if (jsonObj) for (x in jsonObj.prepend){
+            var selector=jsonObj.prepend[x].selector;
+            var content=jsonObj.prepend[x].content;
+            $(selector).prepend(content).trigger('prepend');
+        }
+    };
+
+
+
+    
+    function ecAjaxAfter(jsonObj){
+        if (jsonObj) for (x in jsonObj.after){
+            var selector=jsonObj.after[x].selector;
+            var content=jsonObj.after[x].content;
+            $(selector).after(content).trigger('after');
+        }
+    };
+
+
+
+
+    function ecAjaxBefore(jsonObj){
+        if (jsonObj) for (x in jsonObj.before){
+            var selector=jsonObj.before[x].selector;
+            var content=jsonObj.before[x].content;
+            $(selector).before(content).trigger('before');
+        }
+    };
+
+
+
+
+
+    function ecAjaxSetAttribute(jsonObj){
+        if (jsonObj) for (x in jsonObj.setAttribute){
+            var selector=jsonObj.setAttribute[x].selector;
+            var attribute=jsonObj.setAttribute[x].attribute;
+            var content=jsonObj.setAttribute[x].content;
+            $(selector).attr(attribute,content);
+        }
+        return false;
+    };
+</ec:function>
+
+
+
+
+
+
+
+<ec:function script_toggleSubMenu>
+    function toggleSubMenu(e){
+        parent = e.parentElement;
+
+        //if toggling a submenu, don't close parent
+        if (e.classList.contains('toggle-submenu') || parent.classList.contains('open')){
+            //do nothing
+        } else {
+            //else close all currently open menus
+            dropdowns = document.querySelectorAll('.dropdown');
+            [].forEach.call(dropdowns,function(el){
+                el.classList.remove('open');
+            });
+        };
+
+        //if this is opened then close
+        if(parent.classList.contains('open')){
+            parent.classList.remove('open');
+
+        } else {
+            //if this is closed then open
+            parent.classList.add('open');
+
+        };
+    };
+</ec:function>
+
+
+
+
+
+
+
+<ec:function script_miscFunctions>
+    window.isOdd = isOdd;
+    function isOdd(num) {return (num&1);}
+
+
+    window.isEven = isEven;
+    function isEven(num) {return !(num&1)}
+
+
+    window.toggleOpen = toggleOpen;
+    function toggleOpen(anID, openCallback, closeCallback) {
+        anElement = document.getElementById(anID);
+        if(anElement.classList.contains('opened')) {
+            anElement.classList.remove('opened');
+            if(closeCallback){closeCallback();}
+        } else {
+            anElement.classList.add('opened');
+            if(openCallback){openCallback();}
+        }
+    }
+</ec:function>
+
+
+
+
+
+
+
+@script_main
+@script_draggableElements
+@script_fileFolders
+@script_xHint
+@script_notifications
+@script_tComponent
+@script_toggleSubMenu
+@script_miscFunctions

@@ -1,0 +1,37 @@
+@share
+<ec:module comp_scriptHandler/>
+
+<ec:case if=@not(@comp_highlights_called.alt(0))>
+    <ec:var comp_highlights_called = 1 global/>
+    <ec:var highlight = @xHighlight.asReference global/>
+</ec:case>
+
+
+
+<ec:function xHighlight>
+    <ec:param highlightID consoleLink/>
+
+    <ec:case if=@highlightID.is(0|@null|)>
+        <div class="highlight highlightType0" id="hl-@nodeID()">
+            Highlight was unable to render properly.
+        </div>
+    </ec:case>
+
+    <ec:case if=@else>
+        <ec:data dt_highlight connection=@connection>
+            SELECT highlightTypeID, title, content, imgURL
+            FROM vw_highlight
+            WHERE websiteID = @websiteID.asInt AND highlightID = @highlightID.alt(0).asInt
+        </ec:data>
+
+        <ec:var hl = @dt_highlight[1]/>
+
+        <div class="highlightContainer">
+            <div class="highlight highlightType@hl[highlightTypeID]" id="hl-@highlightID.alt(0)">
+                <ec:case if=@iv(@hl[imgURL])><span class="highlight-img">img</span></ec:case>
+                <span class="highlight-title @if(@consoleLink.alt(0)|anchorify)" @if(@consoleLink.alt(0)|href="/console?ltid=8&xid=@highlightID")>@hl[title]</span>
+                <span class="highlight-content">@runScript(@hl[content].decode)</span>
+            </div>
+        </div>
+    </ec:case>
+</ec:function>

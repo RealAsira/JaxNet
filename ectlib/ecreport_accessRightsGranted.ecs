@@ -1,0 +1,295 @@
+@share
+
+<ec:module comp_input_entity/>
+<ec:var eLTID=@svr[param/eLTID].nullifblank  eXID=@svr[param/eXID].nullifblank/>
+@pageTitle.setValue(@eLTID@eXID.with(/|) Can Access)
+
+<ec:object dt_rightsGranted page=@page limit="72" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>accessRightGrantedID</primaryKey>
+    <sqlSelect>
+        <ec:case rem="different queries depending on if the entity is a user, employee, or userGroup/other">
+
+            <ec:case if=@eLTID.is(1) rem="users">
+            SELECT accessRightGrantedID, level, accessRightID, accessToLTID, accessToXID, accessForLTID, accessForXID, grantedDate, entityName FROM (
+                SELECT t1.accessRightGrantedID, CONCAT(t2.accessRightDescription, ' (', t2.accessRightID, ')') AS level, t2.accessRightID,
+                t1.accessToLTID, t1.accessToXID, t1.accessForLTID, t1.accessForXID,
+                t1.grantedDate, CONCAT(dbo.fn_entityName(t1.accessToLTID, t1.accessToXID), ' (', t3.description, ')') AS entityName
+                FROM accessRightsGranted t1
+                LEFT JOIN accessRights t2 ON t1.accessRightID = t2.accessRightID
+                LEFT JOIN linkedTables t3 ON t1.accessToLTID = t3.linkedTableID
+                LEFT JOIN employees t4 ON t4.userID = @eXID.asInt
+                LEFT JOIN userGroupMemberships t5 ON ((t5.memberLTID = @eLTID.asInt.alt(0) AND t5.memberXID = @eXID.asInt.alt(0)) OR (t5.memberLTID = 2 AND t5.memberXID = t4.employeeID))
+                LEFT JOIN linkedEntities LE ON t1.accessToLTID = LE.toLTID AND t1.accessToXID = LE.toLTID
+                WHERE 1=1 AND ISNULL(LE.websiteID, @websiteID.asInt.alt(0)) = @websiteID.asInt.alt(0)
+                AND (
+                       (t1.accessForLTID  = @eLTID.asInt.alt(0) AND t1.accessForXID = @eXID.asInt.alt(0))
+                    OR (t1.accessForLTID  = 2 AND t1.accessForXID = t4.employeeID)
+                    OR (t1.accessForLTID  = 3 AND t1.accessForXID = t5.userGroupID)
+                )
+            ) c1 GROUP BY c1.accessForLTID, c1.accessForXID, c1.accessRightGrantedID, c1.accessRightID, c1.level, c1.grantedDate, c1.accessToLTID, c1.accessToXID, c1.entityName
+            </ec:case>
+
+            <ec:case if=@eLTID.is(2) rem="employees">
+            SELECT accessRightGrantedID, level, accessRightID, accessToLTID, accessToXID, accessForLTID, accessForXID, grantedDate, entityName FROM (
+                SELECT t1.accessRightGrantedID, CONCAT(t2.accessRightDescription, ' (', t2.accessRightID, ')') AS level, t2.accessRightID,
+                t1.accessToLTID, t1.accessToXID, t1.accessForLTID, t1.accessForXID,
+                t1.grantedDate, CONCAT(dbo.fn_entityName(t1.accessToLTID, t1.accessToXID), ' (', t3.description, ')') AS entityName
+                FROM accessRightsGranted t1
+                LEFT JOIN accessRights t2 ON t1.accessRightID = t2.accessRightID
+                LEFT JOIN linkedTables t3 ON t1.accessToLTID = t3.linkedTableID
+                LEFT JOIN employees emp ON emp.employeeID = @eXID.asInt.alt(0)
+                LEFT JOIN users t4 ON emp.userID = t4.userID
+                LEFT JOIN userGroupMemberships t5 ON ((t5.memberLTID = @eLTID.asInt.alt(0) AND t5.memberXID = @eXID.asInt.alt(0)) OR (t5.memberLTID = 1 AND t5.memberXID = t4.userID))
+                LEFT JOIN linkedEntities LE ON t1.accessToLTID = LE.toLTID AND t1.accessToXID = LE.toLTID
+                WHERE 1=1 AND ISNULL(LE.websiteID, @websiteID.asInt.alt(0)) = @websiteID.asInt.alt(0)
+                AND (
+                       (t1.accessForLTID  = @eLTID.asInt.alt(0) AND t1.accessForXID = @eXID.asInt.alt(0))
+                    OR (t1.accessForLTID  = 1 AND t1.accessForXID = t4.userID)
+                    OR (t1.accessForLTID  = 3 AND t1.accessForXID = t5.userGroupID)
+                )
+            ) c1 GROUP BY c1.accessForLTID, c1.accessForXID, c1.accessRightGrantedID, c1.accessRightID, c1.level, c1.grantedDate, c1.accessToLTID, c1.accessToXID, c1.entityName
+            </ec:case>
+
+            <ec:case if=@else rem="userGroups and other entities">
+                SELECT accessRightGrantedID, level, accessRightID, accessToLTID, accessToXID, accessForLTID, accessForXID, grantedDate, entityName FROM (
+                    SELECT t1.accessRightGrantedID, CONCAT(t2.accessRightDescription, ' (', t2.accessRightID, ')') AS level, t2.accessRightID,
+                    t1.accessToLTID, t1.accessToXID, t1.accessForLTID, t1.accessForXID,
+                    t1.grantedDate, CONCAT(dbo.fn_entityName(t1.accessToLTID, t1.accessToXID), ' (', t3.description, ')') AS entityName
+                    FROM accessRightsGranted t1
+                    LEFT JOIN accessRights t2 ON t1.accessRightID = t2.accessRightID
+                    LEFT JOIN linkedTables t3 ON t1.accessToLTID = t3.linkedTableID
+                    LEFT JOIN linkedEntities LE ON t1.accessToLTID = LE.toLTID AND t1.accessToXID = LE.toLTID
+
+                    WHERE 1=1 AND ISNULL(LE.websiteID, @websiteID.asInt.alt(0)) = @websiteID.asInt.alt(0) AND (t1.accessForLTID  = @eLTID.asInt.alt(0) AND t1.accessForXID = @eXID.asInt.alt(0))
+                ) c1 GROUP BY c1.accessForLTID, c1.accessForXID, c1.accessRightGrantedID, c1.accessRightID, c1.level, c1.grantedDate, c1.accessToLTID, c1.accessToXID, c1.entityName
+            </ec:case>
+        </ec:case>
+    </sqlSelect>
+    <sort>
+        accessForLTID ASC,
+        CASE WHEN accessToLTID = 100 THEN entityName END,
+        accessToLTID ASC, entityName ASC, accessRightGrantedID DESC
+    </sort>
+</ec:object>
+<ec:object obj_rightsGranted_pageNavigator dataObj=@dt_rightsGranted type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_reportRightsGranted dataObj=@dt_rightsGranted type="tComponent">
+    <ec:data dt_entityName connection=@connection>
+        <ec:case if=@eLTID.isnot(3)>
+            SELECT CONCAT(dbo.fn_entityName(linkedTableID, @eXID.asInt.alt(NULL)), ' (', description, ')') AS name
+            FROM linkedTables WHERE linkedTableID = @eLTID.asInt.alt(0)
+        </ec:case>
+        <ec:case if=@eLTID.is(3)>
+            SELECT dbo.fn_entityName(linkedTableID, @eXID.asInt.alt(NULL)) AS name
+            FROM linkedTables WHERE linkedTableID = @eLTID.asInt.alt(0)
+        </ec:case>
+    </ec:data>
+
+    <ec:titlebox title="@dt_entityName[1/name] Can Access:" id="tb_canAccess">
+        <ec:case if=@eLTID.is(2)>
+            <ec:data dt_checkAdmin connection=@connection>
+                SELECT isAdmin FROM employees WHERE employeeID = @eXID.asInt.alt(0) AND websiteID = @websiteID.asInt
+            </ec:data>
+
+            <ec:case if=@dt_checkAdmin[1/isAdmin].is(true)>
+                <p class="notice">This is the admin account for this website. This account has permanent level 7 (super admin) access level on all records.</p>
+            </ec:case>
+        </ec:case>
+
+
+        <ec:loop data=@dataObj.dataDef[data]>
+            <ec:var recordAccessLevel=@user.accessLevel(@rs[accessToLTID]|@rs[accessToXID])/>
+            <ec:var groupAccessLevel=@user.accessLevel(3|@rs[accessForXID]) if=@rs[accessForLTID].is(3)/>
+
+            <ec:case if=@rs[accessForLTID].isheader>
+                <table class="tbl">
+                    <ec:case if=@eLTID.is(1|2)><tr><th colspan="@if(@all(@rs[accessForLTID].is(3)|@eLTID.isnot(3))|6|5)" style="text-align:left;">Access Granted @if(@rs[accessForLTID].is(1|2)|As|Through) @if(@rs[accessForLTID].is(1)|User) @if(@rs[accessForLTID].is(2)|Employee) @if(@rs[accessForLTID].is(3)|User Group) @if(@rs[accessForLTID].isnot(1|2|3)|Other Entity)</th></tr></ec:case>
+                    <tr style="text-align:left;">
+                        <ec:case if=@all(@rs[accessForLTID].is(3)|@eLTID.isnot(3))><th>Group Name</th></ec:case>
+                        <th>Record</th>
+                        <th>Level</th>
+                        <th>Date Granted Access</th>
+                        <th>LTID/XID</th>
+                        <th>&nbsp;</th>
+                    </tr>
+            </ec:case>
+
+                    <tr id="@rs[accessRightID]-accessTo@rs[accessToLTID]-@rs[accessToXID]">
+                        <ec:case if=@all(@rs[accessForLTID].is(3)|@eLTID.isnot(3))>
+                            <ec:data dt_groupName connection=@connection>SELECT groupName FROM userGroups WHERE userGroupID = @rs[accessForXID].alt(0)</ec:data>
+                            <td><a href="/console?ltid=3&xid=@rs[accessForXID]">@dt_groupName[1/groupName].alt(Unknown)</a></td>
+                        </ec:case>
+                        <td><a href="/console?ltid=105&xid=8&fLTID=@rs[accessToLTID]&fXID=@rs[accessToXID]" rel="nofollow">@rs[entityName]</a></td>
+                        <td>@rs[level]</td>
+                        <td>@rs[grantedDate].formatDate(dd mmm yyyy)</td>
+                        <td><a href="/console?ltid=@rs[accessToLTID]&xid=@rs[accessToXID]">@rs[accessToLTID]@rs[accessToXID].nullifblank.with(/|)</a></td>
+                        <td>
+                            <ec:case if=@all(@recordAccessLevel.isGreatAs(6)|@any(@rs[accessForLTID].is(1|2)|@rs[accessForLTID].is(@eLTID))) rem="allowed to modify access rights">
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_accessRight_revoke" rightGrantedID="@rs[accessRightGrantedID]" rLTID="@rs[accessToLTID]" rXID="@rs[accessToXID]"  loader="#@rs[accessRightID]-accessTo@rs[accessToLTID]-@rs[accessToXID]" confirm="Revoke this entity's access to this record?"><ec:icon title="Revoke access right to this record" icon="remove" size="xsml"/></a>
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_accessRight_edit" rightGrantedID="@rs[accessRightGrantedID]" rLTID="@rs[accessToLTID]" rXID="@rs[accessToXID]"><ec:icon title="Edit access right to this record" icon="pencil" size="sml"/></a>
+                            </ec:case>
+                            <ec:case if=@all(@groupAccessLevel.alt(0).isGreatAs(3)|@rs[accessForLTID].is(3)|@eLTID.isnot(3)) rem="allowed to modify access rights">
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_removeMember" userGroupID="@rs[accessForXID]" loader="#@rs[accessRightID]-accessTo@rs[accessToLTID]-@rs[accessToXID]" confirm="Remove entity from this user group and thereby revoke rights granted through said user group?"><ec:icon title="Remove entity from this user group" icon="remove" size="xsml"/></a>
+                            </ec:case>
+                        </td>
+                    </tr>
+
+            <ec:case if=@rs[accessForLTID].isfooter>
+                </table>
+            </ec:case>
+        </ec:loop>
+        </table>
+        
+        @obj_rightsGranted_pageNavigator()
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+<ec:object obj_accessRight_edit title="Edit Access" type="tDialogForm">
+    <ec:var rLTID=@svr[param/rLTID].alt(0) rXID=@svr[param/rXID].nullifblank rem="recordLTID and recordXID"/>
+    <ec:var recordAccessLevel=@user.accessLevel(@rLTID|@rXID)/>
+
+    <ec:case if=@recordAccessLevel.isGreatAs(6)>
+        <ec:var rightGrantedID=@svr[param/rightGrantedID].nullifblank/>
+        <ec:data dt_rightInfo connection=@connection>
+            SELECT TOP 1 accessRightID, accessToLTID, accessToXID, accessForLTID, accessForXID, grantedDate
+            FROM accessRightsGranted
+            WHERE accessRightGrantedID = @rightGrantedID.alt(0)
+        </ec:data><ec:var right=@dt_rightInfo[1]/>
+        <ec:var rightID=@svr[param/rightID].alt(@right[accessRightID]).nullifblank  eLTID=@svr[param/L_e_entity].alt(@right[accessForLTID]).nullifblank  eXID=@svr[param/X_e_entity].alt(@right[accessForXID]).nullifblank/>
+
+        <ec:case if=@state.is(respond)>
+            <ec:case if=@all(@iv(@rightGrantedID)|@iv(@rightID))>
+                <ec:set rightID=@min(@rightID|6)  if=@not(@recordAccessLevel.isLessAs(7))/>
+                <ec:data xx procedure="pr_accessRight_edit" connection=@connection>
+                    <accessRightGrantedID>@rightGrantedID.asInt</accessRightGrantedID>
+                    <accessRightID>@rightID.asInt.alt(0)</accessRightID>
+                </ec:data>
+                <ec:set errMsg=@xx[errorMessage]/>
+
+                <ec:case if=@iv(@errMsg)>
+                    @logError(Edit Access Error|@errMsg|101)
+                    @notification(@errMsg)
+                </ec:case>
+
+                <ec:case if=@else>
+                    <ec:case if=@rightID.isGreaterThan(@right[accessRightID]) rem="access level was increased">
+                        @logAction(45|@fLTID|@fXID|@eLTID/@eXID access level increased to @rightID.alt(0))
+                    </ec:case>
+                    <ec:case if=@rightID.isLessThan(@right[accessRightID]) rem="access level was decreased">
+                        @logAction(46|@fLTID|@fXID|@eLTID/@eXID access level decreased to @rightID.alt(0))
+                    </ec:case>
+                    @dt_rightsGranted.refresh()
+                    @obj_reportRightsGranted.refresh()
+                    @close
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@else>
+                @notification(Missing access level or rightGrantedID)
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>
+            <ec:data dt_rightsSelect connection=@connection>
+                SELECT accessRightID, accessRightDescription FROM accessRights
+                <ec:case if=@not(@recordAccessLevel.isLessAs(7))>WHERE accessRightID IN (0,1,2,3,4,5,6)</ec:case>
+            </ec:data>
+
+            <br/>
+            <input type="hidden" id="rightGrantedID" name="rightGrantedID" value="@rightGrantedID"/>
+            <ec:input_entity title="Entity" id="e_entity" name="e_entity" fieldLTID=@eLTID.alt(@right[accessForLTID]) fieldXID=@eXID.alt(@right[accessForXID]) filterLTID="1,2,3" disabled/>
+            <ec:input_select title="Access Level" id="rightID" name="rightID" fieldValue=@rightID.alt(@right[accessRightID]) options=@dt_rightsSelect require/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@else>
+        @logError(Denied Employee Access Right Modification|An employee with insufficient access rights attempted to modify access rights|44)
+        @notification(You don't have a sufficient access level to modify access rights. Please contact a system administrator if you believe this is in error.)
+        @close(1)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_accessRight_revoke type="tComponent">
+    <ec:var rLTID=@svr[param/rLTID].alt(0) rXID=@svr[param/rXID].nullifblank rem="recordLTID and recordXID"/>
+    <ec:var recordAccessLevel=@user.accessLevel(@rLTID|@rXID)/>
+    
+    <ec:case if=@recordAccessLevel.isGreatAs(6)>
+        <ec:var rightGrantedID=@svr[param/rightGrantedID].nullifblank/>
+        <ec:case if=@all(@state.is(refresh)|@iv(@rightGrantedID))>
+            <ec:data xx procedure="pr_accessRight_revoke" connection=@connection>
+                <accessRightGrantedID>@rightGrantedID.asInt</accessRightGrantedID>
+            </ec:data>
+
+            <ec:data dt_rightInfo connection=@connection>
+                SELECT TOP 1 accessForLTID, accessForXID
+                FROM accessRightsGranted
+                WHERE accessRightGrantedID = @rightGrantedID.alt(0)
+            </ec:data>
+
+            @logAction(46|@fLTID|@fXID|@dt_rightInfo[1/accessForLTID]/@dt_rightInfo[1/accessForXID] access level revoked)
+            @dt_rightsGranted.refresh()
+            @obj_reportRightsGranted.refresh()
+        </ec:case>
+    </ec:case>
+
+    <ec:case if=@else>@notification(Insufficient access level to modify access rights.)</ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_removeMember type="tComponent">
+    <ec:var userGroupID=@svr[param/userGroupID].nullifblank/>
+
+    <ec:case if=@iv(@eLTID|@eXID)>
+        <ec:data xx procedure="pr_userGroupMember_remove" connection=@connection>
+            <userGroupID>@userGroupID.asInt</userGroupID>
+            <memberLTID>@eLTID.asInt</memberLTID>
+            <memberXID>@eXID.asInt</memberXID>
+        </ec:data>
+        @logAction(22|3|@userGroupID|@eLTID/@eXID removed from user group)
+
+        @dt_rightsGranted.refresh()
+        @obj_reportRightsGranted.refresh()
+    </ec:case>
+    
+    <ec:case if=@else>
+        @notification(Cannot remove unknown entity from user group. Please refresh page or contact a system administrator)
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:consoleSearchBox>
+        <ec:input_number title="LTID" id="eLTID" name="eLTID" fieldValue=@eLTID/>
+        <ec:input_number title="XID" id="eXID" name="eXID" fieldValue=@eXID/>
+    </ec:consoleSearchBox>
+
+    @obj_reportRightsGranted
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <a href="/console?ltid=@eLTID&xid=@eXID" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>View Entity</a>
+</ec:function>

@@ -1,0 +1,308 @@
+@share
+
+<ec:param obj_quickPanel asReference/>
+<ec:module comp_input_entity/>
+
+<ec:case if=@iv(@XID)>
+    <ec:module comp_contactCards/>
+    <ec:module comp_timeClock/>
+</ec:case>
+
+<ec:var flastName = @svr[param/flastName].nullifblank/>
+<ec:var ffirstName = @svr[param/ffirstName].nullifblank/>
+<ec:var femail = @svr[param/femail].nullifblank/>
+<ec:var fphonenumber = @svr[param/fphoneNumber].nullifblank/>
+<ec:var finactive = @svr[param/finactive].alt(false)/>
+
+
+
+<ec:object dt_employees page=@page limit="50" type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>employeeID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT employeeID, inactive, preferredName, firstName, lastName, email, phoneNumber, phoneNumberExtension
+            FROM vw_employees
+            WHERE websiteID = @websiteID.asInt
+
+            @if(@finactive.isnull|AND (inActive = 0 OR inActive = 1))
+            @if(@finactive.is(true)|AND (inActive = 1))
+            @if(@finactive.is(false)|AND (inActive = 0))
+
+            @if(@iv(@flastName)|AND lastName LIKE @sqlstr(%@flastName%))
+            @if(@iv(@ffirstName)|AND firstName LIKE @sqlstr(%@ffirstName%))
+            @if(@iv(@femail)|AND email LIKE @sqlstr(%@femail%))
+            @if(@iv(@fphoneNumber)|AND dbo.fn_stripNonNumeric(phoneNumber) LIKE dbo.fn_stripNonNumeric(@sqlstr(%@fphoneNumber%)))
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT employeeID, birthdate, hiredate, hourlyWage, inActive, userID, preferredName, firstName, lastName, email, iconURL, iconDescription, quickPin
+            FROM vw_employee
+            WHERE websiteID = @websiteID.asInt AND employeeID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">lastName, firstName</sort>
+</ec:object>
+<ec:object obj_employees_pageNavigator dataObj=@dt_employees type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_employees dataObj=@dt_employees type="tComponent">
+    <ec:titlebox title="Employees" options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>Name</th>
+                <th>&nbsp;</th>
+                <th>Email</th>
+                <th style="text-align:left;">Phone Number</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=2&xid=@rs[employeeID]">
+                    <td>@rs[lastName], @rs[firstName] @rs[preferredName].with(@chr(40)|@chr(41))</td>
+                    <td>@if(@rs[inActive].is(true)|@chr(40)Inactive@chr(41)|&nbsp;)</td>
+                    <td>@rs[email]</td>
+                    <td style="text-align:left;">@rs[phoneNumber] @if(@iv(@rs[phoneNumberExtension])|ext. @rs[phoneNumberExtension])</td>
+                </tr>
+            </ec:loop>
+        </table>
+        @obj_employees_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_employee dataObj=@dt_employees type="tComponent">
+    <ec:var emp=@dataObj.dataDef[data/1]/>
+
+    <ec:titlebox title="Employee" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@emp[iconURL]" alt="@emp[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content=@XID/>
+                <ec:displayField title="Name" content="@emp[firstName] @emp[lastName] @emp[preferredName].with(@chr(40)|@chr(41))"/>
+                <ec:displayField title="Email" content="@emp[email]"/>
+                <ec:displayField title="Birth Date" content="@emp[birthdate].formatDate(dd MMM yyyy)"/>
+                <ec:displayField title="Hire Date" content="@emp[hiredate].formatDate(dd MMM yyyy)"/>
+                <ec:displayField title="Hourly Wage" content="@emp[hourlyWage].formatNumber($0.00)"/>
+                <ec:displayField title="Inactive" content="@emp[inActive]" style="@if(@emp[inActive].is(true)|color:#f0b624;)"/>
+                <ec:displayField title="Pin Number" content="@emp[quickPin]" if=@any(@user.employeeID.is(@XID)|@accessLevel.isGreatAs(4))/>
+            </div>
+        </div>
+
+        <br/><br/><hr/><br/>
+
+        <div style="display:flex; flex-wrap:wrap; justify-content:flex-start;">
+            <div class="shortcut shadowOnHover anchorify" style="margin:9px 7px 0 0; width:156px;" href="/console?ltid=1&xid=@emp[userID]">
+                <img src="/linkedTableIcons/user.svg" alt="2-img" style="height:24px;">
+                <p class="recordShortcut" title="@emp[firstName] @emp[lastName]">@emp[firstName] @emp[lastName]</p>
+            </div>
+        </div>
+    </ec:titlebox>
+
+    @obj_contactCard()
+    <ec:obj_employeeTimeClockView if=@employee.employeeID.is(@XID)/>
+    <ec:titlebox title="Time Entries" if=@all(@employee.employeeID.isnot(@XID)|@accessLevel.isGreatAs(3)) rem="allow show, edit, delete time entries for individuals who manage other employees">
+        @obj_workTimeEntries()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Employee" buttonCaption="Continue" type="tDialogRecordForm">
+    <ec:var employeeUserID = @svr[param/X_employeeUser].alt(@svr[param/employeeUserID]).nullifblank/>
+    <ec:var preferredName = @svr[param/preferredName].nullifblank/>
+    <ec:var hourlyWage = @svr[param/hourlyWage].nullifblank/>
+    <ec:var birthdate = @svr[param/birthdate].asdate.nullifblank/>
+    <ec:var ssn = @svr[param/ssn].nullifblank/>
+    <ec:var confirmedUserID = @svr[param/confirmedUserID].alt(0)/>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:case if=@all(@iv(@employeeUserID)|@iv(@hourlyWage)|@iv(@birthdate)|@iv(@ssn)) rem="all information must be present">
+            <ec:case if=@confirmedUserID.alt(0).is(1) rem="must confirm user information before making into an employee">
+                    <ec:case if=@state.is(respond)>
+                        <ec:data xx procedure="pr_employee_new" connection=@connection>
+                            <userID>@employeeUserID.asInt</userID>
+                            <preferredName>@preferredName</preferredName>
+                            <hourlyWage>@hourlyWage.asFloat</hourlyWage>
+                            <birthdate>@birthdate.asDate</birthdate>
+                            <ssn>@ssn.replace(-|).asInt</ssn>
+                            <websiteID>@websiteID.asInt</websiteID>
+                        </ec:data>
+                        <ec:var empID = @xx[employeeID]/>
+
+                        <ec:case>
+                            <ec:case if=@empID.alt(0).is(0) rem="error creating employee">
+                                @logError(New Employee Error|An unknown error occurred when creating a new employee|101)
+                                        
+                                <style>* {box-sizing:border-box; -webkit-box-sizing: border-box;}</style>
+                                <br/>
+                                <div style="display:block; width:100%; min-height:108px; font-size:1.3rem; text-align:center; color:white; font-weight:bold; background-color:rgb(0, 66, 110);">
+                                    <span>Error Creating Employee</span><br/><br/>
+                                    <span style="font-weight:normal; font-size:1.2rem;">An unknown error occurred while creating a new employee</span>
+                                </div>
+                                <br/>
+                                <h4>Please share the following with a website technician:</h4>
+                                <strong>URL: </strong>@canonical
+                                <br/><strong>Reference: </strong>@requestTimeStamp()
+                            </ec:case>
+
+                            <ec:case if=@else rem="no error occurred, redirect to employee profile">
+                                @logAction(2|@LTID|@empID)
+                                @notification(Employee EMP-@empID() created successfully||1)
+                                @redirect(/console?ltid=@LTID&xid=@empID)
+                                @close()
+                            </ec:case>
+                        </ec:case>
+                    </ec:case>
+            </ec:case>
+
+            <ec:case if=@else>
+                <ec:data dt_user connection=@connection>
+                    SELECT firstName, lastName, email, registrationDate
+                    FROM vw_users
+                    WHERE websiteID = @websiteID.asInt AND userID = @employeeUserID.asInt
+                </ec:data>
+                <ec:var usr = @dt_user[1]/>
+                <br/>
+
+                <ec:case if=@dt_user[].count.isGreaterThan(0)>
+                    <h3>Is this the correct individual?</h3><br/>
+                    <p class="notice">@usr[firstName] @usr[lastName], @usr[email] | Registered: @usr[registrationDate].formatDate(dd MMMM yyyy)</p><br/>
+                    <br/><ec:input_checkbox title="Correct User?" name="confirmedUserID" id="confirmedUserID"/>
+
+                    <input type="hidden" name="employeeUserID" id="employeeUserID" value="@employeeUserID"/>
+                    <input type="hidden" name="preferredName" id="preferredName" value="@preferredName"/>
+                    <input type="hidden" name="hourlyWage" id="hourlyWage" value="@hourlyWage"/>
+                    <input type="hidden" name="birthdate" id="birthdate" value="@birthdate"/>
+                    <input type="hidden" name="ssn" id="ssn" value="@ssn"/>
+                </ec:case>
+                
+                <ec:case if=@else>
+                    @self.buttonCaption.set(Restart)
+                    <p>The userID supplied was invalid. This occurs when the user either doesn't exist or does not belong to the website.</p>
+                    <input type="hidden" name="hourlyWage" id="hourlyWage" value="@hourlyWage"/>
+                    <input type="hidden" name="birthdate" id="birthdate" value="@birthdate"/>
+                </ec:case>
+
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>   
+            <ec:case if=@state.is(respond) rem="didn't have all information and submited form">@notification(UserID, Hourly Wage, Birth Date, and SSN are all required to add a new employee.)</ec:case>        
+            <br/>
+            <ec:input_entity title="User" id="employeeUser" name="employeeUser" fieldLTID=@if(@iv(@employeeUserID)|1|@null) fieldXID=@employeeUserID filterLTID="1" require/>&nbsp;&nbsp;&nbsp;
+            <ec:input_text title="Preferred Name" id="preferredName" name="preferredName" fieldValue=@preferredName.alt(@emp[preferredName]) maxlength="36"/>
+            <ec:input_date title="Birth Date" name="birthdate" id="birthdate" fieldValue=@birthdate.alt(@calc(@today - 14610)) require/><br/><br/>
+            <ec:input_ssn title="Social Security Number" name="ssn" id="ssn" fieldValue="" require rem="fieldValue left intentionally blank. No need to accidentally display this information"/>
+            <ec:input_money title="Hourly Wage" min="7.25" max="200" name="hourlyWage" id="hourlyWage" fieldValue=@hourlyWage require/>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Employee Information" type="tDialogRecordForm">
+    <ec:var preferredName = @svr[param/preferredName].nullifblank/>
+    <ec:var hourlyWage = @svr[param/hourlyWage].nullifblank/>
+    <ec:var inActive = @svr[param/inActive].nullifblank/>
+    <ec:var birthdate = @svr[param/birthdate].asdate.nullifblank/>
+    <ec:var ssn = @svr[param/ssn].nullifblank/>
+    <ec:var quickPin = @svr[param/quickPin].nullifblank/>
+    <ec:set quickPin = @null if=@not(@user.employeeID.is(@XID.asInt))/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@not(@quickPin.length.isLessThan(4))|@user.employeeID.is(@XID.asInt)) rem="is account owner AND is changing quickPin">
+            <ec:data xx procedure="pr_employee_edit" connection=@connection>
+                <employeeID>@XID.asInt</employeeID>
+                <preferredName>@preferredName</preferredName>
+                <hourlyWage>@hourlyWage.asFloat</hourlyWage>
+                <inActive>@if(@inActive.alt(0).is(1)|1|0).asBool</inActive>
+                <birthdate>@birthdate.asDate</birthdate>
+                <ssn>@ssn.replace(-|).asInt</ssn>
+                <quickPin>@quickPin.left(4).asString.nullifblank</quickPin>
+            </ec:data>
+            
+            @logAction(3|@LTID|@XID|Edited employee @if(@inActive.alt(0).is(1)|- marked inactive))
+            @dt_employees.refresh()
+            @obj_employee.refresh()
+            @close()
+        </ec:case>
+        <ec:case if=@else>
+            <ec:set errMsg = "Your pin number must be at least 4 digits long."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_emp connection=@connection>
+            SELECT preferredName, hourlyWage, inActive, birthdate, quickPin
+            FROM vw_employee
+            WHERE employeeID = @XID.asInt
+        </ec:data>
+        <ec:var emp = @dt_emp[1]/>
+
+        @if(@iv(@errMsg.nullifblank)|@notification(@errMsg))<br/>
+        <ec:input_text title="Preferred Name" id="preferredName" name="preferredName" fieldValue=@preferredName.alt(@emp[preferredName]) maxlength="36"/>
+        <ec:input_date title="Birth Date" name="birthdate" id="birthdate" fieldValue=@birthdate.alt(@emp[birthdate]).alt(@calc(@today - 14610)) require/><br/><br/>
+        <ec:input_ssn title="SSN (blank for no change)" name="ssn" id="ssn" fieldValue="" require rem="fieldValue left intentionally blank. No need to accidentally display this information"/>
+        <ec:input_money title="Hourly Wage" min="7.25" max="200" name="hourlyWage" id="hourlyWage" fieldValue=@hourlyWage.alt(@emp[hourlyWage]) require/>&nbsp;&nbsp; 
+        <ec:input_checkbox title="Inactive?" id="inActive" name="inActive" fieldValue=@if(@inactive.is(true)|1).alt(@if(@emp[inactive].is(true)|1))/><br/><br/>
+
+        <ec:var pinFieldDisable=1/>
+        <ec:set pinFieldDisable=0 if=@any(@user.employeeID.is(@XID)|@accessLevel.isGreatAs(6)) rem="only the employee or admins can change the employee pin"/>
+        <ec:var pinTitle/>
+        <ec:pinTitle>
+            <span>Pin Num. <a href="javascript:void(0)" onclick="$('#number_quickPin').val(Math.floor(1000 + Math.random() * 9000)); $('#number_quickPin').css('color', 'green');"><ec:icon title="Generate random 4 digit pin." icon="cog-refresh" size="lrg" style="margin-left:5px; margin-top:-5px;"/></a></span>
+        </ec:pinTitle>
+        <ec:input_number title=@pinTitle id="quickPin" name="quickPin" fieldValue=@quickPin.alt(@emp[quickPin]) min="0000" max="9999" disabled=@pinFieldDisable.alt(1)/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="First Name" id="ffirstName" name="ffirstName" fieldValue=@ffirstName placeholder="John"/>
+            <ec:input_text title="Last Name" id="flastName" name="flastName" fieldValue=@flastName placeholder="Doe"/> 
+            <ec:input_email id="femail" name="femail" fieldValue=@femail placeholder="john@chr(64)example.com"/>
+
+            <ec:input_tel id="phoneNumber" name="phoneNumber" fieldValue=@fphoneNumber/>
+            <ec:input_trueFalse title="Inactive?" id="finactive" name="finactive" fieldValue=@finactive.alt(false) allowNull/>
+        </ec:consoleSearchBox>
+
+        @obj_employees
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>@obj_employee</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+    <ec:case if=@nv(@XID)>
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>
+        <ec:data dt_userID connection=@connection>
+            SELECT userID
+            FROM vw_employee
+            WHERE employeeID = @XID.asInt
+        </ec:data>
+        <ec:case if=@user.accessLevel(105|1).isGreatAs(1)><a href="/console?ltid=105&xid=1&fdate_start=@today()&fuserID=@dt_userID[1/userID]" rel="nofollow"><ec:icon title="" icon="search" size="sml" direction="left"/>Employee Activity</a><br/></ec:case>
+        <ec:case if=@user.accessLevel(105|21).isGreatAs(1)><a href="/console?ltid=105&xid=21&fisTimeClockEntry=true&X_femployeeID=@XID.asInt&fdeleted=false" rel="nofollow"><ec:icon title="" icon="spreadsheets-app" size="sml" direction="left"/>View Time Entries</a><br/></ec:case>
+    </ec:case>
+</ec:function>

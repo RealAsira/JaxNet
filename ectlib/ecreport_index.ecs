@@ -1,0 +1,53 @@
+@share
+@pageTitle.setValue(List ECReports)
+
+<ec:object dt_reports page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>ecreportID</primaryKey>
+    <sqlSelect>
+        SELECT ecreportID, tag, description, memo
+        FROM vw_ecreports
+    </sqlSelect>
+    <sort>description ASC</sort>
+</ec:object>
+<ec:object obj_reports_pageNavigator dataObj=@dt_reports type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_reports dataObj=@dt_reports type="tComponent">
+    <ec:titlebox title="List ECReports">
+        <table class="tbl">
+            <tr>
+                <th>Report</th>
+                <th>Description</th>
+                <th>&nbsp;</th>
+            </tr>
+        <ec:loop data=@dataObj.dataDef[data]>
+            <tr>
+                <td>@rs[description]</td>
+                <td>@rs[memo]</td>
+                <td><a href="/console?ltid=105&xid=@rs[ecreportID]"><ec:icon title="Goto @rs[description]" icon="hyperlink" size="sml"/></a></td>
+            </tr>
+        </ec:loop>
+        </table>
+
+        @obj_reports_pageNavigator
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    @obj_reports
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

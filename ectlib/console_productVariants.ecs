@@ -1,0 +1,68 @@
+@share
+
+<ec:object dt_productVariants page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>productVariantID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT *
+            FROM productVariants pv
+            LEFT JOIN linkedEntities LE ON toLTID = 20 AND toXID = pv.productVariantID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT *
+            FROM productVariants pv
+            LEFT JOIN linkedEntities LE ON toLTID = 20 AND toXID = pv.productVariantID
+            WHERE 1=1 AND LE.websiteID = @websiteID.asInt
+            AND pv.productVariantID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="asc">pv.productVariantID</sort>
+</ec:object>
+<ec:object obj_productVariants_pageNavigator dataObj=@dt_productVariants type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_productVariants dataObj=@dt_productVariants type="tComponent">
+    <ec:titlebox title="Product Variants"  options=@defaultListOptions()>
+        <table class="tbl">
+            
+        </table>
+
+        @obj_productVariants_pageNavigator()
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_productVariant dataObj=@dt_productVariants type="tComponent">
+    <ec:var pv=@dataObj.dataDef[data/1]/>
+    <ec:titlebox title="Product Variant" options=@defaultRecordOptions()>
+        <div class="displayFields">
+
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>@obj_productVariants</ec:case>
+    <ec:case if=@iv(@XID)>@obj_productVariant</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

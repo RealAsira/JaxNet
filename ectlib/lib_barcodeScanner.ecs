@@ -1,0 +1,120 @@
+@share 
+<ec:module lib_pageFunctions/>
+
+<ec:case if=@nv(@lib_barcodeScannerCalled)>
+    <ec:var lib_barcodeScannerCalled=1 global/>
+
+    <ec:var input_barcode = @xInput_barcode.asReference global/>
+    <ec:var scanLTID scanXID scanLEID scanBarcode global/>
+
+    <ec:script if=@requestType.is(regular) rem="script for barcode inputs ... active status, target ecid, val, detect scan, etc">
+        //activate the scan input
+        $(document).off('click','.barcodeInput').on('click', '.barcodeInput', function(e){
+            e.preventDefault();
+            e.stopPropagation();
+        
+            var anInput = $(this).hasClass('barcodeInput') ? $(this) : $(this).closest('.barcodeInput');
+        
+            //disable other barcode inputs
+            $('.barcodeInputActive').not(anInput).removeClass('barcodeInputActive');
+            document.target_ecid  = null;
+        
+            //add or remove active status if it isn't active yet (toggle effect)
+            if (!$(anInput).hasClass('barcodeInputActive')) {
+                $(anInput).addClass('barcodeInputActive');
+                document.target_ecid   = anInput.attr('target_ecid');
+                document.target_loader = anInput.attr('loader');
+            } else {
+                $(anInput).removeClass('barcodeInputActive');
+                document.target_ecid   = null;
+                document.target_loader = null;
+            }
+        });
+
+    
+        // barcode scan variabels
+        var chars = [];                 // characters in the barcode
+        var scancode;                   // compiled barcode
+        var started = false;            // if the scan is initiated
+        var timeout = 50;               // milliseconds   
+        var lastTimeStamp = Date.now(); // time stamp of last input char
+        var lastEventTarget;            // last target ... if timeout, fill it in
+    
+        // reset barcode scan
+        function resetScan() {
+            if (chars.length > 0) {console.log('cancel', chars.length, lastEventTarget.tagName);}
+            if (chars.length > 0 && (['INPUT', 'TEXTAREA'].includes(lastEventTarget.tagName.toUpperCase()))) {$(lastEventTarget).val($(lastEventTarget).val() + chars.join(''));}    // input text is filled on time out
+            chars = [];
+            scancode = null
+            started = false;
+            lastTimeStamp = Date.now();
+        }
+
+        // detect barcode scan
+        $(window).keypress(function(e){
+            if (e.keyCode == 229) {return;}                             // kill event for a known issue key 
+            if (Date.now() - timeout > lastTimeStamp) {resetScan();}    // scan timed out
+
+            if (!started && [124].includes(e.which)) {
+                started = true;
+                lastEventTarget = e.target;                             // get last target in case scan times out and data needs to be manually filled
+            }
+
+            if (started) {
+                e.preventDefault();                                     // prevents scan text from inputting as physical text to DOM elements
+                chars.push(String.fromCharCode(e.which));               // append new char to array
+                
+                setTimeout(function(){
+                    if (chars.length > 6) {                             // min length of code without preceding | char is 7 digits
+                        scancode = chars.join('');
+                        @if(@testServer|console.log(scancode, document.target_ecid);)
+
+                        var event = new CustomEvent('barcodeScanned', {
+                            detail: {
+                                scancode: scancode,
+                                loader: document.target_loader,
+                                target_ecid: document.target_ecid
+                            }
+                        }); document.dispatchEvent(event);              // create and submit custom event to fire to server
+                    }
+                    chars = [];                                         // manual reset to prevent input from filling in after barcode scanned properly
+                    resetScan();                                        // reset scan so more inputs are allowed
+                }, timeout * 2);
+            }
+
+        });
+    </ec:script>
+</ec:case>
+
+
+
+
+
+<ec:type tBarcodeResponder type="tComponent">
+    <ec:function initialize>
+        @inherited.execute()
+
+        <ec:script if=@requestType.is(regular) rem="listen for barcode scan events">
+            document.addEventListener('barcodeScanned', function(e){
+                e.preventDefault();
+                e.stopPropagation();
+
+                e.detail['ecid'] = '@name.alt(obj_barcodeResponder)';                   // which responder should act. obj_barcodeResponder decodes barcode to LTID, XID, LEID
+                @if(@testServer|console.log('barcodeScanned event dispatched', e);)
+                postAjaxLink(e);
+            });
+        </ec:script>
+    </ec:function>
+</ec:type>
+
+
+
+
+
+<ec:function xInput_barcode>
+    <ec:param title id class name ecid responder_ecid loader containerClass containerStyle style direction/>
+    @if(@ecid.nullifblank.isnull|@ecid.setValue(@responder_ecid.nullifblank.alt(obj_barcodeResponder)))
+    <div @containerClass.with(class="|") @containerStyle.with(style="|")>
+        <span ecid="@responder_ecid.nullifblank.alt(obj_barcodeResponder)" target_ecid="@ecid" @loader.with(loader="|") @style.with(style="|") class="barcodeInput @class()" id="barcodeInput_@id" name="@name.alt(barcode)"><ec:icon title="@title.alt(Activate barcode scan)" icon="barcode" size="med" direction="@direction.alt(none)" style="margin:auto; margin-top:2px;"/></span>
+    </div>
+</ec:function>

@@ -1,0 +1,5 @@
+<ec:data xx connection=@connection DISABLE>
+    UPDATE test
+    SET testDescription = "Hello world!"
+    WHERE testID = @XID
+</ec:data>

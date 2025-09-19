@@ -1,0 +1,767 @@
+@share
+<ec:module lib_dataFunctions/>
+<ec:module lib_pageFunctions/>
+<ec:module comp_input_entity/>
+
+
+<ec:case if=@all(@LTID.is(2)|@iv(@XID)) rem="styles for obj_employeeTimeClockView and obj_workTimeEntries">
+    <ec:var theme/>
+    <ec:set theme="spring"    if=@today.isBetween(@date(03/21/@today.formatDate(yyyy))|@date(06/20/@today.formatDate(yyyy)))/>
+    <ec:set theme="summer"    if=@today.isBetween(@date(06/21/@today.formatDate(yyyy))|@date(08/20/@today.formatDate(yyyy)))/>
+    <ec:set theme="autumn"    if=@today.isBetween(@date(08/21/@today.formatDate(yyyy))|@date(11/20/@today.formatDate(yyyy)))/>
+    <ec:set theme="winter"    if=@today.isBetween(@date(11/21/@today.formatDate(yyyy))|@date(03/20/@today.add(365).formatDate(yyyy)))/>
+    <ec:set theme="halloween" if=@today.isBetween(@date(10/01/@today.formatDate(yyyy))|@date(10/31/@today.formatDate(yyyy)))/>
+    <ec:set theme="christmas" if=@today.isBetween(@date(12/01/@today.formatDate(yyyy))|@date(12/31/@today.formatDate(yyyy)))/>
+    <ec:set theme="default"   if=@else/>
+
+
+    <ec:style>
+    #timeClockOptions {
+        width:98%; margin:auto;
+        border-radius:9px;
+        border-left:1px solid var(--box-border-color-light);
+        border-top:1px solid var(--box-border-color-light);
+        box-shadow: var(--box-shadow-light);
+        padding:5px 9px;
+    }
+
+    #timeClockEntries {
+        margin: 21px auto 13px auto;
+        width:98%;
+    }
+
+
+
+    table#employeeClockTable {
+        display:table;
+        width:96%;
+        margin:9px auto 18px auto;
+        padding:18px;
+        border-collapse:collapse;
+        border-top:0;
+        overflow:auto;
+        font-size: .9rem;
+        line-height:1rem;
+        
+        & * {white-space:nowrap;}
+    
+        & tr {
+            & th, & td {
+                padding:1.5px 3px;
+                &:first-child {padding-left:7px;}
+                &:last-child {text-align:right; padding-right:7px;}
+    
+            }
+    
+            & th {font-family:calibri; font-weight:bold; font-size:1rem;}
+    
+            &:not(.weekHeader, .dayHeader, .hideHover){
+                background-color: transparent; transition:background-color .25s;
+                &:hover {background-color: var(--table-row-hover-color);}
+            }
+    
+            <ec:case if=@userSettings[theme].is(light)>
+                & td:is(.stayNoneOnHover){background-color: #fafafa !important;}
+                &::last-child {background-color:white;}
+            </ec:case>
+            <ec:case if=@userSettings[theme].is(dark)>
+                & td:is(.stayNoneOnHover){background-color: #313131 !important;}
+                &::last-child{background-color:#313131;}
+            </ec:case>
+        }
+    }
+
+
+    /*LIGHT MODE STYLES*/
+    table#employeeClockTable .weekHeader td {text-align:left !important; color:white;}
+    <ec:case if=@theme.is(spring)>
+        table#employeeClockTable .weekHeader {background:linear-gradient(to right, #2dcf7b, #ed64ad);}
+        table#employeeClockTable .dayHeader td:nth-child(2){background:linear-gradient(to right, #abcded, #bed3e6);}
+        table#employeeClockTable .dayHeader td:nth-child(3){background:linear-gradient(to right, #bed3e6, #cad6e0); text-align:left !important;}
+    </ec:case>
+
+    <ec:case if=@theme.is(summer)>
+        table#employeeClockTable .weekHeader {background:linear-gradient(to right, #0a8ec7, #dba156);}
+        table#employeeClockTable .dayHeader td:nth-child(2){background:linear-gradient(to right,#d1e3ff, #e0edff);}
+        table#employeeClockTable .dayHeader td:nth-child(3){background:linear-gradient(to right, #e0edff, #f7faff); text-align:left !important;}
+    </ec:case>
+
+    <ec:case if=@theme.is(autumn)>
+        table#employeeClockTable .weekHeader {background:linear-gradient(to right, #802713, #947a15);}
+        table#employeeClockTable .dayHeader td:nth-child(2){background:linear-gradient(to right, #b87633, #b88830);}
+        table#employeeClockTable .dayHeader td:nth-child(3){background:linear-gradient(to right, #b88830, #baae97); text-align:left !important;}
+    </ec:case>
+
+    <ec:case if=@theme.is(winter|default)>
+        table#employeeClockTable .weekHeader {background:linear-gradient(to right, #063c8d, #8cb3ec);}
+        table#employeeClockTable .dayHeader td:nth-child(2){background:linear-gradient(to right,#d1e3ff, #e0edff);}
+        table#employeeClockTable .dayHeader td:nth-child(3){background:linear-gradient(to right, #e0edff, #f7faff); text-align:left !important;}
+    </ec:case>
+
+    <ec:case if=@theme.is(halloween)>
+        table#employeeClockTable .weekHeader {background:linear-gradient(to right, indigo, #8b56bf);}
+        table#employeeClockTable .dayHeader td:nth-child(2){background:linear-gradient(to right, #ffa346, #ffbc41);}
+        table#employeeClockTable .dayHeader td:nth-child(3){background:linear-gradient(to right, #ffbc41, #ffeece); text-align:left !important;}
+    </ec:case>
+
+    <ec:case if=@theme.is(christmas)>
+        table#employeeClockTable .weekHeader {background:linear-gradient(to right, red, #bbb, red, #ddd, red, #eee, red);}
+        table#employeeClockTable .weekHeader td {text-align:left !important; color:white;}
+        table#employeeClockTable .dayHeader td:nth-child(2){background:linear-gradient(to right, #f2e4aa, #f0e7c5);}
+        table#employeeClockTable .dayHeader td:nth-child(3){background:linear-gradient(to right, #f0e7c5, #ede8d5); text-align:left !important;}
+    </ec:case>
+
+    <ec:case if=@userSettings[theme].is(dark)>
+        
+    </ec:case>
+    
+    /*DARK MODE STYLES*/
+    <ec:case if=@userSettings[theme].is(dark)>
+        <ec:case if=@theme.is(spring|summer|autumn|christmas)>
+            table#employeeClockTable .dayHeader td {color:black;}
+        </ec:case>
+        
+        <ec:case if=@theme.is(summer)>
+            table#employeeClockTable .dayHeader td:nth-child(2){background:linear-gradient(to right,#abbad1, #9da6b3);}
+            table#employeeClockTable .dayHeader td:nth-child(3){background:linear-gradient(to right, #9da6b3, #a6a9ad); text-align:left !important;}    
+        </ec:case>
+        
+        <ec:case if=@theme.is(winter|default)>
+            table#employeeClockTable .dayHeader td:nth-child(2){background:linear-gradient(to right,#77808f, #787f8a);}
+            table#employeeClockTable .dayHeader td:nth-child(3){background:linear-gradient(to right, #787f8a, #8b8c8f); text-align:left !important;}
+        </ec:case>
+        
+        <ec:case if=@theme.is(halloween)>
+            table#employeeClockTable .dayHeader td:nth-child(2){background:linear-gradient(to right, #bf7b36, #a8833e);}
+            table#employeeClockTable .dayHeader td:nth-child(3){background:linear-gradient(to right, #a8833e, #917e57); text-align:left !important;}
+        </ec:case>
+    </ec:case>
+    </ec:style>
+</ec:case>
+
+
+
+
+
+@comment(employee work time clock view ... contains clock in/out features if client as employee is this employee, otherwise just shows list)
+<ec:object obj_employeeTimeClockView style="width:auto" type="tComponent" rem="employee time clock and scheduling">
+    <ec:var mode = @svr[param/mode].alt(timeClock)/>
+
+    <ec:var options/>
+    <ec:options>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_timeClock" mode="schedule"><ec:icon title="View Work Schedule" icon="calendar" size="med"/></a>
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_timeClock" mode="timeClock" id="obj_timeClock_refresher"><ec:icon title="View Time Entries" icon="clock" size="med"/></a>
+    </ec:options>
+
+
+    <ec:case if=@mode.is(timeClock)>
+        <ec:titlebox title="Time Clock" options=@options>
+            <div id="timeClockOptions">
+                <ec:case if=@employee.clockState.is(0|false) rem="clocked out">
+                    <button href="javascript:void(0)" class="btn @if(@theme.is(spring)|btn-success) @if(@theme.is(summer)|btn-info) @if(@theme.is(autumn)|btn-warning) @if(@theme.is(winter|default)|btn-primary) @if(@theme.is(halloween)|btn-purple) @if(@theme.is(christmas)|btn-danger) ajaxClick" ecid="obj_timeClock" act="clockIn">Clock In&nbsp;&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="clock" size="med" color="white"/></button>
+                    <button href="javascript:void(0)" class="btn ajaxClick" ecid="obj_designateClockTime">Designate Start Time</button>
+                </ec:case>
+
+                <ec:case if=@employee.clockState.is(1|true) rem="clocked in">
+                    <button href="javascript:void(0)" class="btn btn-complimentary ajaxClick" ecid="obj_timeClock" act="clockOut">Clock Out&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="clock" size="med" color="white"/></button>
+                    <button href="javascript:void(0)" class="btn ajaxClick" ecid="obj_designateClockTime">Designate End Time&nbsp;&nbsp;</button>
+                    <button href="javascript:void(0)" class="btn ajaxClick" ecid="obj_breakTime">Break&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="apple" size="med" color="darkgrey"/></button>
+                </ec:case>
+            </div>
+
+            @obj_workTimeEntries()
+        </ec:titlebox>
+    </ec:case>
+
+
+    <ec:case if=@mode.is(schedule)>
+        <ec:titlebox title="Work Schedule" options=@options>
+            Employee scheduling feature is not complete
+        </ec:titlebox>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+@comment(actual list of time entries for the employee)
+<ec:object obj_workTimeEntries style="width:auto;" type="tComponent" rem="employee work time entries">
+    <ec:var dayTotal=0 weekTotal=0/> 
+    <ec:data dt_timeEntries connection=@connection>
+        SELECT currentTime, timeEntryID, deleted, startDateTime, endDateTime, duration, dateDay, dateWeek
+        FROM vw_timeEntries_work
+        WHERE (employeeID = @XID.asInt) AND (startDateTime >= DATEADD(week, -2, dbo.fn_dateGroup(getdate(), 3))) AND (deleted = 0)
+    </ec:data>
+
+    <div id="timeClockEntries">
+        <table id="employeeClockTable">
+            <ec:loop data=@dt_timeEntries>
+                <ec:case if=@rs[dateWeek].isHeader>
+                    <ec:set weekTotal = 0/>
+                    <tr class="weekHeader">
+                        <td colspan="4">Week Of &nbsp;@rs[dateDay].formatdate(mmmm d)</td>
+                    </tr>
+                </ec:case>
+
+                <ec:case if=@rs[dateDay].isHeader>
+                    <ec:set dayTotal=0/>
+                    <tr class="dayHeader">
+                        <td>&nbsp;</td>
+                        <td colspan="1"><strong>@rs[dateDay].formatdate(ddd, d mmm yyyy)</strong></td>
+                        <td colspan="2"><strong><span id="daytotal-@rs[dateDay].formatdate(mmddyyyy)"></span> hours @if(@rs[startDateTime].formatDate(dd-mm-yyyy).is(@today.formatDate(dd-mm-yyyy))|today|total)</strong></td>
+                    </tr>
+                </ec:case>
+
+                <tr>
+                    <td class="stayNoneOnHover">&nbsp;</td>
+                    <td>@rs[startDateTime].formatdate(h:nn am/pm) @if(@rs[startDateTime].nullifblank.isGreaterThan(@now)|@chr(40)designated start time@chr(41)|-) @rs[endDateTime].formatdate(h:nn am/pm) @if(@all(@nv(@rs[endDateTime].nullifblank)|@employee.clockState.is(1|true))|clocked in|) @if(@all(@rs[endDateTime].formatDate(d).isnot(@rs[startDateTime].formatDate(d))|@iv(@rs[endDateTime].nullifblank))|@chr(40)ended on @rs[endDateTime].formatDate(dddd, d mmm yyyy)@chr(41)) @if(@iv(@rs[endDateTime].nullifblank)|@if(@rs[endDateTime].nullifblank.isGreaterThan(@now)|@chr(40)designated end time@chr(41)))</td>
+                    <td>@rs[duration].alt(0).formatNumber(0.0) hrs</td>
+                    <td>
+                        <ec:case if=@calc((@today * 24) - (@rs[startDateTime] * 24)).isLessAs(36)>
+                            <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_deleteClockTime" timeEntryID="@rs[timeEntryID]" loader="#obj_workTimeEntries" confirm="Are you sure you want to delete this time entry? This cannot be undone."><ec:icon title="Delete time entry" icon="remove" size="xsml"/></a>
+                            <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_editClockTime" act="editTimeEntry" timeEntryID="@rs[timeEntryID]"><ec:icon title="Edit time entry" icon="pencil" size="sml"/></a>
+                        </ec:case>
+                        <ec:case if=@else>&nbsp;</ec:case>
+                    </td>
+                </tr>
+
+                <ec:set dayTotal=@dayTotal.add(@rs[duration].alt(0))/>
+                <ec:script>
+                    document.getElementById('daytotal-@rs[dateDay].formatdate(mmddyyyy)').innerHTML = '@dayTotal.formatNumber(0.0)';
+                </ec:script>
+
+                <ec:case if=@rs[dateDay].isFooter>
+                    <tr class="hideHover">
+                        <td colspan="4">&nbsp;</td>
+                    </tr>
+                </ec:case>
+
+                <ec:set weekTotal=@weekTotal.add(@rs[duration].alt(0))/>
+                <ec:case if=@rs[dateWeek].isFooter>
+                    <tr class="hideHover">
+                        <td colspan="2" style="text-align:right;"><strong>Total week hours:</strong></td>
+                        <td><strong>@weekTotal.formatNumber(0.0)</strong></td>
+                        <td>&nbsp;</td>
+                    </tr>
+                    <tr class="hideHover"><td colspan="4">&nbsp;</td></tr>
+                </ec:case>
+            </ec:loop>
+        </table>
+    </div>
+
+    <ec:case if=@all(@employee.clockState.is(1|true)|@iv(@dt_timeEntries[1/endDateTime].nullifblank)) rem="refresh time clock at clock out time">
+        <ec:var end = @dt_timeEntries[1/endDateTime]/>
+        <script>
+            (function(){
+                const now = new Date();
+                var millsToClockout = new Date(@end.formatDate(yyyy), @calc(@end.formatDate(m) - 1), @end.formatDate(d), @end.formatDate(hh), @calc(@end.formatDate(nn) + 3), @end.formatDate(ss), 999) - now;
+                setTimeout(() => {
+                    document.getElementById('obj_timeClock_refresher').click();
+                }, Math.max(millsToClockout, 30000)); //at least 30 seconds between refreshes of timeclock
+            })();
+        </script>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+@comment(CLIENT as employee clock in or out of work)
+<ec:object obj_timeClock style="width:auto;" type="tComponent">
+    <ec:case if=@all(@act.is(clockIn|clockOut)|@state.is(refresh))>
+        @comment(start and end times are NULL intentionally. For designated times, these values are passed in)
+
+        <ec:data xx procedure="pr_timeEntry_clocking" connection=@connection>
+            <employeeID>@employee.employeeID.asInt</employeeID>
+            <isTimeClockEntry>1</isTimeClockEntry>
+            <taskID>@null</taskID>
+            <latitude>@svr[param/cs_latitude].asNumber</latitude>
+            <longitude>@svr[param/cs_longitude].asNumber</longitude>
+            <startTime>@null</startTime>
+            <endTime>@null</endTime>
+        </ec:data>
+    
+        <ec:case if=@iv(@xx[errorMessage])>
+            @notification(@xx[errorMessage])
+            @logError(Time Clock Error|@xx[errorMessage]|101)
+        </ec:case>
+        <ec:case if=@nv(@xx[errorMessage]) rem="log clock action">@if(@employee.clockState.alt(0).is(0|false)|@logAction(7|2|@employee.employeeID.alt(@XID)|@chr(64) @now.formatDate(mm/dd/yyyy hh:nn am/pm))|@logAction(8|2|@employee.employeeID.alt(@XID)|@chr(64) @now.formatDate(mm/dd/yyyy hh:nn am/pm)))</ec:case>
+
+        @employee.clockState.setValue(@xx[returnState].alt(@employee.clockState))
+        @refreshRegisteredComponents()
+
+        <ec:case if=@all(@LTID.is(2)|@iv(@XID)) rem="additional refreshes for employee page only">
+            <ec:case if=@employee.employeeID.is(@XID)>@obj_employeeTimeClockView.refresh()</ec:case>
+            <ec:case if=@employee.employeeID.isnot(@XID)>@obj_workTimeEntries.refresh()</ec:case>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+@comment(CLIENT as employee clock in or out of task)
+<ec:object obj_taskTimeClock type="tComponent">
+    <ec:var taskID = @svr[param/taskID].nullifblank/>
+
+    <ec:case if=@all(@state.is(refresh)|@iv(@taskID))>
+        @comment(start and end times are NULL intentionally.)
+        <ec:data xx procedure="pr_timeEntry_clocking" connection=@connection>
+            <employeeID>@employee.employeeID.asInt</employeeID>
+            <isTimeClockEntry>0</isTimeClockEntry>
+            <taskID>@taskID</taskID>
+            <latitude>@svr[param/cs_latitude].asNumber</latitude>
+            <longitude>@svr[param/cs_longitude].asNumber</longitude>
+            <startTime>@null</startTime>
+            <endTime>@null</endTime>
+        </ec:data>
+    
+        <ec:case if=@iv(@xx[errorMessage])>
+            @notification(@xx[errorMessage])
+            @logError(Task Time Clock Error|@xx[errorMessage]|101)
+        </ec:case>
+        <ec:case if=@nv(@xx[errorMessage]) rem="log clock action">
+            @if(@xx[returnState].is(0|false)|@logAction(7|253|@taskID|@chr(64) @now.formatDate(mm/dd/yyyy hh:nn am/pm))|@logAction(8|253|@taskID|@chr(64) @now.formatDate(mm/dd/yyyy hh:nn am/pm)))
+        </ec:case>
+
+        @refreshRegisteredComponents()
+    </ec:case>
+</ec:object>
+
+
+
+
+
+@comment(CLIENT as employee designate their work start or end time)
+<ec:object obj_designateClockTime title="Designate Start / End Time" type="tDialogForm">
+    <ec:var startDateTime = @svr[param/startDateTime].nullifblank/>
+    <ec:var endDateTime = @svr[param/endDateTime].nullifblank/>
+
+    <ec:case if=@state.is(respond)>
+        <ec:data xx procedure="pr_timeEntry_clocking" connection=@connection>
+            <employeeID>@employee.employeeID.asInt</employeeID>
+            <isTimeClockEntry>1</isTimeClockEntry>
+            <taskID>@NULL</taskID>
+            <latitude>@svr[param/cs_latitude].asNumber</latitude>
+            <longitude>@svr[param/cs_longitude].asNumber</longitude>
+            <startDateTime>@startDateTime.asDate</startDateTime>
+            <endDateTime>@endDateTime.asDate</endDateTime>
+        </ec:data>
+
+        <ec:case if=@iv(@xx[errorMessage])>
+            @notification(@xx[errorMessage])
+            @logError(Designate Time Error|@xx[errorMessage]|101)
+        </ec:case>
+
+        <ec:case if=@nv(@xx[errorMessage])>
+            @if(@iv(@startDateTime)|@logAction(7|2|@employee.employeeID.alt(@XID)|Designate @chr(64) @startDateTime)|@logAction(8|2|@employee.employeeID.alt(@XID)|Designate @chr(64) @endDateTime))
+
+            @close
+            @employee.employeeData()
+            @refreshRegisteredComponents()
+
+            <ec:case if=@all(@LTID.is(2)|@iv(@XID)) rem="additional refreshes for employee page only">
+                <ec:case if=@employee.employeeID.is(@XID)>@obj_employeeTimeClockView.refresh()</ec:case>
+                <ec:case if=@employee.employeeID.isnot(@XID)>@obj_workTimeEntries.refresh()</ec:case>
+            </ec:case>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:case if=@employee.clockState.is(1|true) rem="employee is clocked in">
+            <br/>
+            <ec:input_dateTime title="End Time" name="endDateTime" id="endDateTime" fieldValue=@now require/>
+        </ec:case>
+        
+        <ec:case if=@employee.clockState.is(0|false) rem="employee is clocked out">
+            <br/>
+            <ec:input_dateTime title="Start Time" name="startDateTime" id="startDateTime" fieldValue=@now require/>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+@comment(CLIENT as employee taking a break)
+<ec:object obj_breakTime title="Take a Break" buttonCaption="" type="tDialogForm">
+    <ec:var empBreakLength = @svr[param/breakLength].nullifblank/>
+
+    <ec:case if=@employee.clockState.is(1|true) rem="employee is clocked in">
+        <ec:case if=@state.is(respond)>
+            <ec:data xx procedure="pr_timeEntry_break" connection=@connection>
+                <employeeID>@employee.employeeID.asInt</employeeID>
+                <isTimeClockEntry>1</isTimeClockEntry>
+                <taskID>@NULL</taskID>
+                <breakLength>@empBreakLength.asInt</breakLength>
+            </ec:data>
+            @logAction(8|2|@employee.employeeID.alt(@XID)|for @empBreakLength min. break)
+
+            @close
+            @employee.employeeData()
+            @refreshRegisteredComponents()
+
+            <ec:case if=@all(@LTID.is(2)|@iv(@XID)) rem="additional refreshes for employee page only">
+                <ec:case if=@employee.employeeID.is(@XID)>@obj_employeeTimeClockView.refresh()</ec:case>
+                <ec:case if=@employee.employeeID.isnot(@XID)>@obj_workTimeEntries.refresh()</ec:case>
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@not(@closed)>
+            <br/>
+            <button class="btn ajaxClick" breakLength="5">5 min&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="apple" size="med" color="darkgrey"/></button>
+            <button class="btn ajaxClick" breakLength="10">10 min&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="apple" size="med" color="darkgrey"/></button>
+            <button class="btn ajaxClick" breakLength="20">20 min&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="apple" size="med" color="darkgrey"/></button>
+            <button class="btn ajaxClick" breakLength="30">30 min&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="apple" size="med" color="darkgrey"/></button>
+            <button class="btn ajaxClick" breakLength="60">1 hr&nbsp;&nbsp;&nbsp;<ec:icon title="" icon="apple" size="med" color="darkgrey"/></button>
+        </ec:case>
+    </ec:case>
+
+    <ec:case if=@else>
+        <p class="notice">You are currently clocked out and you cannot take a break while clocked out. Please close this dialog and inspect your time clock to ensure it is correct (it has been refreshed and up to date information is displayed).</p><br/>
+        @employee.employeeData()
+        @refreshRegisteredComponents()
+    </ec:case>
+</ec:object>
+
+
+
+
+
+@comment(ADMIN creating new time entry)
+<ec:object obj_newClockTime title="New Time Entry" type="tDialogForm">
+    <ec:var anEmployeeID = @svr[param/X_employeeID].alt(@svr[param/anEmployeeID]).nullifblank/>     <ec:set anEmployeeID=@employee.employeeID if=@all(@nv(@anEmployeeID)|@LTID.is(2)|@XID.is(@employee.employeeID))/>
+    <ec:var isTimeClockEntry = @svr[param/isTimeClockEntry].alt(false)/>
+    <ec:var taskID = @svr[param/X_taskID].alt(@svr[param/taskID]).nullifblank/>
+    <ec:var startDateTime = @svr[param/startDateTime].nullifblank/>
+    <ec:var endDateTime = @svr[param/endDateTime].nullifblank/>
+
+    <ec:var isAuthed=0/>@comment(NOTE: employees can add/edit time entries through obj_timeClock which is used on their employee profile. This has much stricter rules.)
+    <ec:set isAuthed=1 if=@all(@isTimeClockEntry.is(true|1)|@user.accessLevel(2).isGreatAs(4)) rem="has edit access level to employees"/>
+    <ec:set isAuthed=1 if=@all(@isTimeClockEntry.is(false|0)|@user.accessLevel(253).isGreatAs(4)) rem="has edit access level to tasks"/>
+
+    <ec:case if=@isAuthed() rem="admins can create prior time entries">
+        <ec:case if=@state.is(respond)>
+            <ec:case if=@all(@iv(@anEmployeeID)|@iv(@startDateTime)|@any(@isTimeClockEntry.is(1|true)|@iv(@taskID))) rem="must have start time and either is a task or is a timeclock entry">
+                <ec:data xx procedure="pr_timeEntry_new" connection=@connection>
+                    <employeeID>@anEmployeeID.asInt</employeeID>
+                    <isTimeClockEntry>@isTimeClockEntry.asBool</isTimeClockEntry>
+                    <taskID>@taskID.asInt</taskID>
+                    <latitude>@svr[param/cs_latitude].asNumber</latitude>
+                    <longitude>@svr[param/cs_longitude].asNumber</longitude>
+                    <startDateTime>@startDateTime.asDate</startDateTime>
+                    <endDateTime>@endDateTime.asDate</endDateTime>
+                </ec:data>
+
+                <ec:case if=@iv(@xx[errorMessage])>
+                    @notification(@xx[errorMessage])
+                    @logError(Time Clock Error|@xx[errorMessage]|101)
+                </ec:case>
+
+                <ec:case if=@nv(@xx[errorMessage])>
+                    @close()
+                    @logAction(2|@LTID|@employee.employeeID.alt(@XID)|Time entry created)
+                    @employee.employeeData() @refreshRegisteredComponents()
+
+                    <ec:case if=@all(@LTID.is(2)|@iv(@XID)) rem="additional refreshes for employee page only">
+                        <ec:case if=@employee.employeeID.is(@XID)>@obj_employeeTimeClockView.refresh()</ec:case>
+                        <ec:case if=@employee.employeeID.isnot(@XID)>@obj_workTimeEntries.refresh()</ec:case>
+                    </ec:case>
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@else>
+                @notification(An employee and a starting date-time is required. Must mark as a work time-clock entry OR select a task but NOT both.)
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>      
+            <br/>
+            <div>
+                <ec:input_dateTime title="Start Time" name="startDateTime" id="startDateTime" fieldValue=@startDateTime.alt(@prevWorkDay()).asDate require/>
+                <ec:input_dateTime title="End Time" name="endDateTime" id="endDateTime" fieldValue=@endDateTime.nullifblank allowNull/>
+                <ec:input_trueFalse title="Work Time-Clock?" id="isTimeClockEntry" name="isTimeClockEntry" fieldValue=@isTimeClockEntry.alt(false) hintContent="Is this an employee work time-clock entry? If true, do not select a task."/>
+            </div>
+            <div>
+                <ec:input_entity title="Employee" id="employeeID" name="employeeID" fieldLTID=@if(@iv(@anEmployeeID)|2|@null) fieldXID=@anEmployeeID filterLTID="2"/>
+                <ec:input_entity title="Task" id="taskID" name="taskID" fieldLTID=@if(@iv(@taskID)|253|@null) fieldXID=@taskID filterLTID="253" allowNull/>
+            </div>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+@comment(ADMIN editing time entry ... or employee modifying their time clock)
+<ec:object obj_editClockTime title="Edit Time Entry" type="tDialogForm">
+    <ec:data dt_clockType connection=@connection>
+        SELECT TOP 1 employeeID, isTimeClockEntry
+        FROM vw_timeEntry
+        WHERE timeEntryID = @svr[param/timeEntryID].alt(0)
+    </ec:data>
+    <ec:var isTimeClockEntry = @dt_clockType[1/isTimeClockEntry].nullifblank/>
+    <ec:var ownerID = @dt_clockType[1/employeeID].nullifblank/>
+
+    <ec:var timeEntryID = @svr[param/timeEntryID].nullifblank/>
+    <ec:var startDateTime = @svr[param/startDateTime].nullifblank/>
+    <ec:var endDateTime = @svr[param/endDateTime].nullifblank/>
+
+    <ec:var isAuthed=0 bypassTimeRestrictions=0 rem="isAuthed... are they allowed to edit time entries?  bypassTimeRestrictions... are they allowed to edit entries further into the past?"/>
+    <ec:set isAuthed=1 bypassTimeRestrictions=1 if=@all(@isTimeClockEntry.is(true|1)|@user.accessLevel(2).isGreatAs(4))                 rem="has edit access level to employees, can bypass time restrictions"/>
+    <ec:set isAuthed=1 bypassTimeRestrictions=1 if=@all(@isTimeClockEntry.is(false|0)|@user.accessLevel(253).isGreatAs(4))              rem="has edit access level to tasks, can bypass time restriction"/>
+    <ec:set isAuthed=1 bypassTimeRestrictions=0 if=@all(@LTID.is(2)|@XID.is(@employee.employeeID)|@ownerID.is(@employee.employeeID))    rem="has access to edit their own time entries, cannot bypass time restrictions"/>
+
+
+    <ec:case if=@isAuthed() rem="admins can edit prior time entries">
+        <ec:case if=@state.is(respond)>
+            <ec:case if=@all(@iv(@startDateTime)|@iv(@timeEntryID))>
+                <ec:data xx procedure="pr_timeEntry_edit" connection=@connection>
+                    <timeEntryID>@timeEntryID.asInt</timeEntryID>
+                    <startDateTime>@startDateTime.asDate</startDateTime>
+                    <endDateTime>@endDateTime.asDate</endDateTime>
+                    <bypassTimeRestrictions>@bypassTimeRestrictions.alt(0).asBool</bypassTimeRestrictions>
+                </ec:data>
+
+                <ec:case if=@iv(@xx[errorMessage])>
+                    @notification(@xx[errorMessage])
+                    @logError(Edit Time Clock Error|@xx[errorMessage]|101)
+                </ec:case>
+
+                <ec:case if=@nv(@xx[errorMessage])>
+                    @close()
+                    @logAction(3|@LTID|@employee.employeeID.alt(@XID)|Time entry edited)
+                    @employee.employeeData() @refreshRegisteredComponents()
+
+                    <ec:case if=@all(@LTID.is(2)|@iv(@XID)) rem="additional refreshes for employee page only">
+                        <ec:case if=@employee.employeeID.is(@XID)>@obj_employeeTimeClockView.refresh()</ec:case>
+                        <ec:case if=@employee.employeeID.isnot(@XID)>@obj_workTimeEntries.refresh()</ec:case>
+                    </ec:case>
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@else>
+                @notification(A starting date/time is required.)
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>
+            <ec:data dt_timeEntry connection=@connection>
+                SELECT startDateTime, endDateTime
+                FROM vw_timeEntry
+                WHERE timeEntryID = @svr[param/timeEntryID].alt(0).asInt
+            </ec:data>
+            <ec:var timeEntry = @dt_timeEntry[1]/>
+
+            <br/>
+            <input type="hidden" name="timeEntryID" id="timeEntryID" value="@svr[param/timeEntryID]"/>
+            <ec:input_dateTime title="Start Time" name="startDateTime" id="startDateTime" fieldValue=@timeEntry[startDateTime].alt(@now) require/>
+            <ec:input_dateTime title="End Time" name="endDateTime" id="endDateTime" fieldValue=@timeEntry[endDateTime].alt(@now)/>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+@comment(ADMIN deleting time entry ... or employee removing time entry from their time clock)
+<ec:object obj_deleteClockTime type="tComponent">
+    <ec:var timeEntryID = @svr[param/timeEntryID].nullifblank/>
+
+    <ec:data dt_clockType connection=@connection>
+        SELECT TOP 1 employeeID, isTimeClockEntry
+        FROM vw_timeEntry
+        WHERE timeEntryID = @timeEntryID.alt(0)
+    </ec:data>
+    <ec:var isTimeClockEntry = @dt_clockType[1/isTimeClockEntry].nullifblank/>
+    <ec:var ownerID = @dt_clockType[1/employeeID].nullifblank/>
+
+    <ec:var isAuthed=0/>@comment(NOTE: employees can add/edit time entries through obj_timeClock which is used on their employee profile. This has much stricter rules.)
+    <ec:set isAuthed=1 if=@all(@isTimeClockEntry.is(true|1)|@LTID.is(2)|@XID.is(@employee.employeeID)|@ownerID.is(@employee.employeeID)) rem="has access to delete their own time entries"/>
+    <ec:set isAuthed=1 if=@all(@isTimeClockEntry.is(true|1)|@user.accessLevel(2).isGreatAs(4)) rem="has edit access level to employees"/>
+    <ec:set isAuthed=1 if=@all(@isTimeClockEntry.is(false|0)|@user.accessLevel(253).isGreatAs(4)) rem="has edit access level to tasks"/>
+
+    <ec:case if=@isAuthed() rem="admins can delete prior time entries">
+        <ec:case if=@iv(@timeEntryID)>
+            <ec:data xx procedure="pr_timeEntry_delete" connection=@connection>
+                <timeEntryID>@timeEntryID.asInt</timeEntryID>
+            </ec:data>
+
+            @logAction(4|@LTID|@XID|Time clock entry deleted)
+            @employee.employeeData()
+            @refreshRegisteredComponents()
+
+            <ec:case if=@all(@LTID.is(2)|@iv(@XID)) rem="additional refreshes for employee page only">
+                <ec:case if=@employee.employeeID.is(@XID)>@obj_employeeTimeClockView.refresh()</ec:case>
+                <ec:case if=@employee.employeeID.isnot(@XID)>@obj_workTimeEntries.refresh()</ec:case>
+            </ec:case>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+@comment(objects and supporting code for ecreport_timeEntries)
+<ec:case if=@all(@LTID.is(105)|@XID.is(21))>
+    <ec:var femployeeID = @svr[param/X_femployeeID].nullifblank/>
+    <ec:var ftaskID = @svr[param/X_ftaskID].nullifblank/>
+    <ec:var fisTimeClockEntry = @svr[param/fisTimeClockEntry].alt(false)/>
+    <ec:var fstartDate = @svr[param/fstartDate].nullifblank/>
+    <ec:var fendDate = @svr[param/fendDate].nullifblank rem="filter to not show any in the future"/>
+    <ec:var fdeleted = @svr[param/fdeleted].asBool.nullifblank/>
+    <ec:set ftaskID=@null if=@fisTimeClockEntry.asBool rem="filtering on time clock entries. override taskID to null "/>
+
+
+
+    <ec:object dt_timeEntries page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>timeEntryID</primaryKey>
+    <sqlSelect>
+        SELECT timeEntryID, employeeID, empName, taskID, taskName, startDateTime, endDateTime, dayHeader, latitude, longitude, deleted, duration, totalDuration
+        FROM vw_timeEntries
+        WHERE 1=1
+
+        @if(@iv(@femployeeID)|AND employeeID = @femployeeID.asInt)
+        @if(@iv(@ftaskID)|AND taskID = @ftaskID.asInt)
+        
+        @if(@fisTimeClockEntry.is(true)|AND (isTimeClockEntry = 1))
+        @if(@fisTimeClockEntry.is(false)|AND (isTimeClockEntry = 0))
+
+        @if(@fdeleted.isnull|AND (deleted = 1 OR deleted = 0))
+        @if(@fdeleted.is(true|1)|AND (deleted = 1))
+        @if(@fdeleted.is(false|0)|AND (deleted = 0))
+
+        @if(@iv(@fstartDate)|AND startDateTime @chr(62)= @sqlstr(@fstartdate.asDate.formatdate(yyyy-mm-dd hh:mm:ss.zzz)))
+        @if(@iv(@fendDate)|AND (endDateTime @chr(60)= @sqlstr(@fendDate.asDate.formatdate(yyyy-mm-dd hh:mm:ss.zzz)) OR endDateTime IS NULL)) /*  endDateTime null because incomplete time entries should be included too  */
+
+        GROUP BY CAST(startDateTime AS DATE), dayHeader, taskID, taskName, employeeID, empName, deleted, startDateTime, endDateTime, duration, totalDuration, latitude, longitude, timeEntryID
+    </sqlSelect>
+    <sort>CAST(startDateTime AS DATE) DESC, startDateTime DESC, endDateTime DESC, timeEntryID DESC</sort>
+    </ec:object>
+    <ec:object obj_timeEntries_pageNavigator dataObj=@dt_timeEntries type="tPageNavigator"/>
+
+
+
+    <ec:object obj_reportTimeEntries dataObj=@dt_timeEntries type="tComponent">
+        <style>
+            .deletedEntry {text-decoration: line-through;}
+        </style>
+
+        <ec:case if=@iv(@femployeeID)>
+            <ec:data dt_employee connection=@connection>
+                SELECT dbo.fn_entityName_public(2,@sqlesc(@femployeeID.asInt)) AS name
+            </ec:data>
+            <ec:var empName = @dt_employee[1/name].nullifblank/>
+        </ec:case>
+    
+        <ec:case if=@iv(@ftaskID)>
+            <ec:data dt_task connection=@connection>
+                SELECT dbo.fn_entityName(253,@sqlesc(@ftaskID.asInt)) AS name
+            </ec:data>
+            <ec:var taskName = @dt_task[1/name].nullifblank/>
+        </ec:case>
+    
+        <ec:var timeOptionsAccessLevel/>
+        <ec:set timeOptionsAccessLevel=@user.accessLevel(2|@femployeeID.asInt)  if=@fisTimeClockEntry.is(true)  rem="needs specific access level to the employee's account to modify their time clock"/>
+        <ec:set timeOptionsAccessLevel=@user.accessLevel(253|@ftaskID.asInt)  if=@fisTimeClockEntry.is(false)   rem="needs specific access level to tasks account to modify time entries"/>
+    
+        
+        <ec:var titleboxOptions/>
+        <ec:titleboxOptions if=@timeOptionsAccessLevel.isGreatAs(4) rem="must be able to edit the task or employee profile in order to add additional time entries">
+            <a href="javascript:void(0)" class="ajaxClick" ecid="obj_newClockTime" @femployeeID.with(anEmployeeID="|") @fstartDate.with(startDateTime="|") @fendDate.with(endDateTime="|") @fisTimeClockEntry.with(isTimeClockEntry="|") @ftaskID.with(taskID="|") rel="nofollow"><ec:icon title="New time entry" icon="plus" size="med" direction="right"/></a>
+        </ec:titleboxOptions>
+    
+    
+        <ec:titlebox title="Time Entries" options=@titleboxOptions>
+            <h3 style="margin-left:2%; display:inline-block;">@if(@iv(@ftaskID)|@taskName())@if(@all(@iv(@ftaskID)|@iv(@femployeeID))|&nbsp;/&nbsp;)@if(@iv(@femployeeID)|@empName)&nbsp;&nbsp;</h3>
+            <ec:case if=@all(@iv(@svr[param/X_ftaskID])|@fisTimeClockEntry.is(true)) rem="taskID is overwritten"><p class="notice" style="display:inline-block">Filter for "Work Time-Clock" entries is true, so the task filter has been removed automatically. @hint(To view task time entries, try setting "Work-Time Clock" to false. Either leave "Task" blank to view all task time entries or select a task to view only its time entries.)</p></ec:case>
+            <br/><span style="margin-left:2%;"><strong>Total Time Clocked:</strong> @dataObj.dataDef[data/1/totalDuration].alt(0).formatNumber(0.000) hrs @hint(This is the total number of hours clocked that match the search filter criteria.)</span>
+    
+            <ec:var showEntries=0/>
+            <ec:set showEntries=1 if=@all(@fisTimeClockEntry.is(true)|@timeOptionsAccessLevel.isGreatAs(3)) rem="meets level to view employee time clock entries"/>
+            <ec:set showEntries=1 if=@all(@fisTimeClockEntry.is(false)|@timeOptionsAccessLevel.isGreatAs(2)) rem="meets level to view task time entries"/>
+    
+            <ec:case if=@showEntries>
+                <table class="tbl">
+                    <tr>
+                        <th>Time Clocked</th>
+                        <th>Lat, Lon @hint(Latitude and longitude @chr(40)within about .5mi radius@chr(41) where the time entry was clocked. If no location was recorded, "0, 0" (null island) is stored instead.)</th>
+                        <th>Options</th>
+                    </tr>
+                    <ec:loop data=@dataObj.dataDef[data]>
+                        <ec:var taskLineBreak = 1/>
+                        <ec:var employeeLineBreak = 1/>
+                
+                        @comment(headers)
+                        <ec:case if=@rs[dayHeader].isHeader() rem="DATE HEADERS">
+                            <tr><td style="text-align:left; font-weight:bold; font-size:1.05rem;" colspan="3">@rs[dayHeader].asDate.formatDate(dd MMM yyyy)</td></tr>
+                            <ec:set taskLineBreak = 0/>
+                            <ec:set employeeLineBreak = 0/>
+                        </ec:case>
+                    
+                        <ec:case if=@all(@fisTimeClockEntry.is(false|0)|@rs[taskID].isHeader()|@nv(@ftaskID)) rem="TASK HEADERS">
+                            <ec:case if=@taskLineBreak><tr><td colspan="3">&nbsp;</td></tr></ec:case>
+                            <tr class="anchorify" href="/console?ltid=253&xid=@rs[taskID]&xLTID=@LTID&xXID=@XID"><td style="text-align:left; font-weight:bold; font-size:1.04rem;" colspan="3"><u>@rs[taskName]</u></td></tr>
+                        </ec:case>
+                    
+                        <ec:case if=@all(@rs[employeeID].isHeader()|@nv(@femployeeID)) rem="EMPLOYEE HEADERS">
+                            <ec:case if=@employeeLineBreak rem="line break only for new employees"><tr><td colspan="3">&nbsp;</td></tr></ec:case>
+                            <tr class="anchorify" href="/console?ltid=2&xid=@rs[employeeID]&xLTID=@LTID&xXID=@XID"><td style="text-align:left; font-weight:bold; font-size:1.04rem;" colspan="3"><u>@rs[empName]</u></td></tr>
+                        </ec:case>
+                    
+                    
+                        <tr @if(@rs[deleted].alt(0)|Time entry is deleted).with(title="|") @if(@rs[deleted].asBool.is(1)|deletedEntry).with(class="|")>
+                            <td @if(@all(@not(@rs[deleted].alt(0))|@nv(@rs[endDateTime].nullifblank))|style="color:var(--notice-highlight-color);")>@rs[startDateTime].asDate.formatDate(hh:mm am/pm) - @rs[endDateTime].asDate.formatDate(hh:mm am/pm).alt(@if(@not(@rs[deleted].alt(0))|clocked in)) @rs[duration].nullifblank.formatNumber(0.0).with(@chr(40)|&nbsp;hrs@chr(41))</td>
+                            <td>@rs[latitude], @rs[longitude]</td>
+                            <td>
+                                <ec:case if=@fisTimeClockEntry.is(true) rem="options for work time clock entries">
+                                    <ec:case if=@timeOptionsAccessLevel.isGreatAs(4)><a href="javascript:void(0)" class="ajaxClick" ecid="obj_deleteClockTime" timeEntryID="@rs[timeEntryID].asInt" rel="nofollow" confirm="Are you sure you want to delete this time entry? This cannot be undone."><ec:icon title="Delete time entry" icon="remove" size="xsml" direction="right"/></a></ec:case>
+                                    <ec:case if=@timeOptionsAccessLevel.isGreatAs(4)><a href="javascript:void(0)" class="ajaxClick" ecid="obj_editClockTime" timeEntryID="@rs[timeEntryID].asInt" rel="nofollow"><ec:icon title="Edit time entry" icon="pencil" size="sml" direction="right"/></a></ec:case>
+                                </ec:case>
+                                <ec:case if=@fisTimeClockEntry.is(false) rem="options for task time entries.">
+                                    <ec:case if=@timeOptionsAccessLevel.isGreatAs(5)><a href="javascript:void(0)" class="ajaxClick" ecid="obj_deleteClockTime" timeEntryID="@rs[timeEntryID].asInt" rel="nofollow" confirm="Are you sure you want to delete this time entry? This cannot be undone."><ec:icon title="Delete time entry" icon="remove" size="xsml" direction="right"/></a></ec:case>
+                                    <ec:case if=@timeOptionsAccessLevel.isGreatAs(4)><a href="javascript:void(0)" class="ajaxClick" ecid="obj_editClockTime" timeEntryID="@rs[timeEntryID].asInt" rel="nofollow"><ec:icon title="Edit time entry" icon="pencil" size="sml" direction="right"/></a></ec:case>
+                                </ec:case>
+                            </td>
+                        </tr>
+                    
+                        <ec:case if=@rs[dayHeader].isFooter rem="line break for new date"><tr><td colspan="3">&nbsp;</td></tr></ec:case>
+                    </ec:loop>
+                </table>
+            
+                @obj_timeEntries_pageNavigator()
+            </ec:case>
+        </ec:titlebox>
+    </ec:object>
+
+
+
+    @comment(component registration for dynamic refresh when using quick panel to clock in/out of tasks and work... refresh dt_timeEntries and obj_workTimeEntries when viewing said report)
+    <ec:case if=@fisTimeClockEntry>
+        @obj_timeClock.registerComponent(@dt_timeEntries)
+        @obj_timeClock.registerComponent(@obj_reportTimeEntries)
+    </ec:case>
+    <ec:case if=@not(@fisTimeClockEntry)>
+        @obj_taskTimeClock.registerComponent(@dt_timeEntries)
+        @obj_taskTimeClock.registerComponent(@obj_reportTimeEntries)
+    </ec:case>
+
+    @obj_newClockTime.registerComponent(@dt_timeEntries)
+    @obj_newClockTime.registerComponent(@obj_reportTimeEntries)
+
+    @obj_editClockTime.registerComponent(@dt_timeEntries)
+    @obj_editClockTime.registerComponent(@obj_reportTimeEntries)
+
+    @obj_deleteClockTime.registerComponent(@dt_timeEntries)
+    @obj_deleteClockTime.registerComponent(@obj_reportTimeEntries)
+</ec:case>

@@ -1,0 +1,1073 @@
+@share 
+
+<ec:case if=@nv(@lib_pageFunctionsCalled)>
+    <ec:var lib_pageFunctionsCalled=1 global/>
+
+
+    @comment(misc global variables)
+    <ec:var pageFunctions_self=@self global/>
+    <ec:var search=@svr[param/searchform].alt(@clientGet(search)).alt(@svr[param/search]).nullifblank global/>
+    <ec:var page=@svr[param/page].asInt.alt(@svr[param/cs_page]) global rem="public variable"/>
+    <ec:var state="initialize" requestType="regular" global/>
+    
+    @if(@iv(@svr[param/ecid].nullifblank)|@requestType.set(ajax))
+    
+
+
+    @comment(data objects)
+    <ec:data dt_clientStorage format="xml" interpret=0 global/>
+    <ec:data dt_headerScripts format="xml" interpret=0 global/>
+    <ec:data dt_metaTags format="xml" interpret=0 global/>
+    <ec:data dt_metaLinks format="xml" interpret=0 global/>
+    <ec:data dt_include format="xml" interpret=0 global/>
+
+
+
+    @comment(variables reference functions)
+    <ec:var clientGet=@xClientGet.asReference global/>
+    <ec:var clientStore=@xClientStore.asReference global/>
+    <ec:var headerScript=@xHeaderScript.asReference global/>
+    <ec:var include=@xInclude.asReference global/>
+    <ec:var jesc=@xJesc.asReference global/>
+    <ec:var jstr=@xJstr.asReference global/>
+    <ec:var libraryIsUsed=@xLibraryIsUsed.asReference global/>
+    <ec:var metaLink=@xMetaLink.asReference global/>
+    <ec:var metaTag=@xMetaTag.asReference global/>
+    <ec:var redirect=@xRedirect.asReference global/>
+    <ec:var reload=@xReload.asReference global/>
+    <ec:var style=@xStyle.asReference global/>
+    <ec:var script=@xScript.asReference global/>
+    <ec:var sqlesc=@xSQLesc.asReference global/>
+    <ec:var sqlstr=@xSQLstr.asReference global/>
+    <ec:var urlAdd=@xUrlAdd.asReference global/>
+    <ec:var use=@xUse.asReference global/>
+
+
+
+    @comment(other variables used by objects/functions)
+    <ec:var pushStateURL global/>
+
+    @comment(pushBrowserHistory object, called to push data to client)
+    <ec:object pushBrowserHistory type="tComponent" global>
+        <ec:var queryString/>
+        <ec:case if=@page.alt(0).isGreaterThan(0)><ec:set queryString="@queryString.with(|&)page=@page"/></ec:case>
+        <ec:case if=@iv(@search)><ec:set queryString="@queryString.with(|&)search=@search.urlencode"/></ec:case>
+    </ec:Object>
+
+    @comment(responder object; initalized here; defined in pageFunctions; called in lib_pageTemplates)
+    <ec:object responder type="tAjaxResponder" global/>
+</ec:case>
+
+
+
+<ec:function xClientGet>
+    <ec:param tag/>
+    <ec:var value=@dt_clientStorage[@tag].nullifblank/>
+    <ec:set if=@nv(@value) value=@svr[param/cs_@tag].nullifblank/>
+    @return(@value)
+</ec:function>
+
+
+
+
+
+<ec:function xClientStore>
+    <ec:param tag value/>
+    @dt_clientStorage.store(@tag|@value)
+    <ec:script>jQuery.data($('#responderScripts')[0],'cs_@tag',@jstr(@value));</ec:script>
+    @return()
+</ec:function>
+
+
+
+
+
+<ec:function xHeaderScript>
+    <ec:param src rem="the href to the script"/>
+    <ec:var record=@dt_headerScripts.getRecord(src|@src)/>
+    
+    <ec:case if=@nv(@record)>
+      <ec:set record=@dt_headerScripts.addRecord/>
+      @record.store(src|@src)
+    </ec:case>
+    @return()
+</ec:function>
+
+
+
+
+
+<ec:function xInclude>
+    <ec:param name="REC@sys_iteration"/>
+    <ec:param group required/>
+    <ec:param mode/>
+    <ec:var aLibrary anInclude/>
+
+    @if(@nv(@dt_include)|@dt_include.addRecord)
+    <ec:set aLibrary=@dt_include.getRecord(name|@name)/>
+    <ec:set if=@nv(@aLibrary) aLibrary=@dt_include.addRecord/>
+
+    @aLibrary.storeAttribute(name|@name).hide
+    @aLibrary.storeAttribute(use|true).hide
+
+    <ec:set anInclude=@aLibrary.addRecord(include)/>
+
+    @anInclude.setValue(@sender.execute)
+    @anInclude.storeAttribute(group|@group).hide
+    @anInclude.storeAttribute(mode|@mode).hide
+</ec:function>
+
+
+
+
+
+<ec:function xJesc>
+    <ec:param str/>
+    @return(@str.replace(\|\\).replace('|\').replace(@chr(34)|\@chr(34)).trim)
+</ec:function>
+
+<ec:function xJstr>
+    <ec:param str/>
+    <ec:var char1 = @str.trim.left(1)  char2 = @str.trim.right(1)/>
+
+    <ec:case if = @all(@char1.is(@char2)|@char1.is('|"))  rem="is already a string">
+        <ec:set str = "@char1()@jesc(@str.copy(2|@calc(@str.length() - 1)))@char2()"/>
+    </ec:case>
+
+    <ec:case if = @any(@char1.isnot(@char2)|@char1.isnot('|")|@char2.isnot('|"))  rem="is not a string">
+    <ec:set str = "@str.replace(\|\\).replace('|\').replace(@chr(34)|\@chr(34)).with('|')"/>
+  </ec:case>
+
+    @return(@str.trim)
+</ec:function>
+
+
+
+
+
+<ec:function xLibraryIsUsed>
+    <ec:param library=@null/>
+    <ec:var isUsed=0 record=@dt_include.getRecord(name|@library)/>
+
+    <ec:case if=@all(@iv(@record)|@not(@record.attribute(include).alt(false)))>
+        <ec:set isUsed=@record.attribute(use).alt(0)/>
+    </ec:case>
+
+    @return(@isUsed)
+</ec:function>
+
+
+
+
+
+<ec:function xMetaLink>
+    @comment(use at the top of ec:webpage instances AND in virtual pages)
+    <ec:param rel href/>
+    <ec:var record=@dt_metaLinks.getRecord(rel|@rel)/>
+    
+    <ec:case if=@nv(@record)>
+      <ec:set record=@dt_metaLinks.addRecord/>
+      @record.store(rel|@rel)
+      @record.store(href|@href)
+    </ec:case>
+    @return()
+</ec:function>
+
+
+
+
+
+<ec:function xMetaTag>
+    @comment(use at the top of ec:webpage instances AND in virtual pages)
+    <ec:param name content/>
+    <ec:var record=@dt_metaTags.getRecord(name|@name)/>
+    
+    <ec:case if=@nv(@record)>
+      <ec:set record=@dt_metaTags.addRecord/>
+      @record.store(name|@name)
+      @record.store(content|@content)
+    </ec:case>
+
+    @return()
+</ec:function>
+
+
+
+
+
+<ec:function xRedirect  rem="@url does not use .urldecode because intentionally encoded urls are sometimes passed in. instead, .urldecode should be passed in for urls that need to be decoded. #returnto uses .urldecode intentionally as the @returnto variable should be assigned with .urlencode">
+    <ec:param url loader/><ec:var loader=@loader.alt(0) rem="this only works with ajax requests"/>
+
+    <ec:case>
+        <ec:case if=@any(@not(@url.contains(http://|https://))|@url.contains(@host|#returnto))  rem="interntal redirect">@logAction(36|@LTID|@XID|Redirect to @url)</ec:case>
+        <ec:case if=@else  rem="external redirect">@logAction(37|@LTID|@XID|Redirect to @url)</ec:case>
+    </ec:case>
+
+    <ec:case if=@requestType.is(regular)>
+        @RESPONSE_REDIRECT(@if(@url.is(#returnto)|@returnto.urldecode|@url))@stop()
+    </ec:case>
+
+    <ec:case if=@requestType.is(ajax)>
+        <ec:script>
+            @if(@loader.is(1)|addLoader(undefined, 'body');)
+            window.location.href = @jstr(@if(@url.is(#returnto)|@returnto.urldecode|@url));
+        </ec:script>
+    </ec:case>
+</ec:function>
+
+
+
+
+
+<ec:function xReload>
+    <ec:script>
+        addLoader(undefined, 'body');
+        window.location.reload();
+    </ec:script>
+</ec:function>
+
+
+
+
+
+<ec:function xScript>
+    <ec:param content=@sender.execute/>
+    <ec:case if=@all(@content.length.isGreaterThan(0)|@content.right(1).isnot(;)) rem="adds ; after content if it is missing">@content.setValue(@content;)</ec:case>
+    <ec:case if=@requestType.is(regular)>
+        <ec:include group="script">/* @self.key */ @content</ec:include>
+    </ec:case>
+    <ec:case if=@requestType.is(ajax)>@responder.script(@content)</ec:case>
+</ec:function>
+
+
+
+
+
+<ec:function xStyle>
+    <ec:param content=@sender.execute/>
+    <ec:case if=@requestType.is(regular)>
+        <ec:include group="style">/* @self.key */ @content</ec:include>
+    </ec:case>
+</ec:function>
+
+
+
+
+
+<ec:function xSQLesc>
+    <ec:param str/>
+    @return(@str.replace('|'').nullifblank.trim)
+</ec:function>
+
+<ec:function xSQLstr>
+    <ec:param str/>
+    @return(@str.replace('|'').nullifblank.with('|').alt(NULL).trim)
+</ec:function>
+
+
+
+
+
+<ec:function xUrlAdd>
+    <ec:param url urlParams/>
+    <ec:var baseURL=@url.with(///|?).textbetween(///|?)/>
+    <ec:var newParam=@url.with(|///).textbetween(?|///).with(|@UrlParams.replace(?|).with(&|))/>
+    <ec:var parseList=@list(@newParam|&)/>
+
+    <ec:data paramList format="xml"></ec:data>
+    <ec:loop data=@parseList>
+        <ec:case if=@iv(@rs.nullIfBlank)>@paramList.store(@rs.with(!!!|=).textbetween(!!!|=)|@rs.with(|!!!).textbetween(=|!!!)).hide</ec:case>
+    </ec:loop>
+
+    <ec:newParam><ec:loop data=@paramList>@rs.key=@rs@if(@Not(@rs.isLast)|&)</ec:loop></ec:newParam>
+    @return(@baseURL.with(|@newParam.nullIfBlank.with(?|)))
+</ec:function>
+
+
+
+
+
+<ec:function xUse>
+    <ec:param library=@null/>
+    <ec:var record=@dt_include.getRecord(name|@library)/>
+
+    <ec:case if=@all(@iv(@record)|@not(@record.attribute(include).alt(false)))>
+        @record.storeAttribute(use|true).hide
+        <ec:var otherInlcudes=@record.getRecord(group|library)/>
+
+        <ec:case if=@iv(@otherIncludes)>
+            <ec:var includeList=@list(@otherIncludes)/>
+            <ec:loop data=@includeList>
+                @pageFunctions_self.xUse(@rs)
+            </ec:loop>
+        </ec:case>
+    </ec:case>
+</ec:function>
+
+
+
+
+
+<ec:type tAjaxResponder>
+    <ec:var builder scriptBuilder/>
+    <ec:var refreshList/>
+    <ec:var designatedAction/>
+    <ec:Var actionObject/>
+
+    <ec:function initialize>
+        <ec:data builder format="xml"><ecid>@svr[param/ecid]</ecid><loader>@svr[param/loader].alt(body)</loader><update/><replace/><append/><prepend/><after/><before/><setAttribute/></ec:data>@self.builder.setReference(@builder)
+        <ec:data refreshList format="xml"></ec:data>@self.refreshList.setReference(@refreshList)
+        <ec:set designatedAction=@svr[param/ecAct]/>
+
+        @builder[update].makeArray  @builder[append].makeArray  @builder[setAttribute].makeArray
+    </ec:function>
+
+
+
+    <ec:function refresh>   
+        <ec:param anObject asReference/>
+        <ec:queObject objectList=@refreshList anObject=@anObject/>
+    </ec:function>
+
+
+
+    <ec:function queObject>
+        <ec:param objectList asReference/>
+        <ec:param anObject asReference/>
+        <ec:param objectName=@anObject.objectName/>
+        <ec:var aNewRecord objectRecord/>
+        <ec:var existingObject=@objectList.getRecord(objectName|@objectName)/>
+
+        <ec:case if=@nv(@existingObject)>
+            <ec:set aNewRecord=@objectList.addRecord(item)/>
+            <ec:Set objectRecord=@aNewRecord.addRecord(object)/>
+            @aNewRecord.store(objectName|@objectName)
+            @objectRecord.setReference(@anObject)/>
+            @return()
+        </ec:case>
+    </ec:function>
+
+
+
+    <ec:function script rem="Inside Responder Object, Overrides xScript which is meant for positioning script on RequestType=Regular">
+        <ec:param content asValue/>
+        <ec:case if=@requestType.is(ajax)>
+            <ec:case if=@all(@content.length.isGreaterThan(0)|@content.right(1).isnot(@chr(59)))><ec:content>@content;</ec:content></ec:case>
+            <ec:scriptBuilder>
+                @scriptBuilder
+                @content
+            </ec:scriptBuilder>
+        </ec:case>
+        <ec:xScript if=@requestType.is(regular)> /* @self.key */ @content</ec:xScript>
+    </ec:function>
+
+
+
+    <ec:function update>
+        <ec:param selector content/>
+        <ec:setAction action="update" selector=@selector content=@content/>
+    </ec:function>
+
+
+
+    <ec:function replace>
+        <ec:param selector content/>
+        <ec:setAction action="replace" selector=@selector content=@content/>
+    </ec:function>
+
+
+
+    <ec:function append>
+        <ec:param selector content/>
+        <ec:setAction action="append" selector=@selector() content=@content()/>
+    </ec:function>
+
+
+
+    <ec:function prepend>
+        <ec:param selector content/>
+        <ec:setAction action="prepend" selector=@selector() content=@content()/>
+    </ec:function>
+
+
+
+    <ec:function after>
+        <ec:param selector content/>
+        <ec:setAction action="after" selector=@selector() content=@content()/>
+    </ec:function>
+
+
+
+    <ec:function before>
+        <ec:param selector content/>
+        <ec:setAction action="after" selector=@selector() content=@content()/>
+    </ec:function>
+
+
+
+    <ec:function setAttribute>
+        <ec:param selector attribute="value" content/>
+        <ec:setAction action="setAttribute" selector=@selector() attribute=@attribute() content=@content()/>
+    </ec:function>
+
+
+
+    <ec:function setAction>
+        <ec:param action/>
+        <ec:param selector/>
+        <ec:param content/>
+        <ec:param attribute/>
+
+        <ec:var item=@builder[@action].addRecord(item)/>
+        @item.addRecord(selector).setValue(@selector)
+        @item.addRecord(content).setValue(@content)
+        <ec:case if=@iv(@attribute)>@item.addRecord(attribute).setValue(@attribute)</ec:case>
+    </ec:function>
+
+
+    <ec:function render>
+        <ec:var anObject/>
+        <ec:var renderedText/>
+        <ec:case if=@iv(@actionObject)>
+            <ec:set renderedText=@actionObject.render_component.trim.nullifblank/>
+            <ec:set designatedAction=@null rem="after actionObject responds, remove designated action passed in through ecAct parameter"/>
+
+            <ec:case if=@iv(@renderedText)>@update(#@actionObject.objectName|@renderedText)</ec:case>
+            <ec:var refreshRecord=@refreshList[1]/>
+            <ec:loop while=@iv(@refreshRecord)>
+                <ec:set anObject=@refreshRecord[object].asReference/>
+                @anObject.state.setValue(refresh)
+                <ec:set renderedText=@anObject.render_component.trim.nullifblank/>
+                <ec:case if=@iv(@renderedText)>@update(#@anObject.objectName|@renderedText)</ec:case>
+                <ec:set refreshRecord=@refreshList[@index.add(1)]/>
+            </ec:loop>
+
+            <ec:case if=@not(@scriptBuilder.isBlank)>
+                <ec:scriptBuilder>
+                    <script language="javascript">
+                        @scriptBuilder();
+                    </script>
+                </ec:scriptBuilder>
+                @update(#responderScripts|@scriptBuilder)
+            </ec:case>
+            <ec:onAjaxAfterRender if=@iv(@onAjaxAfterRender.asReference)/>
+            
+            @response_contentType(application/json; charset=utf-8)
+            <ec:output>@builder.json</ec:output>@stop()
+        </ec:case>
+    </ec:function>
+</ec:type>
+
+
+
+
+
+<ec:type tComponent>
+    <ec:var name/>
+    <ec:var class/>
+    <ec:var style/>
+    <ec:var persist rem="component will retain content when page is left and backbutton pressed"/>
+    <ec:var renderAfterPageLoad rem="render component after rest of page loads"/>
+    <ec:var placeholder rem="placeholder content if content is rendered after page load"/>
+    <ec:var dataObj type="tDataObj"/>
+
+    <ec:var componentRegistry/>
+    <ec:var objectBody/>
+    <ec:var params Rem="Parameters sent in when Object Instance is called"/>
+    <ec:var state/>
+
+
+
+    <ec:function initialize>
+        <ec:param name=@self.objectName/>       @self.name.setValue(@name)
+        <ec:param class/>                       @self.class.setValue(@class)
+        <ec:param style/>                       @self.style.setValue(@style)
+        <ec:param persist=0/>                   @self.persist.setValue(@persist.asBoolean)
+        <ec:param renderAfterPageLoad=0/>       @self.renderAfterPageLoad.setValue(@renderAfterPageLoad.asBoolean)
+        <ec:param placeholder/>                 @self.placeholder.setValue(@placeholder.nullifblank)
+        <ec:param dataObj asReference/>         @self.dataObj.setReference(@dataObj)
+        <ec:param onAction asReference/>        @self.onAction.setReference(@onAction)
+
+        @if(@nv(@self.name)|@response_statusCode(500) @exception(tComponent requires name parameter))
+
+        <ec:data xComponentRegistry format="xml"></ec:data>@self.componentRegistry.setReference(@xComponentRegistry)
+        <ec:case if=@iv(@dataObj)>@dataObj.register(@self)</ec:case>
+        <ec:set objectBody=@sender.asReference/>
+        @beforeInitialize()
+
+        <ec:set state="create"/>
+        <ec:case if=@all(@name.is(@svr[param/ecid])|@nv(@responder.actionObject)) rem="Action Object can only be assigned once to prevent recursive refresh">
+            @state.setValue(refresh)
+            <ec:set state="respond" if=@responder.designatedAction.is(respond)/>
+            <ec:set state="create" if=@responder.designatedAction.is(renderAfterPage)/>
+            @responder.actionObject.setReference(@self.asReference)
+            @action
+        </ec:case>
+
+
+        <ec:case if=@requestType.is(regular))>
+            <ec:script if=@any(@persist|@renderAfterPageLoad)>
+                window.pageLoadedFromCache=0
+            </ec:script>
+
+            <ec:script if=@persist>
+                //load content from cache if this is not a refresh or new page load
+                if ((document.referrer!=null)&&(sessionStorage.getItem('lastReferrer')!=document.referrer)){
+                    if (('sessionStorage' in window) && (window['sessionStorage'] !== null)){
+                        if ('@Name'+window.location.href in sessionStorage){
+                            $("#@Name").html(sessionStorage.getItem('@Name'+window.location.href));
+                            $(window).scrollTop(sessionStorage.getItem('@Name'+'ScrollPos'+window.location.href));
+                            jQuery.data($('#responderScripts')[0],'cs_page',sessionStorage.getItem('@Name'+'Page'+window.location.href));
+                            jQuery.data($('#responderScripts')[0],'cs_totalPages',sessionStorage.getItem('@Name'+'TotalPage'+window.location.href));
+                            window.pageLoadedFromCache=1;
+                            @if(@testServer.is(1)|console.log('Replaced from cache: @name url='+window.location.href+'  referrer='+document.referrer+' page='+$('#responderScripts').data("cs_page"));)
+                        }
+                    }
+                };
+
+                //save component content when leaving the page
+                $(window).on('unload', function(){
+                    history.replaceState({}, document.title,window.location.href);
+                    if (('sessionStorage' in window) && (window['sessionStorage'] !== null)){
+                        var componentContent = $("#@Name").html();
+                            if (componentContent!=null){
+                                sessionStorage.setItem('@Name'+window.location.href, componentContent);
+                                sessionStorage.setItem('@Name'+'ScrollPos'+window.location.href,$(window).scrollTop());
+                                sessionStorage.setItem('@Name'+'Page'+window.location.href,$('#responderScripts').data("cs_page"));
+                                sessionStorage.setItem('@Name'+'TotalPage'+window.location.href,$('#responderScripts').data("cs_totalPages"));
+                                @if(@testServer.is(1)|console.log('stored @name url='+window.location.href+' referrer='+document.referrer+' page='+sessionStorage.getItem('@Name'+'Page'+window.location.href));)
+                            }
+                    }
+                });
+            </ec:script>
+        </ec:case>
+        @afterInitialize()
+    </ec:function>
+
+
+
+    <ec:function render_component>
+        <ec:case if=@iv(@objectBody)>@objectBody.execute()</ec:case>
+        @renderContent()
+    </ec:function>
+
+
+
+    <ec:function render>
+        <ec:param params=@paramList.asReference/>@self.params.setReference(@params)
+        <ec:set if=@all(@requestType.is(ajax)|@state.is(create)) state="refresh" rem="Refreshed by other component"/>
+        <ec:case if=@all(@iv(@dataObj)|@not(@all(@renderAfterPageLoad|@state.is(create))))>@dataObj.activate()</ec:case>
+
+        @beforeRender()
+        <div id="@name" class="tComponent @class" @style.with(style="|")>
+            <ec:case if=@not(@all(@renderAfterPageLoad|@state.is(create)))>@render_component()</ec:case>
+            <ec:case if=@renderAfterPageLoad>@renderAfterPageLoadScript</ec:case>
+            <ec:case if=@all(@iv(@placeholder.nullifblank)|@state.is(create)|@renderAfterPageLoad)>@placeholder()</ec:case>
+        </div>
+        @afterRender()
+    </ec:function>
+
+
+
+    <ec:function refresh>
+        @responder.refresh(@self)
+    </ec:function>
+
+
+
+    <ec:function registerComponent>
+        <ec:param anObject asReference/>
+        <ec:var aNewRecord objectRecord/>
+        <ec:var existingObject=@objectList.getRecord(objectName|@objectName)/>
+
+        <ec:case if=@nv(@existingObject)>
+            <ec:set aNewRecord=@componentRegistry.addRecord(item)/>
+            <ec:set objectRecord=@aNewRecord.addRecord(object)/>
+            @aNewRecord.store(objectName|@anObject.objectName)
+            @objectRecord.setReference(@anObject)
+            @return()
+        </ec:case>
+    </ec:function>
+
+
+
+    <ec:function refreshRegisteredComponent>
+        <ec:param objectName/>
+        <ec:var aRecord=@componentRegistry.getRecord(objectName|@objectName)/>
+
+        <ec:case if=@iv(@aRecord)>
+            @aRecord[object].refresh()
+        </ec:case>
+    </ec:function>
+
+
+
+    <ec:function refreshRegisteredComponents>
+        <ec:loop data=@componentRegistry>
+            @rs[object].refresh()
+        </ec:Loop>
+    </ec:function>
+
+
+    
+    <ec:function renderAfterPageLoadScript>
+      <script>
+        addLoader('@name', '#@name');
+        if ($('#@name').css('min-height') == undefined) $('#@name').css('min-height', '200px');
+
+        window.onload = function(){
+          if (window.pageLoadedFromCache==0){
+            $.ajax({
+	            type: "POST",
+	            url: document.URL,
+	            async: true,
+                success: showResponse,
+	            data: {ecid:"@name", ecAct:"renderAfterPage"}
+ 	        });
+            @if(@testServer.is(1)|console.log('AJAX fired @name(), url = ' + document.URL);)
+            }}
+      </script>
+   </ec:function>
+   
+
+    <ec:function action/>
+    <ec:function renderContent/>
+    <ec:function beforeInitialize/>
+    <ec:function afterInitialize/>
+    <ec:function beforeRender/>
+    <ec:function afterRender/>
+</ec:type>
+
+
+
+
+
+<ec:type tDialogForm type="tComponent">
+    <ec:var title closed buttonCaption containerStyle forceContinue/>
+
+    <ec:function initialize>
+        <ec:param title/>                       @self.title.setValue(@title)
+        <ec:param buttonCaption="Continue"/>    @self.buttonCaption.setValue(@buttonCaption)
+        <ec:param containerStyle/>              @self.containerStyle.setValue(@containerStyle)
+        <ec:param forceContinue/>               @self.forceContinue.setValue(@forceContinue.nullifblank.alt(@svr[param/forceContinue].alt(0)))
+        <ec:set closed=0/>
+        @inherited.execute()
+
+        <ec:include group="body" name="@name" rem="placeholder in body component">
+            <div class="tDialog @if(@forceContinue.nullifblank.alt(@svr[param/forceContinue].alt(0))|forceContinueDialog) closed" id="tDialog_@name" @containerStyle.with(style="|")>
+                <form id="frm_@name" class="ecAjaxForm@class.with( |)" @style.with(style="|") method="POST">
+                    <div class="tDialog-content tComponent" id="@name"></div>
+                </form>
+            </div>
+        </ec:include>
+        <ec:include group="body" name="tDialogScript">
+            <ec:script>
+                function closeDialog(e){
+                    container = e.closest('.tDialog');
+                    container.classList.remove('opened');
+                    setTimeout(() => {
+                        container.classList.add('closed');
+                    }, 250);
+                };
+
+                <ec:case if=@not(@forceContinue.nullifblank.alt(@svr[param/forceContinue].alt(0)))>
+                    document.addEventListener('keyup', function(e){
+                        if (e.key == "Escape"){
+                            let els = document.querySelectorAll('.tDialog:not(.forceContinueDialog)');
+                            els.forEach((el) => {
+                                el.classList.remove('opened');
+                            });
+
+                            setTimeout(() => {
+                                els.forEach((el) => {
+                                    el.classList.add('closed');
+                                });
+                            }, 250);
+                        }
+                    });
+                </ec:case>
+            </ec:script>
+        </ec:include>
+   </ec:function>
+
+
+
+    <ec:function render>
+        <ec:param params=@paramList.asReference/>
+        <ec:var selector="#@name" />
+        <ec:set if=@all(@requestType.is(ajax)|@state.is(create)) state="refresh" rem="refreshed by other component"/>
+        <ec:case if=@all(@not(@closed)|@state.is(refresh|respond))>
+            <ec:case if=@iv(@dataObj)>@dataObj.activate()</ec:case>
+            @responder.update(@selector|@render_component)
+        </ec:case>
+    </ec:function>
+
+
+
+    <ec:function render_component rem="content and layout of tDiaglogForm">
+        <ec:var renderedContent />
+        <ec:renderedContent if=@iv(@objectBody)>@objectBody.execute</ec:renderedContent>
+
+        <div class="tDialog-header">
+            <h4 class="tDialog-title" id="tDialog-title_@name">@title</h4>
+            <ec:case if=@not(@forceContinue.nullifblank.alt(@svr[param/forceContinue].alt(0)))><a href="javascript:void(0)" rel="nofollow" onclick="closeDialog(this);" style="float:right;"><ec:icon title="" icon="remove" size="xsml" direction="right"/></a></ec:case>
+            <hr style="margin:3px 0px;"/>
+        </div>
+
+        <div class="tDialog-body">
+            @renderedContent()
+            <ec:case if=@forceContinue.nullifblank.alt(@svr[param/forceContinue].alt(0))><input type="hidden" id="forceContinue" name="forceContinue" value="1"/><ec:script>document.getElementById('tDialog_@name').classList.add('forceContinueDialog');</ec:script></ec:case>
+            <script>
+                document.addEventListener('@self.objectName', function(){
+                    var container = document.getElementById('tDialog_@self.objectName');
+                    var timeout = container.classList.contains('opened') ? 0 : 550; //if already opened, shorter timout; otherwise, longer timeout
+
+                    setTimeout(() => {
+                        var el = document.getElementById('@self.objectName').querySelector('.tDialog-body').querySelectorAll('input:not([type="button"]):not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="range"]):not([type="reset"]):not([type="submit"])')[0];
+                        if (el != undefined){
+                            el.focus();
+                            
+                            // .focus() defaults to start of value instead of end. this resets value so cursor is at end
+                            var val = el.value; el.value = ''; el.value = val;
+                        }
+                    },  timeout);
+                });
+            </script>
+        </div>
+
+        <div class="tDialog-footer">
+            <ec:case rem="button caption ... if forceContinue=1 then cancel button is hidden unless buttonCaption is CANCEL or CLOSE... if buttonCaption is yes, then cancel button is no, otherwise it is cancel">      
+                <div id="tDialog-footer-buttons">
+                    <ec:case if=@buttonCaption.isnot(cancel|close|)>
+                        <ec:case if=@not(@forceContinue.nullifblank.alt(@svr[param/forceContinue].alt(0)))><a href="javascript:void(0)" rel="nofollow" class="btn" onclick="closeDialog(this);">@if(@buttonCaption.is(yes)|No|Cancel)</a></ec:case>
+                        <button type="submit" id="submit_@name" class="btn btn-info submitOnClick">@buttonCaption</button>
+                    </ec:case>
+                    
+                    <ec:case if=@buttonCaption.is(cancel|close|)>
+                        <a href="javascript:void(0)" rel="nofollow" class="btn" onclick="closeDialog(this);">@buttonCaption.nullifblank.alt(Cancel)</a>
+                    </ec:case>
+                </div>
+            </ec:case>
+        </div>
+
+        <ec:script if=@state.is(refresh)>
+            el = document.querySelectorAll('.tDialog.closed#tDialog_@name');
+            if(el.length > 0){
+                el[0].classList.remove('closed');
+                setTimeout(() => {
+                    el[0].classList.add('opened');
+                }, 250);
+            }
+
+            @logAction(1|@LTID|@XID|@act.with(| on) @name)
+        </ec:script>
+    </ec:function>
+
+
+
+    <ec:function open>
+        @responder.refresh(@self)
+    </ec:function>
+
+
+
+    <ec:function close>
+        <ec:param closeAfterRender/><ec:var closeAfterRender=@closeAfterRender.nullifblank.alt(0)/>
+        <ec:set closed=1 if=@not(@closeAfterRender)/>
+
+        <ec:script>
+            setTimeout(() =>{
+                el = document.querySelectorAll('.tDialog.opened#tDialog_@self.name()');
+                if(el.length > 0){
+                    el[0].classList.remove('opened', 'forceContinueDialog');
+                    setTimeout(() => {
+                        el[0].classList.add('closed');
+                    }, @if(@closeAfterRender|250|249));
+                }
+            }, @if(@closeAfterRender|550|1));
+        </ec:script>
+    </ec:function>
+</ec:type>
+
+
+
+
+
+<ec:type tDialogRecordForm type="tDialogForm">
+    <ec:function initialize>@inherited.execute</ec:function>
+
+    <ec:function render_component>
+        <ec:case if=@validate.alt(0) rem="function returns 1 or 0. If 1 allow the action. If 0, deny the action and throw">
+            <ec:var renderedContent />
+            <ec:renderedContent if=@iv(@objectBody)>@objectBody.execute</ec:renderedContent>
+    
+            <div class="tDialog-header">
+                <h4 class="tDialog-title" id="tDialog-title_@name">
+                    <ec:case if=@name.is(obj_record_edit)><a style="display:inline-block;" href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_entityImage_edit"><ec:icon title="Edit entity image" icon="picture" direction="left" size="med" style="transform:translateY(3px);"/></a></ec:case>
+                    <span style="display:inline;">@title</span>
+                </h4>
+                <ec:case if=@not(@forceContinue.nullifblank.alt(@svr[param/forceContinue].alt(0)))><a href="javascript:void(0)" rel="nofollow" onclick="closeDialog(this);" style="float:right;"><ec:icon title="" icon="remove" size="xsml" direction="right"/></a></ec:case>
+                <hr style="margin:3px 0px;"/>
+            </div>
+    
+            <div class="tDialog-body">
+                @renderedContent()
+                <ec:case if=@forceContinue.nullifblank.alt(@svr[param/forceContinue].alt(0))><input type="hidden" id="forceContinue" name="forceContinue" value="1"/><ec:script>document.getElementById('tDialog_@name').classList.add('forceContinueDialog');</ec:script></ec:case>
+                <script>
+                    document.addEventListener('@self.objectName', function(){
+                        var container = document.getElementById('tDialog_@self.objectName');
+                        var timeout = container.classList.contains('opened') ? 0 : 550; //if already opened, shorter timout; otherwise, longer timeout
+    
+                        setTimeout(() => {
+                            var el = document.getElementById('@self.objectName').querySelector('.tDialog-body').querySelectorAll('input:not([type="button"]):not([type="file"]):not([type="hidden"]):not([type="radio"]):not([type="range"]):not([type="reset"]):not([type="submit"])')[0];
+                            if (el != undefined){
+                                el.focus();
+                                
+                                // .focus() defaults to start of value instead of end. this resets value so cursor is at end
+                                var val = el.value; el.value = ''; el.value = val;
+                            }
+                        },  timeout);
+                    });
+                </script>
+            </div>
+    
+            <div class="tDialog-footer">
+                <ec:case rem="button caption ... if forceContinue=1 then cancel button is hidden unless buttonCaption is CANCEL or CLOSE... if buttonCaption is yes, then cancel button is no, otherwise it is cancel">               
+                    <div id="tDialog-footer-buttons">
+                        <ec:case if=@buttonCaption.isnot(cancel|close|)>
+                            <ec:case if=@not(@forceContinue.nullifblank.alt(@svr[param/forceContinue].alt(0)))><a href="javascript:void(0)" rel="nofollow" class="btn" onclick="closeDialog(this);">@if(@buttonCaption.is(yes)|No|Cancel)</a></ec:case>
+                            <button type="submit" id="submit_@name" class="btn btn-info submitOnClick">@buttonCaption</button>
+                        </ec:case>
+                        
+                        <ec:case if=@buttonCaption.is(cancel|close|)>
+                            <a href="javascript:void(0)" rel="nofollow" class="btn" onclick="closeDialog(this);">@buttonCaption.nullifblank.alt(Cancel)</a>
+                        </ec:case>
+                    </div>
+                </ec:case>
+            </div>
+    
+            <ec:script if=@state.is(refresh)>
+                el = document.querySelectorAll('.tDialog.closed#tDialog_@name');
+                if(el.length > 0){
+                    el[0].classList.remove('closed');
+                    setTimeout(() => {
+                        el[0].classList.add('opened');
+                    }, 250);
+                }
+    
+                @logAction(1|@LTID|@XID|@act.with(| on) @name)
+            </ec:script>
+        </ec:case>
+
+
+        <ec:case if=@else>
+            <ec:var selector="#@name"/>
+            @responder.update(@selector|Access Denied)
+
+            <ec:case>
+                <ec:case if=@name.is(obj_record_new)>@throw(Access Denied|Access Denied To Create Record|You are currently not allowed to create a new record. Please contact a system administrator if you think this is in error.|401|44)</ec:case>
+                <ec:case if=@name.is(obj_record_edit)>@throw(Access Denied|Access Denied To Edit Record|You are currently not allowed to edit this record. Please contact a system administrator if you think this is in error.|401|44)</ec:case>
+                <ec:case if=@else>@throw(Access Denied|Access Denied|An unknown server error occurred while authenticating your access rights. Please contact a system administrator.|401|44)</ec:case>
+            </ec:case>
+        </ec:case>
+    </ec:function>
+
+    
+    <ec:function validate>
+        <ec:var valid=0/>
+
+        <ec:case if=@name.is(obj_record_new)><ec:set valid=1 if=@accessLevel.alt(0).isGreatAs(3)/></ec:case>
+        <ec:case if=@name.is(obj_record_edit)><ec:set valid=1 if=@accessLevel.alt(0).isGreatAs(4)/></ec:case>
+
+        @return(@valid.nullifblank.alt(0))
+    </ec:function>
+</ec:type>
+
+
+
+
+
+<ec:object obj_entityImage_edit type="tDialogForm" title="Edit Image" style="width:45%;" containerStyle="z-index:997;" buttonCaption="Cancel">
+    <ec:case if=@all(@not(@closed)|@state.is(refresh)|@nv(@act)) rem="stage 1 ... display current image and allow client to add/crop a new image OR delete existing entityImages">
+        <style>
+            .croppie-container {width:90%; margin: 0px auto; display:block;}
+
+            #imgPreviewDiv {position:relative; width:max-content; margin:0px 5%;}
+            #removeBtn {position: absolute; right:-16px; top:-10px;}
+            #previewImg {width:128px; display:block;}
+        </style>
+
+        <ec:data dt_img connection=@connection>
+            SELECT dbo.fn_entityImage(@LEID.asInt, 1) AS currentImgPath
+        </ec:data>
+    
+        <input type="hidden" id="imgData" name="imgData" value=""/>
+        <input type="hidden" id="act" name="act" value="submitImage"/>
+
+        <br/>
+        <ec:input_submit title="Submit" style="display:none; margin:0px 5%;" onclick="submitEntityImage();"/>
+        <ec:input_file title="Upload New Image" id="anImage" name="anImage" style="display:none;" labelClass="btn" containerStyle="margin:0px 5%;"/>
+        <br/><br/>
+
+        <ec:case rem="whether there is a custom image or not">
+            <div id="imgPreviewDiv">
+                <ec:case if=@not(@dt_img[1/currentImgPath].contains(linkedTableIcons)) rem="custom image ... allow delete">
+                    <a href="javascript:void(0)" ecid="obj_entityImage_edit" act="deleteImage" class="ajaxClick btn btn-default btn-sml" id="removeBtn"><ec:icon title="Delete custom entity image" icon="remove" size="sml" direction="center" style="margin-right:0px;"/></a>
+                    <img id="previewImg" src="@dt_img[1/currentImgPath]" alt="Image is missing or loading in..."/>
+                </ec:case>
+                
+                <ec:case if=@else>
+                    <img id="previewImg" src="@dt_img[1/currentImgPath]" alt="Image is missing or loading in..."/>
+                </ec:case>
+            </div>
+        </ec:case>
+        
+        <script>
+            //https://foliotek.github.io/Croppie/ --url is case sensitive
+            var anInput = document.getElementById('file_anImage');
+            var aPreview = document.getElementById('previewImg');
+
+            anInput.onchange = function(e) {
+                var target = e.target || window.event.srcElement, files = target.files;
+
+                //read new file and initialize croppie
+                if (FileReader && files && files.length) {
+                    var fr = new FileReader();
+                    fr.onload = function() {
+                        aPreview.src = fr.result;                                                   //set preview to new image, used by croppie
+                        aPreview.style.display = 'none';                                            //hide old preview (croppie instance creates its own)
+                        document.getElementById('file_anImage_container').remove();                 //remove input to remove eroneous form info
+                        document.getElementById('submit_').style.display = 'block';                 //reveal submit for croppie instance
+                        init_croppie(aPreview);   
+                    }
+                    fr.readAsDataURL(files[0]);          
+                } else {
+                    console.log('FileReader isn\'t supported by this browser. Auto-submitting form.');
+                    anInput.parentElement.submit();
+                }
+            }
+
+            function init_croppie(aPreview) {
+                var resize = new Croppie(aPreview, {
+                    viewport: {width: 192, height:192, type: 'square'},
+                    boundary: {width: '100%', height: 384},
+                    showZoomer: true,
+                    enableResize: false //otherwise client can change aspect ratio
+                });
+
+                //result(type,size,format,quality,circle)
+                //allowed types are base64, html (element with inline base64), blob, and rawcanvas ()
+                //allowed sizes are viewport, original, {width, height}
+                //allowed formats are png (default), jpeg, webp //SEEMS ONLY PNG ACTUALLY WORKS
+                //allowed quality is float between 0 and 1
+                //allowed circle is bool true or false
+                document.getElementById('submit_').addEventListener('click', function(e){      
+                    resize.result('base64', 'viewport', 'png', 0.5, false).then(function(imgData){
+                        document.getElementById('imgData').value = imgData;
+
+                        //on submit, add data to hidden element then the form is submitted  
+                        var aFile = dataURLtoFile(imgData, 'result.png');
+                        var aForm = document.getElementById('frm_obj_entityImage_edit');
+                            aForm.enctype = 'multipart/form-data';
+                        var formData = new FormData(aForm);
+                            formData.append('imgData', aFile, 'result.png');
+
+                        console.log(formData); 
+                    });
+                });
+            }
+
+            function dataURLtoFile(dataurl, filename){
+                var
+                    arr = dataurl.split(','),
+                    mime = arr[0].match(/:(.*?);/)[1],
+                    bstr = atob(arr[arr.length - 1]),
+                    n = bstr.length,
+                    u8arr = new Uint8Array(n);
+
+                while (n--){
+                    u8arr[n] = bstr.charCodeAt(n);
+                }
+
+                return new File([u8arr], filename, {type:mime});
+            }
+        </script>
+    </ec:case>
+
+
+
+    <ec:case if=@all(@state.is(respond)|@act.is(submitImage)) rem="stage 2a ... file submitted to server. store and process file">
+        <ec:var filePath = "@fileStore()images\0_tempImages\@requestTimeStamp()@chr(46)png"/>
+        <ec:var anImg type="base64"/><ec:var anImg=@svr[param/imgData].replace(data:image/png;base64,|) type="base64"/>
+        @anImg.saveToFile(@filePath)
+
+        <ec:loop count=4 REVERSE rem="4 times because there are 4 entity image types to be created">
+            <ec:var theIndex = @index/>
+            <ec:data xx procedure="pr_entityImage_edit" connection=@connection>
+                <LEID>@LEID.asInt</LEID>
+                <imageTypeID>@theIndex.asInt</imageTypeID>
+            </ec:data>
+            <ec:var entityImageID = @xx[entityImageID]  physicalPath = @xx[physicalPath].alt(/images)  imgWidth = @xx[imgWidth]  imgHeight = @xx[imgHeight]/>
+            <ec:set physicalPath = @physicalPath.replace(@entityImageID@chr(46)png|) rem="remove file name"/>
+
+            <ec:var dest_path = "@fileStore()@physicalPath()"/>
+            @if(@not(@directoryExists(@dest_path))|@makeDir(@dest_path))
+            @sizeImage(@filePath|@dest_path/@entityImageID()@chr(46)png|@imgWidth|@imgHeight|0)
+        </ec:loop>
+
+
+        @comment(update page to show new image)
+        <ec:var content/><ec:content><img id="recordIcon" src="@physicalPath()/@entityImageID()@chr(46)png" alt="record-icon"/></ec:content>
+        @deleteFile(@filePath).hide
+        @responder.replace(#recordIcon|@content)
+        @notification(Image updated successfully!|5)
+        @close()
+
+        
+        @comment(delete old images from file server)
+        <ec:data dt_delPaths connection=@connection>
+            SELECT (SELECT physicalPath FROM entityImages WHERE LEID = @LEID AND deleted = 1 FOR XML PATH, ROOT ('paths')) AS deletePaths
+        </ec:data>
+        <ec:data delPaths format="XML">
+            @dt_delPaths[1/deletePaths].decode
+        </ec:data>
+
+        <ec:loop data=@delPaths[paths]>
+            <ec:var fullPath="@fileStore()@rs[physicalPath]"/>
+            <ec:case if=@fileExists(@fullPath) rem="only attempt to delete real files">
+                @deleteFile(@fullPath)
+            </ec:case>
+        </ec:loop>
+    </ec:case>
+
+
+
+    <ec:case if=@all(@state.is(refresh)|@act.is(deleteImage)) rem="stage 2b ... delete old entity images and use default image instead">
+        <ec:data xx procedure="pr_entityImage_delete" connection=@connection>
+            <LEID>@LEID.asInt</LEID>
+        </ec:data>
+
+        @comment(delete images from file server)
+        <ec:data delPaths format="XML">
+            @xx[deletePaths].decode
+        </ec:data>
+
+        <ec:loop data=@delPaths[paths]>
+            <ec:var fullPath="@fileStore()@rs[physicalPath]"/>
+            <ec:case if=@fileExists(@fullPath) rem="only attempt to delete real files">
+                @deleteFile(@fullPath)
+            </ec:case>
+        </ec:loop>
+
+
+        @comment(revert back to default image)
+        <ec:data dt_defaultPath connection=@connection>
+            SELECT dbo.fn_entityImage(@LEID.asInt, 1) AS path
+        </ec:data>
+
+        <ec:var content/><ec:content><img id="recordIcon" src="@dt_defaultPath[1/path]" alt="record-icon"/></ec:content>
+        @responder.replace(#recordIcon|@content)
+        @notification(Now using default entity image... old image deleted.|5)
+        @close()
+    </ec:case>
+</ec:object>

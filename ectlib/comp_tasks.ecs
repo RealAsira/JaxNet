@@ -1,0 +1,285 @@
+@share
+<ec:module lib_dataFunctions/>
+<ec:module lib_pageFunctions/>
+<ec:module comp_input_entity/>
+
+<ec:case if=@nv(@comp_tasks_called)>
+    <ec:var comp_tasks_called=1 global/>
+    
+    <ec:var taskEditLevel = @xTaskEditLevel.asReference global/>
+</ec:case>
+
+
+
+
+
+<ec:object obj_task_new title="New Task" type="tDialogForm">
+    @comment(no validation here ... anyone can create and assign tasks)
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var memo = @svr[param/memo].nullifblank/>
+    <ec:var startDate = @svr[param/startDate].nullifblank/>
+    <ec:var dueDate = @svr[param/dueDate].nullifblank/>
+    <ec:var assignedBy = @svr[param/X_assignedByEmployeeID].nullifblank/>
+    <ec:var assignedTo = @svr[param/X_assignedToEmployeeID].nullifblank/>
+    <ec:var projectID = @svr[param/X_assignedToProjectID].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@description)|@iv(@assignedBy)|@any(@iv(@assignedTo)|@iv(@projectID)))>
+            <ec:data xx procedure="pr_task_new" connection=@connection>
+                <description>@description</description>
+                <memo>@memo.encode</memo>
+                <assignedByEmployeeID>@assignedBy.asInt</assignedByEmployeeID>
+                <assignedToEmployeeID>@assignedTo.asInt</assignedToEmployeeID>
+                <assignedToProjectID>@projectID.asInt</assignedToProjectID>
+                <predecessorOfTaskID>@NULL</predecessorOfTaskID>
+                <startDate>@startDate.asDate</startDate>
+                <dueDate>@dueDate.asDate</dueDate>
+                <recurCode>@NULL</recurCode>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newTaskID=@xx[newTaskID].nullifblank/>
+
+            <ec:case if=@nv(@xx[errorMessage].nullifblank)>
+                @logAction(2|253|@newTaskID)
+                @if(@LTID.is(253)|@notification(Task TSK-@newTaskID() created successfully||1)@redirect(/console?ltid=253&xid=@newTaskID)|@refreshRegisteredComponents)
+                @close()
+            </ec:case>
+
+            <ec:case if=@else>
+                <ec:set errMsg = @xx[errorMessage]/>
+                @logError(New Task Error|@errMsg|101)
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg = "A description, assigner, and assignee (project or employee) is required to create a new task."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))
+        <br/>
+        <ec:input_text title="Description" id="description" name="description" containerStyle="width:100%;" style="width:100%;" fieldValue=@description hintContent="A brief but descriptive tid-bit or title for this task."/><br/>
+        <ec:input_date title="Start Date" id="startDate" name="startDate" fieldValue=@startDate.alt(@nextWorkDay).formatDate(mm/dd/yyyy)/>
+        <ec:input_date title="Due Date" id="dueDate" name="dueDate" fieldValue=@dueDate.formatDate(mm/dd/yyyy) allowNull/>
+
+        <ec:input_entity title="Assigned By" id="assignedByEmployeeID" name="assignedByEmployeeID" fieldLTID=@if(@iv(@assignedBy.alt(@employee.employeeID))|2|@null) fieldXID=@assignedBy.alt(@employee.employeeID) filterLTID="2" disabled=@if(@user.accessLevel(252|@null).isGreatAs(5)|0|1)/>
+        <ec:input_entity title="Assigned To" id="assignedToEmployeeID" name="assignedToEmployeeID" fieldLTID=@if(@iv(@assignedTo)|2|@null) fieldXID=@assignedTo filterLTID="2" allowNull/><br/>
+        <ec:input_entity title="Project" id="assignedToProjectID" name="assignedToProjectID" fieldLTID=@if(@iv(@projectID.nullifblank)|252|@null) fieldXID=@projectID filterLTID="252" allowNull/><br/><br/>
+
+        <ec:input_textField title="Memo" id="memo" name="memo" fieldValue=@memo allowNull/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_task_edit title="Edit Task" type="tDialogForm">
+    <ec:var taskID = @svr[param/taskID].nullifblank/>
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var memo = @svr[param/memo].nullifblank/>
+    <ec:var startDate = @svr[param/startDate].nullifblank/>
+    <ec:var dueDate = @svr[param/dueDate].nullifblank/>
+    <ec:var assignedBy = @svr[param/X_assignedByEmployeeID].nullifblank/>
+    <ec:var assignedTo = @svr[param/X_assignedToEmployeeID].nullifblank/>
+    <ec:var projectID = @svr[param/X_assignedToProjectID].nullifblank/>
+    <ec:var level = @taskEditLevel(@taskID).alt(0)  if=@state.is(refresh|respond)/>
+
+    <ec:case if=@level.alt(0).isGreaterThan(0)>
+        <ec:data dt_task connection=@connection>
+            SELECT TOP(1) description, memo, assignedByEmployeeID, assignedToEmployeeID, assignedToProjectID, startDate, dueDate, recurCode
+            FROM tasks WHERE taskID = @sqlesc(@taskID.alt(0).asInt)
+        </ec:data>
+        <ec:var tsk=@dt_task[1]/>
+
+        <ec:case if=@state.is(respond)>
+            <ec:case if=@all(@iv(@taskID)|@iv(@description)|@iv(@assignedBy)|@any(@iv(@assignedTo)|@iv(@projectID)))>
+                <ec:case if=@level.is(1) rem="set values to stored values when assignee shouldn't edit them">
+                    @description.setValue(@tsk[description])
+                    @assignedByEmployeeID.setValue(@tsk[assignedByEmployeeID])
+                    @assignedToEmployeeID.setValue(@tsk[assignedToEmployeeID])
+                    @assignedToProjectID.setValue(@tsk[assignedToProjectID])
+                    <ec:set startDate=@tsk[startDate] if=@startDate.asDate.isGreaterThan(@startDate.add(5).asDate) rem="prevent assignee from moving start date by more than one work-week at a time"/>
+                    @dueDate.setValue(@tsk[dueDate].asDate)
+                </ec:case>
+
+                <ec:case if=@level.is(2) rem="set values to stored values when assigner shouldn't edit them">
+                    @assignedByEmployeeID.setValue(@tsk[assignedByEmployeeID])
+                    @assignedToProjectID.setValue(@tsk[assignedToProjectID])
+                </ec:case>
+
+                <ec:data xx procedure="pr_task_edit" connection=@connection>
+                    <taskID>@taskID.asInt</taskID>
+                    <description>@description</description>
+                    <memo>@memo.encode</memo>
+                    <assignedByEmployeeID>@assignedBy.asInt</assignedByEmployeeID>
+                    <assignedToEmployeeID>@assignedTo.asInt</assignedToEmployeeID>
+                    <assignedToProjectID>@projectID.asInt</assignedToProjectID>
+                    <predecessorOfTaskID>@NULL</predecessorOfTaskID>
+                    <startDate>@startDate.asDate</startDate>
+                    <dueDate>@dueDate.asDate</dueDate>
+                    <recurCode>@NULL</recurCode>
+                </ec:data>
+
+                <ec:case if=@nv(@xx[errorMessage].nullifblank)>
+                    @logAction(3|253|@taskID)
+                    @refreshRegisteredComponents()
+                    @close()
+                </ec:case>
+
+                <ec:case if=@else>
+                    <ec:set errMsg = @xx[errorMessage]/>
+                    @logError(Edit Task Error|@errMsg|101)
+                </ec:case>
+            </ec:case>
+
+            <ec:case if=@else>
+                <ec:set errMsg = "A taskID, description, assigner, and assignee (project or employee) is required to create a new task."/>
+            </ec:case>
+        </ec:case>
+
+
+        <ec:case if=@not(@closed)>
+            @if(@iv(@errMsg)|@notification(@errMsg))
+            <br/>
+            <input type="hidden" id="taskID" name="taskID" value="@taskID.asInt"/>
+            <ec:input_text title="Description" id="description" name="description" containerStyle="width:100%;" style="width:100%;" fieldValue=@tsk[description].alt(@description) disabled=@if(@level.is(1)|1|0) hintContent="A brief but descriptive tid-bit or title for this task."/><br/>
+            <ec:input_date title="Start Date" id="startDate" name="startDate" fieldValue=@tsk[startDate].alt(@startDate).alt(@nextWorkDay).formatDate(mm/dd/yyyy)/>
+            <ec:input_date title="Due Date" id="dueDate" name="dueDate" fieldValue=@tsk[dueDate].alt(@dueDate).formatDate(mm/dd/yyyy) allowNull disabled=@if(@level.is(1)|1|0)/>
+
+            <ec:input_entity title="Assigned By" id="assignedByEmployeeID" name="assignedByEmployeeID" fieldLTID=@if(@iv(@tsk[assignedByEmployeeID].alt(@assignedBy))|2|@null) fieldXID=@tsk[assignedByEmployeeID].alt(@assignedBy) filterLTID="2" disabled=@if(@any(@user.accessLevel(252|@null).isGreatAs(5)|@level.isnot(1|2))|0|1)/>
+            <ec:input_entity title="Assigned To" id="assignedToEmployeeID" name="assignedToEmployeeID" fieldLTID=@if(@iv(@tsk[assignedToEmployeeID].alt(@assignedTo))|2|@null) fieldXID=@tsk[assignedToEmployeeID].alt(@assignedTo) filterLTID="2" allowNull disabled=@if(@level.is(1)|1|0)/><br/>
+            <ec:input_entity title="Project" id="assignedToProjectID" name="assignedToProjectID" fieldLTID=@if(@iv(@tsk[assignedToProjectID].alt(@projectID).nullifblank)|252|@null) fieldXID=@tsk[assignedToProjectID].alt(@projectID) filterLTID="252" allowNull disabled=@if(@level.is(1|2)|1|0)/><br/><br/>
+
+            <ec:input_textField title="Memo" id="memo" name="memo" fieldValue=@tsk[memo].alt(@memo) allowNull/>
+        </ec:case>
+    </ec:case>
+
+    <ec:case if=@else rem="not allowed to edit the task">
+        @logError(Edit Task Error|Employee has insufficient permission to edit task. Access Level: @accessLevel(253|@taskID), TskEdLvl @level.alt(0)|101)
+        @notification(You do not have sufficient permission to edit this task. Please contact a system administrator if you believe this is in error.)
+        @close()
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_task_toggleState type="tComponent">
+    <ec:var taskID=@svr[param/taskID].nullifblank/>
+
+    <ec:case if=@state.is(refresh)>
+        <ec:case if=@taskEditLevel(@taskID).isGreaterThan(0) rem="is allowed to mark complete">
+            <ec:data xx procedure="pr_task_toggleCompletion" connection=@connection>
+                <taskID>@taskID.asInt</taskID>
+            </ec:data>
+            <ec:var isComplete = @xx[isComplete].asBool/>
+            <ec:var actionID rem="server returns isComplete... 1 is true (so action is 11, mark complete) 0 is false"/>
+            
+            <ec:set actionID=11 if=@isComplete/>
+            <ec:set actionID=12 if=@not(@isComplete)/>
+            
+            @logAction(@actionID.alt(3)|253|@taskID)
+            @refreshRegisteredComponents()
+        </ec:case>
+        
+        <ec:case if=@else>
+            @logError(Toggle Task Completion Error|Employee has insufficient permission to toggle task completion state. Access Level: @accessLevel(253|@taskID), TskEdLvl @level.alt(0)|101)
+            @notification(You do not have sufficient permission to toggle the complete status for this task. Please contact a system administrator if you believe this is in error.)
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_taskMemo_dialog title="Task Details" buttonCaption="Close" type="tDialogForm">
+    <ec:var taskID = @svr[param/taskID].alt(0).asInt/>
+
+    <ec:case if=@not(@closed)>
+        <style>
+            .taskDispWindow {
+                display:block;
+                min-height:30px;
+                max-height:320px;
+                overflow-y: auto;
+                border: 1px solid grey;
+                border-radius:5px;
+                margin-bottom:19px;
+                padding:7px 5px;
+                box-shadow:var(--box-shadow-light);
+
+                <ec:case if=@userSettings[theme].is(light)>
+                    background-color:#fffded;
+                    color:black;
+                </ec:case>
+
+                <ec:case if=@userSettings[theme].is(dark)>
+                    background-color:#3d4b51;
+                    color:white;
+                </ec:case>()
+            }
+
+            #taskMemo {& ol, & ul {margin-left: 20px;}}
+        </style>
+
+        <ec:data dt_task connection=@connection>
+            SELECT description, memo, startDate, dueDate, completeDate, assignedByEmployeeID, assignedToEmployeeID, assignedToProjectID
+            FROM tasks WHERE taskID = @taskID.asInt
+        </ec:data>
+        <ec:var tsk = @dt_task[1]/>
+
+        <br/><h3>@tsk[description]</h3>
+        <br/><h4>Memo</h4>
+        <div class="taskDispWindow" id="taskMemo">
+            @tsk[memo].decode
+        </div>
+
+        <div>
+            <ec:input_date title="Start Date" id="startDate" name="startDate" fieldValue=@tsk[startDate] disabled/>
+            <ec:input_date title="Due Date" id="dueDate" name="dueDate" fieldValue=@tsk[dueDate] allowNull disabled/>
+            <ec:input_date title="Completion Date" id="completeDate" name="completeDate" fieldValue=@tsk[completeDate] allowNull disabled/>
+        </div>
+        <br/>
+        <div>
+            <ec:input_entity title="Assigned By" id="assignedByEmployeeID" name="assignedByEmployeeID" fieldLTID=2 fieldXID=@tsk[assignedByEmployeeID] filterLTID="2" disabled/>
+            <ec:input_entity title="Assigned To" id="assignedToEmployeeID" name="assignedToEmployeeID" fieldLTID=2 fieldXID=@tsk[assignedToEmployeeID] filterLTID="2" disabled/>
+            <ec:input_entity title="Project" id="assignedToProjectID" name="assignedToProjectID" fieldLTID=@if(@iv(@tsk[assignedToProjectID].nullifblank)|252|@null) fieldXID=@tsk[assignedToProjectID] filterLTID="252" disabled/>
+        </div>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function xTaskEditLevel rem="0 - no edit access,  1 - can modify minor details (assignee),  2 - can edit most details (assigner),  3 - full edit access (access rights granted)">
+    <ec:param taskID required/> 
+
+    <ec:data dt_taskInfo connection=@connection>
+        SELECT assignedByEmployeeID, assignedToEmployeeID, assignedToProjectID
+        FROM tasks WHERE taskID = @sqlesc(@taskID.alt(0).asInt)
+    </ec:data>
+    <ec:var info = @dt_taskInfo[1]/>
+
+    <ec:var level=0 rem="how much editing the employee can do, if any... higher value later in case the employee meets multiple of the conditions"/>
+    <ec:set level=1 if=@user.employeeID.is(@info[assignedToEmployeeID]) rem="is the assignee ... can modify some details"/>
+    <ec:set level=2 if=@user.employeeID.is(@info[assignedByEmployeeID]) rem="is the assigner ... can reassign, etc (essentially full access)"/>
+    <ec:set level=3 if=@user.accessLevel(253|@taskID).isGreatAs(4) rem="has edit permissions for the task"/>
+    <ec:case if=@iv(@info[assignedToProjectID].nullifblank) rem="task belongs in a project">
+        <ec:set level=3 if=@user.accessLevel(252|@info[assignedToProjectID]).isGreatAs(4) rem="has edit permission for the containing project"/>
+    </ec:case>
+
+    @return(@level.alt(0).asInt)
+</ec:function>
+
+
+
+
+
+@comment(task deletion is only avaialable in console_tasks, and validation runs through obj_deleteRecord)

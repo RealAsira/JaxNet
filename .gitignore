@@ -1,0 +1,19 @@
+#Ignore uploaded files and images
+/files
+/files/**
+/images
+/images/**
+
+#Ignore codespace, certificates, IIS config
+/ecsite.code-workspace
+/end-request-cert-07apr2023.cer
+/start-request-cert-07apr2023.txt
+/origin_ca_rsa_root.cer
+/web.config
+
+#Ignore un-needed files that are sometimes automatically created by ECPages or OS
+/ecpages/output.htm
+/.Trash-1000
+
+#Ignore server configuration
+ecpages/settings.xml

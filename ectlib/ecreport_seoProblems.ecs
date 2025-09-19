@@ -1,0 +1,23 @@
+@share
+@pageTitle.setValue(SEO Problems)
+
+<ec:object obj_seoProblems type="tComponent">
+    <ec:titlebox title="SEO Problems">
+        
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    @obj_seoProblems
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

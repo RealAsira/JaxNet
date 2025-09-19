@@ -1,0 +1,155 @@
+@share
+@pageFound.set(1) @LTID.set(9)
+
+<ec:module comp_widgets/>
+<ec:module comp_messages/>
+<ec:module comp_scriptHandler/>
+
+<ec:pluginsReset/>
+<ec:pluginAdd name="widget" function=@widget.asReference/>
+
+<ec:var docURL = @app.right(@calc(@app.length - 4)).lower/><ec:set if=@docURL.right(1).is(/) docURL = @docURL.left(@calc(@docURL.length - 1))/>
+<ec:var revealKeywordsBtn/><ec:revealKeywordsBtn><a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_keywordsList">View Keywords List</a></ec:revealKeywordsBtn>
+
+<ec:style>
+    .documentContent {& ol, & ul {margin-left: 20px;}}
+</ec:style>
+
+<ec:data dt_document connection=@connection>
+    SELECT doc.documentID, doc.description, doc.date, doc.parentDocumentID, doc.documentContent, doc.isHidden, doc.allowReplies, doc.employeeID AS authorID, COALESCE(doc.authorName, dbo.fn_entityName_public(2, doc.employeeID)) AS authorName, LE.linkedEntityID
+    FROM vw_document doc
+    LEFT JOIN linkedEntities LE ON LE.toLTID = 9 AND LE.toXID = documentID
+    WHERE doc.websiteID = @websiteID.asInt AND doc.description = @sqlstr(@docURL.replace(-|@chr(32))) 
+</ec:data>
+<ec:var thisDoc = @dt_document[1]/>
+<ec:set XID = @thisDoc[documentID].nullifblank/>
+@if(@nv(@ecid)|@logAction(1|9|@XID|))
+
+
+
+<ec:object obj_keywordsList title="Keywords" buttonCaption="Close" type="tDialogForm">
+    <ec:case if=@not(@closed)>
+        <ec:data dt_keywords connection=@connection>
+            SELECT dbo.fn_sortAlphaString(keywords) AS sortedKeywords
+            FROM vw_documents WHERE description = @sqlstr(@docURL.replace(-|@chr(32))) AND websiteID = @websiteID.asInt
+        </ec:data>
+        <br/>
+        
+        @dt_keywords[1/sortedKeywords].lower
+    </ec:case>
+</ec:object>
+
+
+
+<ec:webpage title=@thisDoc[description].alt(Documents)>
+    <ec:metaTag name="description" content="Read about @thisDoc[description] on @host"/>
+    <ec:metaTag name="og:description" content="Read about @thisDoc[description] on @host"/>
+    <ec:metaTag name="og:image" content="/linkedTableIcons/document.svg"/>
+
+    <ec:case if=@all(@iv(@thisDoc[documentID])|@thisDoc[isHidden].is(false))>    
+        <div id="documentHeader"><br/>
+            <h1>@thisDoc[description]</h1>
+            <span style="color:grey;"><strong>By <ec:case if=@iv(@user.employeeID)><a href="/console?ltid=2&xid=@thisDoc[authorID]" rel="nofollow">@thisDoc[authorName]</a></ec:case><ec:case if=@else>@thisDoc[authorName]</ec:case></strong> on @thisDoc[date].formatdate(mm.dd.yyyy)<ec:case if=@iv(@user.employeeID)>&nbsp;&nbsp;|&nbsp;&nbsp;@revealKeywordsBtn</ec:case></span>
+            <br/><br/><hr/>
+        </div>  
+        <br/>
+
+        <div class="documentContent">
+            @runScript(@thisDoc[documentContent].decode)<br/>
+        </div>
+
+        <ec:case if=@thisDoc[allowReplies].is(1|true)>
+            <ec:object obj_comments linkedEntityID=@thisDoc[linkedEntityID] type="tMessages"/>
+            <div class="col col-100 col-center">
+                @obj_comments()
+            </div>
+        </ec:case>
+    </ec:case>
+
+    <ec:case if=@else>
+        <ec:case if=@nv(@thisDoc[documentID])>
+            <ec:case if=@iv(@search)>
+                <ec:data dt_documentSearch connection=@connection>
+                    SELECT docs.description, LEFT(dbo.fn_stripTags(CAST(doc.documentContent AS VARCHAR(MAX))), 256) AS docPreview, docs.date, COALESCE(doc.authorName, dbo.fn_entityName_public(2, docs.employeeID)) AS authorName
+                    FROM vw_documents docs
+                    LEFT JOIN vw_document doc ON docs.documentID = doc.documentID
+                    WHERE docs.websiteID = @websiteID.asInt AND docs.isHidden = 0
+                    @if(@iv(@search)|AND FREETEXT((docs.description, docs.keywords), 'NEAR(@sqlesc(@search))'))
+                </ec:data>
+
+                <ec:style>
+                    #searchResultsList {
+                        display:flex; flex-wrap:wrap; justify-content:flex-start;
+                    }
+
+                    .searchCard {
+                        display:inline-block;
+                        width: 100%;
+                        padding:5px;
+                        margin:9px 0px;
+                        border:1px solid var(--box-border-color);
+                        border-radius:5px;
+
+                        & div {width:100%; display:flex; flex-wrap:wrap; justify-content:space-between; border-bottom:1px solid var(--box-border-color-light); padding-bottom:3px; margin-bottom:3px;}
+                    }
+                </ec:style>
+
+                <div id="documentHeader">
+                    <h1>Keywords Search Results</h1><br/>
+                    <span>&nbsp;</span>
+                    <br/><br/><hr/>
+                </div>
+                <br/>
+                <div id="searchResultsList">
+                    <ec:loop data=@dt_documentSearch>
+                        <div class="searchCard shadowOnHover anchorify" href="/doc/@rs[description].lower.replace(@chr(32)|-)">
+                            <div>
+                                <h4>@rs[description]</h4>
+                                <p>by @rs[authorName] on @rs[date].formatdate(mm.dd.yyyy)</p>
+                            </div>
+                            <p style="color:grey;">@rs[docPreview].decode@chr(46)@chr(46)@chr(46)</p>
+                        </div>
+                    </ec:loop>
+                </div>
+            </ec:case>
+
+            <ec:case if=@else>
+                <ec:case if=@iv(@docURL.nullifblank)>
+                    <div id="documentHeader"><br/>
+                        <h1>Document Not Found</h1>
+                        <span>&nbsp;</span>
+                        <br/><br/><hr/>
+                    </div>
+                    <br/>
+                    This document could not be found. It may have been deleted or had its name changed.
+                    @logError(Document Not Found|/@docURL could not be found|79)
+                </ec:case>
+                <ec:case if=@else>
+                    <h1>Public Topics and Documents</h1>
+                    <span style="color:grey;"><strong>By @siteDescription()</strong> on 12.06.2022</span>
+                    <br/><br/><hr/><br/>
+                    <p>To begin, click on a topic under <strong>Navigation</strong> or <strong>Popular Topics</strong> found <span desktop inline>on the left side of the screen</span><span mobile inline>in the nav-menu (accessed by clicking on the menu button in the navigation bar)</span>.</p>
+                    <br/>
+                    <p>You can also search for topics and documents using the search bar found on the navigation bar. The search results are returned based on keywords contained within a document.</p>
+                    <br/>
+                    <p>These topics and documents can answer common questions, provide additional / advanced information, and more for website users. If you have any questions that don't have answers, please reach out to us and we will be happy to answer your questsions and post a topic or document answering the same for everyone else to find as well.</p>
+                </ec:case>
+            </ec:case>
+        </ec:case>
+        
+        <ec:case if=@thisDoc[isHidden].is(true)>
+            <h1>@thisDoc[description]</h1>
+            <span style="color:grey;"><strong>By <ec:case if=@iv(@user.employeeID)><a href="/console?ltid=2&xid=@thisDoc[authorID]" rel="nofollow">@thisDoc[authorName]</a></ec:case><ec:case if=@else>@thisDoc[authorName]</ec:case></strong> on @thisDoc[date].formatdate(mm.dd.yyyy)&nbsp;&nbsp;|&nbsp;&nbsp;@revealKeywordsBtn</span>
+            <br/><br/><hr/><br/>
+            <p>This document is currently unavailable to view. We apologize for any inconvenience this may cause.</p>
+            
+            <ec:case if=@nv(@user.employeeID) rem="set status code if client doesn't have an employee cookie">
+                @response_statusCode(401)
+                <ec:case if=@all(@svr[request/referer].contains(@host)|@aclProfile.spider.alt(0).is(0)) rem="only log if client accessed from the website and it isn't a spider">
+                    @logError(Unauthorized|@thisDoc[description] cannot be accessed by the public|76)
+                </ec:case>
+            </ec:case>
+            <ec:case if=@iv(@user.employeeID)>The system detected that you are logged into an employee account. You can see this page's contents by clicking "edit page" in the account dropdown.</ec:case>
+        </ec:case>
+    </ec:case>
+</ec:webpage>

@@ -1,0 +1,31 @@
+<ec:var content = @svr[param/content].nullifblank hashes=@svr[param/hashes].alt(1) frames=@svr[param/frames].alt(1)/>
+
+<ec:case if=@iv(@content)>
+  <span id="renderTime"></span>
+  <ec:loop count = @hashes>
+    @hash_hmac_SHA256(hello world!|007564aSeaSalt@index)<br/>
+  </ec:loop>
+  <ec:var time = "@calc((@now - @requestStartTime) * 864000).formatnumber(0)ms"/>
+  <script>document.getElementById('renderTime').innerHTML = 'Time: @time';</script>
+  <br/><br/>
+</ec:case>
+
+
+<ec:case if=@nv(@content)>
+  <h4>Webserver Load Test</h4>
+  <form action="/launchpad">
+    <label for="requests"><strong>Requests:</strong></label>
+    <input type="number" name="frames" id="requests" value="@frames" style="width:50px;"/>
+    &nbsp;&nbsp;&nbsp;
+    <label for="hashes"><strong>Hashes:</strong></label>
+    <input type="number" name="hashes" id="hashes" value="@hashes" style="width:65px;"/>
+    &nbsp;&nbsp;&nbsp;
+    <button type="submit">Run Test</button>
+  </form><hr/><br/>
+
+  <div style="width:100%; display:flex; flex-wrap:wrap; justify-content:center;">
+    <ec:loop count = @frames>
+      <iframe src="https://jaxnet.dev/launchpad?content=1&hashes=@hashes" height="200" width="200" title="iframe #@index" style="margin:3px;"></iframe>
+    </ec:loop>
+  </div>
+</ec:case>

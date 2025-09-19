@@ -1,0 +1,73 @@
+@share
+<ec:module lib_pageFunctions/>
+
+<ec:case if=@nv(@comp_votes_called)>
+    <ec:var comp_votes_valled=1 global/>
+    <ec:var entityVotes = @xEntityVotes.asReference global/>
+
+    <ec:style>
+        a.voteArrow.empty .icndiv {background-color: grey !important; &:hover {background-color:darkgrey !important;}}
+    </ec:style>
+</ec:case>
+
+
+
+<ec:function entityVotes>
+    <ec:param toLTID toXID required/>
+    <ec:param voteScore disableDownvote/>
+
+    <ec:data xx if=@iv(@user.userID) connection=@connection>
+        SELECT voteLedgerID, voteValue AS myVoteValue FROM voteLedger
+        WHERE 1=1 AND toLinkedEntityID = dbo.fn_linkedEntity_getID(@toLTID.asInt.alt(0), @toXID.asInt.alt(0)) AND fromUserID=@user.userID.asInt.alt(0)
+    </ec:data>
+    <ec:var voteLedgerID=@xx[1/voteLedgerID].nullifblank myVoteValue=@xx[1/myVoteValue].alt(0)/>
+
+    <div id="voteComponent-@toXID" style="display:inline-block;">
+        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick voteArrow @if(@myVoteValue.isLessThan(1)|empty)" loader="#voteComponent-@toXID()" ecid="obj_voteHandler" act="@if(@myVoteValue.isLessThan(1)|upvote|unvote)" toLTID="@toLTID" toXID="@toXID" voteLedgerID="@voteLedgerID" style="display:inline-block;"><ec:icon title="Upvote" icon="arrow-up" size="sml" direction="left"/></a>
+        <span id="voteScore-@toXID()" style="display:inline-block;">@calc(@voteScore.alt(0) + @myVoteValue)&nbsp;</span>
+        <ec:case if=@not(@disableDownvote.alt(0))>
+            <a href="javascript:void(0)" rel="nofollow" class="ajaxClick voteArrow @if(@myVoteValue.isGreaterThan(-1)|empty)" loader="#voteComponent-@toXID()" ecid="obj_voteHandler" act="@if(@myVoteValue.isGreaterThan(-1)|downvote|unvote)" toLTID="@toLTID" toXID="@toXID" voteLedgerID="@voteLedgerID" style="display:inline-block;"><ec:icon title="Downvote" icon="arrow-down" size="sml" direction="left"/></a>
+        </ec:case>
+    </div>
+</ec:function>
+
+
+
+<ec:object obj_voteHandler type="tComponent">
+    <ec:param toLTID = @svr[param/toLTID].nullifblank  toXID = @svr[param/toXID].nullifblank  voteLedgerID = @svr[param/voteLedgerID].nullifblank  userID = @svr[param/userID].alt(@user.userID)/>
+
+    <ec:case if=@state.is(refresh)>
+        <ec:case if=@iv(@userID)>
+            <ec:data xx procedure="pr_voteHandler" connection=@connection>
+                <voteLedgerID>@voteLedgerID.asInt</voteLedgerID>
+                <action>@act</action>
+                <toLTID>@toLTID.asInt</toLTID>
+                <toXID>@toXID.asInt</toXID>
+                <userID>@userID.nullifblank.asInt</userID>
+            </ec:data>
+
+            
+            <ec:var errMsg = @xx[errorMessage].nullifblank  newScore = @xx[newScore].alt(0)/>
+            <ec:script if=@iv(@errMsg)>
+                @logError(Vote Handler Error|@errMsg|101)
+                @notification(An error occurred while processing your vote. Please try again later.)
+                $('#load-voteComponent-@toXID()').remove();
+            </ec:script>
+            
+            <ec:case if=@nv(@errMsg)>
+                <ec:case rem="log the vote action">
+                    <ec:case   if=@act.is(upvote)>@logAction(41|@LTID|@XID|Voted on @toLTID()/@toXID())</ec:case>
+                    <ec:case if=@act.is(downvote)>@logAction(42|@LTID|@XID|Voted on @toLTID()/@toXID())</ec:case>
+                    <ec:case   if=@act.is(unvote)>@logAction(43|@LTID|@XID|Removed vote on @toLTID()/@toXID())</ec:case>
+                </ec:case>
+                <ec:var selector = '#voteComponent-@toXID()'  aComponent = @entityVotes(@toLTID|@toXID|@newScore)/>
+                @responder.update(@selector|@aComponent)
+            </ec:case>
+        </ec:case>
+        
+        <ec:case if=@else rem="a userID is required to vote">
+            <ec:notification>Please <a href="/login?returnto=@canonical.urlencode" rel="nofollow">login</a> or <a href="/signup?returnto=@canonical.urlencode" rel="nofollow">sign up</a> for an account to vote</ec:notification>
+            <ec:script>$('#load-voteComponent-@toXID()').remove();</ec:script>
+        </ec:case>
+    </ec:case>
+</ec:object>

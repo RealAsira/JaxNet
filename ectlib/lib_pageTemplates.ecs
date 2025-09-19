@@ -1,0 +1,835 @@
+@share
+<ec:module lib_barcodeScanner if=@app.is(console)/>
+
+<ec:case if=@nv(@lib_pageTemplatesCalled)>
+    <ec:var lib_pageTemplatesCalled=1 global/>
+
+    @comment(HTML structure templates and header/footer include functions)
+    <ec:var defaultTemplateHTML=@XDefaultTemplateHTML.asReference global/>
+    <ec:var bodyInclude=@xBodyInclude.asReference global/>
+    <ec:var headInclude=@xHeadInclude.asReference global/>
+
+    @comment(body templates)
+    <ec:var consoleTemplate=@xConsoleTemplate.asReference global/>
+    <ec:var docTemplate=@xDocTemplate.asReference global/>
+    <ec:var defaultTemplate=@xDefaultTemplate.asReference global/>
+    <ec:var storeTemplate=@xStoreTemplate.asReference global/>
+
+    <ec:var webpage=@xWebpage.asReference global/>
+</ec:case>
+
+
+
+
+
+<ec:function XDefaultTemplateHTML>
+    <ec:param title=@title.alt(Default Title)/>
+    <ec:param bodyText=@null/>
+    <ec:param about=@about.alt(description)/>
+    <ec:param keywords=@keywords.alt(keywords)/>
+    <ec:param img=@img.nullifblank/>
+
+    <!DOCTYPE html>
+    <html lang="en" dir="ltr" xmlns="https://www.w3.org/1999/xhtml">
+        <head>
+            <title>@title</title>
+            <meta property="og:title" content="@title"/>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+            <meta http-equiv="Content-Style-Type" content="text/css"/>
+            <script src="/js/jquery/jquery.js"></script>
+            <script src="/js/croppie/croppie.min.js"></script>
+            <link href="/js/croppie/croppie.css" rel="stylesheet"/>
+            <script src="/js//jquery-ui/jquery-ui.js"></script>
+            <link href="/js/jquery-ui/jquery-ui.css" rel="stylesheet"/>
+            <script src="/js//jquery-ui/jquery-ui-timepicker-addon.js"></script>
+            <link href="/js/jquery-ui/jquery-ui-timepicker-addon.css" rel="stylesheet"/>
+            
+            <ec:case if=@app.is(console|beta)>
+                <script src="/js/barcode-generator/bcGen.js"></script>
+                <script src="/js/tinymce/tinymce.min.js"></script>
+                <script src="/js/aceEditor/ace.js"></script>
+                <link href="/js/aceEditor/ace.css" rel="stylesheet"/>
+            </ec:case>
+
+            <script src="/index-js"></script>
+            <ec:headInclude/>
+        </head>
+        <body>
+            <ec:bodyInclude/>
+            @bodyText
+        </body>
+    </html>
+</ec:function>
+
+
+
+
+
+<ec:function xConsoleTemplate>
+    <ec:style>
+        /*display by default*/
+        #consoleTitlebarContainer {display:block; padding-bottom:43px;}
+        #consoleTitlebar {
+            position:fixed; top:0; left:0; right:0; z-index: 100;
+            display:flex;
+            width:100%;
+            height:43px;
+            flex-wrap:wrap;
+            justify-content: space-between;
+            align-items:center;
+        
+            & #consoleTitlebarLeft {width:20%; text-align:left;}
+            & #consoleTitlebarCenter {width:60%; text-align:center; & a {color:darkgrey; &:hover {color:darkgrey;}}}
+            & #consoleTitlebarRight {width:20%; text-align:right;}
+            & #consoleTitlebarLeft, & #consoleTitlebarCenter, & #consoleTitlebarRight {padding:0; margin:0; vertical-align:middle;}
+        }
+        
+        :root {
+            --console-leftMenu-width: 190px;
+            --console-rightMenu-width: 480px;
+
+            --console-leftMenu-semiCollapsed-width-multiplier: .72;
+        }
+
+        #consoleContent {margin:0; padding:0; padding-top:13px;}
+
+        #consoleLeftMenu, #consoleRightMenu {margin:0; padding:0; position:fixed; top:43px; z-index:10; transition: transform .3s;}
+        #consoleLeftMenu {transform:translateX(calc(var(--console-leftMenu-width) * -1))}
+        #consoleRightMenu {transform:translateX(var(--console-rightMenu-width));}
+        #consoleLeftMenu.opened, #consoleRightMenu.opened {transform:translateX(0px);}
+
+        #consoleLeftMenu {
+            width:var(--console-leftMenu-width);
+            height:100vh;
+            height:100dvh;
+            left:0;
+        }
+        
+        #consoleLeftMenuHeader {width:92%; margin:auto;}
+        
+        #consoleRightMenu {
+            width:var(--console-rightMenu-width);
+            max-width:100vw;
+            height:100vh;
+            padding-top:13px;
+            right:0;
+            overflow-y:auto;
+        
+            & #tb_options {
+                padding-bottom:20px;
+                & > .titlebox_content {max-height:100%;}
+            }
+        }
+        
+        <ec:case if=@userSettings[theme].is(light)>
+            #consoleTitlebar {background-color:rgba(251, 251, 251, 1); border-bottom: 1px solid #ccc;}
+            #consoleLeftMenu, #consoleRightMenu {background-color:#f8f8f8;}
+            #consoleLeftMenu {border-right:1px solid #e5e5e5;}
+            #consoleLeftMenuHeader {border-bottom:1px solid #d5d5d5; & a {color:#444 !important;}}
+            #consoleRightMenu {outline:1px solid #e5e5e5;}
+        </ec:case>
+
+        <ec:case if=@userSettings[theme].is(dark)>
+            #consoleTitlebar {background-color:#313131; border-bottom:1px solid #45484a;}
+            #consoleLeftMenu, #consoleRightMenu {background-color:#313131;}
+            #consoleLeftMenu {border-right:1px solid #45484a;}
+            #consoleLeftMenuHeader {border-bottom:1px solid #dfdfdf; & a {color:#dfdfdf !important;}}
+            #consoleRightMenu {outline:1px solid #45484a;}
+        </ec:case>
+
+        /*hide right menu toggle but always show right menu*/
+        @media screen and (min-width: 1032px){
+            #consoleRightMenu {transform:translateX(0px) !important;}
+            #consoleRightMenu {background-color: transparent; outline: none; & #tb_options{padding-bottom:0px;}}
+            #consoleTitlebarRight {visibility:hidden;}
+
+            #consoleContent {
+                width:calc(100% - var(--console-rightMenu-width));
+                margin:0px calc(var(--console-rightMenu-width) - 6px) 0px auto;
+            }
+        }
+        
+        /*show in desktop mode*/
+        @media screen and (min-width: 1278px){
+            #consoleTitlebarContainer {display:none;}
+
+            #consoleLeftMenu, #consoleRightMenu {top:0; transform:translateX(0px) !important;}
+        
+            #consoleContent {
+                width:calc(100% - var(--console-leftMenu-width) - var(--console-rightMenu-width));
+            }
+        }
+        
+        
+        
+        .dropdown-submenu {margin-left:40px;}
+        
+        .dropdown-menu {
+            display:block;
+            overflow:hidden;
+            position:absolute;
+            top:100%;
+            float:left;
+            z-index:11;
+            
+            max-height:0px;
+            height:auto;
+            min-width:160px;
+            padding:0px;
+            margin:2px 0 0;
+
+            font-size: .95em;
+            text-align:left;
+            list-style:none;
+
+            -webkit-background-clip:padding-box;
+            background-clip:padding-box;
+
+            -webkit-box-shadow:0 6px 12px rgb(0,0,0,.1);
+            box-shadow:0 6px 12px rgba(0,0,0,.1);
+
+            transition: max-height .3s ease;
+            transition-delay: 0s;
+        }
+        
+        .open > .dropdown-menu {max-height:40vh;}
+        
+        .nav.navmenu-nav {overflow:hidden;}
+        .open .nav.navmenu-nav {}
+        
+        .navmenu-nav.dropdown-menu {
+            position:static;
+            margin:0;
+            padding-top:0;
+            float:none;
+            border:none;
+            -webkit-box-shadow:none;
+            box-shadow:none;
+            border-radius:0;
+        }
+        
+        .tComponent#obj_history {min-height:50px;}
+        
+        .navmenu-default .navmenu-nav.dropdown-menu, .navbar-default .navbar-offcanvas .navmenu-nav.dropdown-menu {background-color: #e7e7e7;}
+        .nav {padding-left:0; list-style-type:none; & > li {position:relative; display:block; & > a {padding: 7px 10px; position:relative; display:block;}}}
+        .navmenu-default .navmenu-nav > li > a, .navbar-default .navbar-offcanvas .navmenu-nav > li > a {color: #777;}
+        .navmenu-nav {margin-bottom:10px;}
+        .dropdown {position:relative;}
+        
+        .caret {
+            display:inline-block;
+            width:0;
+            height:0;
+            margin-left:2px;
+            vertical-align:middle;
+            border-top:4px dashed;
+            border-right:4px solid transparent;
+            border-left: 4px solid transparent;
+            color:grey;
+            transform: rotate(-90deg);
+            transition:color .25s, transform .25s;
+        }
+
+        .dropdown.open > a > .caret, .dropdown-submenu.open > a > .caret {
+            transform: rotate(0deg);
+        }
+        
+        .dropdown-toggle:hover .caret {
+            color:darkgrey;
+        }
+
+        .dropdown-history {
+            #obj_history_refresher .icndiv {transform:rotate(0deg); opacity:0; transition: transform .25s, opacity .1s;}
+            &.open {#obj_history_refresher .icndiv {transform:rotate(-180deg); opacity:1;}}
+        }
+        
+        #consolePageStats {
+            color:#ccc; font-size:.7rem; font-weight:700; font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+            padding:10px; position:fixed; bottom:0;
+            width:max-content;
+
+            margin-bottom:43px; @media screen and (min-width:1278px) {& {margin-bottom:0px;}} /*apply margin in mobile mode*/
+        }
+
+
+        
+        #recordIcon {
+            display: inline-block;
+            height: 64px;
+            max-width: 66px;
+            margin-top: 9px;
+            margin-left: 12px;
+            vertical-align: top;
+        }
+
+        #recordIcon + #recordFields {
+            width: calc(100% - 82px);
+            margin-left: auto;
+            display: inline-block;
+        }
+
+        #search_primarySearch {
+            transition: width .2s;
+            width:102px;
+            min-width:auto;
+            height:32px;
+            margin-left:7px;
+            transform:translateY(2px);
+
+            &:focus {width:139px;}
+        }
+
+        div:has(~ #submitPrimarySearch:focus) #search_primarySearch {width:139px;}
+
+
+
+        #consoleQuickPanel {
+            display:block;
+            position:fixed;
+            top:60px;
+            left:-400px;
+            width:calc(98% - (var(--console-leftMenu-width) * (1 - var(--console-leftMenu-semiCollapsed-width-multiplier))));
+            min-width:198px;
+            max-width:400px;
+            min-height:200px; 
+            max-height: 500px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding:9px;
+            border-radius: 0px 5px 5px 0px;
+            box-shadow: var(--box-shadow), inset 5px -1px 4px rgba(0,0,0,.15);
+            z-index:9;
+            transition: left .4s;
+            @media screen and (min-width: 1278px) {left:-215px;}    
+            @media screen and (min-width:980px) {width:400px; max-height:700px;}
+
+            &.opened {
+                /*  desktop "oepened" rule  */
+                left: var(--console-leftMenu-width);
+            }
+
+            <ec:case if=@userSettings[theme].is(dark)>
+                background-color:#383838;
+                border-top: 1px solid #45484a;
+                border-right: 1px solid #45484a;
+            </ec:case>
+            
+            <ec:case if=@userSettings[theme].is(light)>
+                background-color:#f8f8f8;
+                border-top: 1px solid rgba(0,0,0,.05);
+                border-right: 1px solid rgba(0,0,0,.05);
+            </ec:case>    
+        }
+
+        #consoleLeftMenu.opened:has(+ #consoleQuickPanel.opened)  {
+            transform: translateX(calc(var(--console-leftMenu-width) * -.72));
+
+            /*  mobile "opened" rule  */
+            & + #consoleQuickPanel.opened {left: calc(var(--console-leftMenu-width) - (var(--console-leftMenu-width) * .72));}
+        }
+    </ec:style>
+
+
+    <script>
+        // used when left vs right console menus are opened or closed
+        function closeLeft() {
+            document.getElementById('consoleLeftMenu').classList.remove('opened');
+            document.getElementById('consoleQuickPanel').classList.remove('opened');
+        }
+        
+        function closeRight(){
+            document.getElementById('consoleRightMenu').classList.remove('opened');
+        }
+
+        window.addEventListener('resize', function(e) {
+            closeLeft();
+        }, true);
+    </script>
+    
+
+    <div id="consoleLeftMenu">
+        <form method="GET" action="/console">
+            <input hidden name="ltid" value="105"/>
+            <input hidden name="xid" value="10"/>
+            <div style="display:flex; flex-wrap:noswrap; justify-content:flex-start; margin-top:8px; margin-bottom:4px; width:100%; height:42px; overflow:hidden; ">
+                <ec:input_search name="search" id="primarySearch" placeholder="Search..." fieldValue="@svr[param/search]"/>
+                <button type="submit" id="submitPrimarySearch" style="width:34px;"><ec:icon title="" icon="search" direction="none" size="med" color="#dfdfdf" style="margin:0; padding:0;"/></button>
+                <button type="button" style="width:34px; margin-left:-2px;"><ec:input_barcode title="Console barcode scan search" name="primaryBarcodeInput" id="primaryBarcodeInput" direction="right" containerStyle="transform:translatex(-2px);"/></button>
+            </div>
+        </form>
+        
+        <table id="consoleLeftMenuHeader">
+            <tr style="display:block;">
+                <th style="width:100%; text-align:left;"><a href="/console?ltid=2&xid=@user.employeeID" rel="nofollow" style="font-family:calibri; font-size:larger;">@employee.preferredName()</a></th>
+                <th style="width:100%;"><a title="View or hide your quick panel" href="javascript:void(0)" onclick="toggleOpen('consoleQuickPanel', () => {$('#consoleQuickPanel_refresher').click()});" class="btn btn-sml" style="font-size:.85rem; margin-right:-6px;">...&nbsp;@obj_task_notifications_countBadge()</a></th>
+                <a href="javascript:void(0)" style="display:none;" class="ajaxClick" id="consoleQuickPanel_refresher" loader="#consoleQuickPanel" ecid="obj_quickPanel">&nbsp;</a>
+            </tr>
+        </table>
+        
+        <ul class="nav navmenu-nav">
+            <li class="dropdown dropdown-history">
+                <a href="javascript:void(0)" rel="nofollow" style="margin-right:28px;" class="dropdown-toggle" onclick="toggleSubMenu(this); document.getElementById('obj_history_refresher').click(); this.setAttribute('onclick', 'toggleSubMenu(this);');">
+                    History
+                    <b class="caret"></b>
+                </a>
+                <a href="javascript:void(0)" rel="nofollow" style="float:right; margin-top:-31px;" class="ajaxClick" loader="#obj_history" ecid="obj_history" id="obj_history_refresher"><ec:icon title="Refresh History" icon="refresh" direction="right"/></a>
+                <ul class="dropdown-menu navmenu-nav">
+                    @obj_history()
+                </ul>
+            </li>
+
+            <ec:sessionStorage tag="consoleMenu">
+                <ec:data consoleMenuItems connection=@connection>
+                    SELECT menuItemID, level, description, URL, iconURL
+                    FROM dbo.tb_menuItems(1, @user.userID.asInt, @user.employeeID.asInt) ORDER BY sortBy
+                </ec:data>
+                <ec:var lastLevel=0 hasChildren=0/>
+
+                <ec:loop data=@consoleMenuItems>
+                    <ec:set hasChildren=@rs[level].isLessThan(@consoleMenuItems[@index.add(1)/level].alt(@rs[level]))/>
+                    <ec:loop count=@calc(@lastLevel - @rs[Level])></li></ul></ec:loop>
+                    <ec:case if=@hasChildren>
+                        <li class="@if(@rs[level].is(0)|dropdown|dropdown-submenu)"><a href="javascript:void(0)" rel="nofollow" class="dropdown-toggle @if(@rs[level].is(0)||toggle-submenu)" onclick="toggleSubMenu(this);">@rs[description]<b class="caret"></b></a>
+                        <ul class="dropdown-menu navmenu-nav">
+                    </ec:case>
+
+                    <ec:case if=@all(@not(@hasChildren)|@rs[URL].isnot(javascript:void@chr(40)0@chr(41))) rem="if it is a menu item that isn't a category header">
+                        <li @if(@nv(@rs[description])|class="divider") style="padding-left:30px; @if(@iv(@rs[iconURL])|line-height:23px;|line-height:18px;)"><a href="@rs[URL].replace(@chr(64)userID|@user.userID)" rel="nofollow"><ec:case if=@iv(@rs[iconURL])><img alt="@rs[description].encode" src="@rs[iconURL]" style="height:22px;" /></ec:case><span style="vertical-align: text-top;">&nbsp;@rs[description]</span></a></li>
+                    </ec:case>
+
+                    <ec:set lastLevel=@rs[level]/>
+                </ec:loop>
+                <ec:loop count=@calc(@lastLevel)></li></ul></ec:loop>
+            </ec:sessionStorage>
+
+        </ul>
+        <div id="consolePageStats">
+            <span>sID: @user.sessionID</span><br/>
+            <span>Access Level: @accessLevel</span><br/>
+            <span>Render Time: @calc((@now - @requestStartTime) * 86400).formatnumber(0.00)s</span>
+        </div>
+    </div>
+
+    <div id="consoleQuickPanel"> 
+        @obj_quickPanel()
+    </div>
+
+    <div id="consoleContent">
+        <div id="consoleTitlebarContainer">
+            <div id="consoleTitlebar">
+                <div id="consoleTitlebarLeft"><ec:icon title="Navigation" icon="menu-hamburger" color="darkgrey" direction="left" size="lrg" class="hoverPointer" style="margin-left:7px;" onclick="toggleOpen('consoleLeftMenu', closeRight, closeLeft);"/></div>
+                <div id="consoleTitlebarCenter"><a href="/console" rel="nofollow" class="hoverPointer"><strong style="font-size:1.3rem;">Console</strong></a></div>
+                <div id="consoleTitlebarRight"><ec:icon title="Options" icon="option-vertical" color="darkgrey" direction="right" size="lrg" class="hoverPointer" style="margin-right:7px;" onclick="toggleOpen('consoleRightMenu', closeLeft);"/></div>
+            </div>
+        </div>
+
+        <ec:contents if=@iv(@contents.asReference) rem="see fn:contents in console_xxx modules | this is for page contents"/>
+        @sender.execute
+    </div>
+
+    <div id="consoleRightMenu">
+        <ec:titlebox title="Options">
+            <div id="relatedLinks">
+                <ec:related if=@iv(@related.asReference) rem="see fn:related in console_xxx modules | this is for options menu items"/>
+                <br/><hr/>
+            
+                <div style="display:flex; flex-wrap:wrap;">
+                    <ec:case if=@iv(@LTID)>
+                        <ec:case if=@user.accessLevel(105|8).isGreatAs(2)><button href="/console?ltid=105&xid=8&fLTID=@LTID&fXID=@XID" class="btn anchorify">Access Rights<ec:icon title="Who can access this record?" icon="unlocked" size="med" direction="right" style="margin-left:6px;"/></a></ec:case>
+                        <ec:case if=@all(@LTID.is(1|2|3)|@iv(@XID)|@user.accessLevel(105|7).isGreatAs(2))><button href="/console?ltid=105&xid=7&eLTID=@LTID&eXID=@XID" class="btn anchorify">Rights Granted<ec:icon title="This entity can access x records" icon="key-skeleton" size="med" direction="right" style="margin-left:6px;"/></a></ec:case>
+                        <ec:case if=@all(@LTID.is(1|2)|@iv(@XID)|@user.accessLevel(105|9).isGreatAs(2))><button href="/console?ltid=105&xid=9&eLTID=@LTID&eXID=@XID" class="btn anchorify">User Groups<ec:icon title="User groups this person is a member of" icon="users" size="lrg" direction="right" style="margin-left:6px;"/></a></ec:case>
+                        <ec:case if=@all(@iv(@XID)|@user.accessLevel(105|1).isGreatAs(2))><button href="/console?ltid=105&xid=1&fLTID=@LTID&fXID=@XID" class="btn anchorify">Logs<ec:icon title="View logs about this record" icon="file" size="med" direction="right" style="margin-left:6px;"/></a></ec:case>
+                    </ec:case>
+                </div>
+                <hr/>
+            
+                <ec:obj_relatedShortcuts if=@app.is(console) rem="in lib_consoleRelated module"/>
+            </div>
+        </ec:titlebox>
+    </div>  
+</ec:function>
+
+
+
+
+
+<ec:function xDocTemplate>
+    <ec:var docURL = @app.right(@calc(@app.length - 4)).lower/><ec:set if=@docURL.right(1).is(/) docURL = @docURL.left(@calc(@docURL.length - 1))/>
+
+    <ec:style>
+        :root {
+            --leftMenu-width: 240px;
+        }
+
+        #leftMenu {
+            display:none;
+            position:fixed;
+            top:90px;
+            left:0;
+            width:var(--leftMenu-width);
+            height:calc(100vh - 110px);
+            z-index:10;
+        }
+        
+        #documentContent {margin:1vh 3vw;}
+        #publicDocsBreadcrumb {margin:1vh 1vw; width:auto;}
+
+        @media screen and (min-width: 982px){
+            #leftMenu {display:block !important;}
+
+            #documentContent {
+                width:calc(100% - var(--leftMenu-width) - 32px - 20%);
+                margin-left:calc(var(--leftMenu-width) + 16px + 10%);
+                margin-right:calc(16px + 10%);
+                margin-top:1vh;
+            }
+
+            #publicDocsBreadcrumb {width:calc(100% - var(--leftMenu-width) - 32px - 10%); margin-left:calc(var(--leftMenu-width) + 16px); margin-right:calc(16px + 10%);}
+        }
+
+        @media screen and (min-width: 982px) and (max-width: 1480px){
+            #documentContent {width:calc(100% - var(--leftMenu-width) - 32px); margin-left:calc(var(--leftMenu-width) + 16px); margin-right:16px;}
+            #publicDocsBreadcrumb {width:calc(100% - var(--leftMenu-width) - 32px); margin-right:16px;}
+        }
+
+        #leftNavMenu .leftMenu-card {
+            max-width:225px;
+            margin: 1vh 7px 3vh 7px;
+        }
+
+        .leftMenu-card {
+            max-width:233px;
+            border:1px solid var(--box-border-color);
+            border-radius:5px;
+            margin:1vh 0px 3vh 7px;
+            padding:3px 7px;
+            line-height:initial;
+
+            & ul {
+                list-style-type:none;
+                & li {padding-left:7px; font-size:medium; font-family:calibri;}
+            }
+
+            & h3 {padding-left:7px;}
+        }
+
+        #documentHeader {
+            position:sticky;
+            top:71px; margin: -1px;
+            
+            <ec:case if=@userSettings[theme].is(light)>
+                background-color: white;
+            </ec:case>
+            <ec:case if=@userSettings[theme].is(dark)>
+                background-color:#181818;
+            </ec:case>
+        }
+    </ec:style>
+
+
+    <ec:data dt_document connection=@connection>
+        SELECT documentID, parentDocumentID, description, keywords, date, documentContent, isHidden, dbo.fn_document_level(documentID) AS level
+        FROM vw_document
+        WHERE websiteID = @websiteID.asInt AND description = @sqlstr(@docURL.replace(-|@chr(32)))
+    </ec:data>
+    <ec:var doc = @dt_document[1]/>
+
+    <ec:data dt_categories connection=@connection>
+        SELECT description
+        FROM vw_documents
+        WHERE websiteID = @websiteID.asInt AND parentDocumentID IS NULL AND isHidden = 0
+        ORDER BY description ASC
+    </ec:data>
+
+    <ec:data dt_navigation connection=@connection rem="left navigation menu ... replaces siblingDocuments and childDocuments ... level is used to determine if collapsed or regular view is used">
+        <ec:case if=@doc[level].alt(0).isLessThan(4)>SELECT documentID, description, level FROM dbo.tb_documentTree(@doc[documentID].asInt.alt(0)) ORDER BY sortBy</ec:case>
+        <ec:case if=@doc[level].alt(0).isGreatAs(4)>SELECT documentID, description, level FROM dbo.tb_documentTree_collapsed(@doc[documentID].asInt.alt(0)) ORDER BY sortBy</ec:case>
+    </ec:data>
+                    
+    <ec:data dt_popularDocuments connection=@connection>
+        SELECT documentID, description FROM (
+            SELECT TOP 10 t1.documentID, t1.description
+            FROM vw_documents t1
+            LEFT JOIN vw_actionLog t2 ON t1.documentID = t2.XID
+
+            WHERE websiteID = @websiteID.asInt AND t2.actionDate > DATEADD(DAY, -30, GETDATE()) AND t1.parentDocumentID IS NOT NULL AND t1.isHidden = 0
+            GROUP BY t1.[description], t1.[documentID]
+            ORDER BY COUNT(t2.logID) DESC
+        ) AS t3
+    </ec:data>
+
+    <ec:var lMenuItems/>
+    <ec:lMenuItems>
+        <div class="collectionCard leftMenu-card anchorify" id="CL-doc" href="/home">
+            <span class="collectionCard-img"><img src="/imgs-default/home.svg" alt="home icon"/></span>
+            <span class="collectionCard-name"><h3><a href="/home" @if(@userSettings[theme].is(dark)|class="whiteLink")>Site Home</a></h3></span>
+        </div>
+
+        <div class="leftMenu-card hoverShadow">
+            <ul>
+                <h3>Navigation</h3>
+                <ec:loop data=@dt_navigation>
+                    <ec:case if=@rs[documentID].is(@doc[documentID].alt(0))>
+                        <li style="padding-left:@calc(4 + @rs[level].alt(0) * 9)px; border-left:3px solid var(--link-color-hover);"><a style="font-weight:bold; color: var(--link-color-hover);">@rs[description].left(32)@if(@rs[description].length.isGreaterThan(32)|...|)</a></li>
+                    </ec:case>
+                    <ec:case if=@else>
+                        <ec:case if=@rs[description].isnot(...)>
+                            <li style="padding-left:@calc(7 + @rs[level].alt(0) * 9)px;"><a href="/doc/@rs[description].lower.replace(@chr(32)|-)">@rs[description].left(32)@if(@rs[description].length.isGreaterThan(32)|...|)</a></li>
+                        </ec:case>
+                        <ec:case if=@else rem="collapsed view spacer shouldn't link anywhere">
+                            <li style="padding-left:@calc(7 + @rs[level].alt(0) * 9)px;"><a style="color: var(--link-color);">...</a></li>
+                        </ec:case>
+                    </ec:case>
+                </ec:loop>
+                
+                <ec:loop data=@dt_categories if=@dt_navigation.count.alt(0).isLessThan(1) rem="show root categories">
+                    <li><a href="/doc/@rs[description].lower.replace(@chr(32)|-)">@rs[description].left(32)@if(@rs[description].length.isGreaterThan(32)|...|)</a></li>
+                </ec:loop>
+            </ul>
+        </div>
+
+        <div class="leftMenu-card hoverShadow">
+            <h3>Popular Topics</h3>
+            <ul>
+                <ec:loop data=@dt_popularDocuments>
+                    <ec:case if=@rs[documentID].is(@doc[documentID].alt(0))>
+                        <li style="padding-left:4px; border-left:3px solid var(--link-color-hover);"><a style="font-weight:bold; color: var(--link-color-hover);">@rs[description].left(32)@if(@rs[description].length.isGreaterThan(32)|...|)</a></li>
+                    </ec:case>
+                    <ec:case if=@else>
+                        <li style="padding-left:7px;"><a href="/doc/@rs[description].lower.replace(@chr(32)|-)">@rs[description].left(32)@if(@rs[description].length.isGreaterThan(32)|...|)</a></li>
+                    </ec:case>
+                </ec:loop>
+            </ul>
+        </div>
+    </ec:lMenuItems>
+
+
+    <ec:function xBreadCrumbs>
+        <ec:param documentID=0 style noMargin/>
+        <ec:data xx connection=@connection>
+            SELECT doc.documentID, dbo.fn_documentTag(doc.documentID, 0) AS description
+            FROM vw_documents doc
+            INNER JOIN dbo.tb_documentAncestors(@doc[documentID].asInt) documentAncestors ON doc.documentID = documentAncestors.documentID
+        </ec:data>
+        
+        <ul class="breadcrumb @if(@noMargin.alt(0)|noMarginBreadcrumb)" id="publicDocsBreadcrumb" @style.with(style="|")>
+            <ec:loop data=@xx DESC>
+                <ec:case if=@rs[description].replace(@chr(32)|).lower.isnot(@docURL.replace(-|))>
+                    <li><a href="/doc/@rs[description].lower.replace(@chr(32)|-)">@rs[description]&nbsp;&nbsp;<strong>@chr(47)</strong>&nbsp;&nbsp;</a></li>      
+                </ec:case>
+                <ec:case if=@else>
+                    <li style="color: var(--link-color-hover);"><strong>@rs[description]</strong></li>      
+                </ec:case>
+            </ec:loop>
+        </ul>
+
+        <ec:include if=@xx.count.isGreaterThan(1) group="headerInclude">
+            <script type="application/ld+json">
+                {
+                    "@chr(64)context": "@protocol()@host@svr[request/url]",
+                    "@chr(64)type": "BreadcrumbList",
+                    "itemListElement": [          
+                        <ec:loop data=@xx DESC>
+                            {
+                                "@chr(64)type": "ListItem",
+                                "position": @index(),
+                                "name": "@rs[description]",
+                                "item": "@protocol()@host()/doc/@rs[description].lower.replace(@chr(32)|-)"
+                            }@if(@not(@rs.isFirst)|,|)
+                        </ec:loop>
+                    ]
+                }
+            </script>
+        </ec:include>
+    </ec:function>
+
+    
+    <ec:var rMenuItems/>
+    <ec:rMenuItems>
+        <ec:case if=@iv(@user.userID)>
+            <li class="anchorify" rel="nofollow" href="/account">Account</li>
+            <li class="anchorify" rel="nofollow" href="/account?opt=orders">Order History</li>
+            <li class="anchorify" rel="nofollow" href="/account?opt=history">Browsing History</li>
+            <li class="anchorify" rel="nofollow" href="#">Watchlist</li>
+        </ec:case>
+        <li class="anchorify" rel="nofollow" href="/doc/faq-and-help">Help</li>
+
+        <ec:case if=@nv(@user.userID)><li class="anchorify" rel="nofollow" href="/login?returnto=@svr[request/url].urlEncode@svr[request/query].nullifblank.with(?|).urlEncode">Login</li></ec:case>
+        <ec:case if=@iv(@user.userID)><li class="anchorify" rel="nofollow" href="/login?act=logout">Logout</li></ec:case>
+        
+        <ec:case if=@iv(@user.employeeID)>
+            <br/><hr/><br/>
+            <li class="anchorify" href="/console?ltid=9&xid=@doc[documentID]">Edit Document</li>
+            <li class="anchorify" href="/console">Console</li>
+        </ec:case>
+    </ec:rMenuItems>
+
+    <ec:topbar bannerIcon=@siteSettings[topbarIcon] rMenuContent=@rMenuItems lMenuContent=@lMenuItems searchAction="/doc/" searchPlaceholder="Search documents and FAQ..."/>
+    <div id="primaryContent" style="width:100%; margin-top:2vh;">
+        <div id="leftMenu">
+            @lMenuItems
+        </div>
+        
+        <ec:xBreadCrumbs if=@iv(@doc[documentID])/>
+        <div id="documentContent">
+            @sender.execute()
+        </div>
+    </div>
+    @bottombar()
+</ec:function>
+
+
+
+
+
+<ec:function xDefaultTemplate>
+    <div id="bodyContent">
+        @sender.execute
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:function xStoreTemplate>
+    <div id="bodyContent">
+        @sender.execute
+    </div>
+</ec:function>
+
+
+
+
+
+<ec:function xWebpage>
+    <ec:responder/>
+    <ec:param title/>
+    <ec:param templateHTML asReference rem="full structure of page including head, headInclude, body, bodyInclude"/>
+    <ec:param templateBody asReference rem="template for the body"/>
+
+    <ec:case rem="set HTML template">
+        <ec:case if=1>@templateHTML.setReference(@defaultTemplateHTML)</ec:case>
+    </ec:case>
+
+    <ec:case rem="set the body template">
+        <ec:case if=@app.is(console)>@templateBody.setReference(@consoleTemplate)</ec:case>
+        <ec:case if=@any(@app.is(doc)|@app.contains(doc/))>@templateBody.setReference(@docTemplate)</ec:case>
+        <ec:case if=@app.is(store)>@templateBody.setReference(@storeTemplate)</ec:case>
+        <ec:case if=@else>@templateBody.setReference(@defaultTemplate)</ec:case>
+    </ec:case>
+    <ec:param pageBody=@sender asReference/>
+
+    <ec:var pageText/>
+    <ec:pageText>
+        <ec:templateBody>
+            @pageBody.execute
+        </ec:templateBody>
+    </ec:pageText>
+
+    <ec:output>
+        <ec:templateHTML title="@title" bodyText="@pageText"/>
+    </ec:output>
+</ec:function>
+
+
+
+
+
+<ec:function xBodyInclude>
+    <ec:var record/>
+    <div id="alerts"></div>
+    <div id="responderScripts"></div>
+    <ec:loop data=@dt_include>
+        <ec:case if=@rs.attribute(use).alt(false)>
+            @record.absolute.setReference(@rs.getRecord(group|body))
+            <ec:case if=@iv(@record.asReference)>@record()</ec:case>
+        </ec:case>
+    </ec:loop>
+</ec:function>
+
+
+
+
+
+<ec:function xHeadInclude>
+    <ec:var record/>
+    @comment(meta 'keywords' is intentionally omitted as search engines no longer utilize it)
+    @comment(if the following metaTags aren't assigned elsewhere, these become their defaults)
+    <ec:metaTag name="author" content="@siteDescription"/>
+    <ec:metaTag name="copyright" content="@@siteDescription"/>
+    <ec:metaTag name="description" content="Visit @host today!"/>
+    <ec:metaTag name="language" content="EN"/>
+    <ec:metaTag name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0"/>
+    <ec:metaTag name="og:description" content="Visit @host today!"/>
+    <ec:metaTag name="og:image" content="/imgs-default/og_image.png"/>
+    <ec:metaTag name="og:url" content="@canonical"/>
+    <ec:metaLink rel="canonical" href="@canonical"/>
+    <ec:metaLink rel="icon" href="/favicon.ico"/>
+    <ec:metaLink rel="stylesheet" href="/index-css"      if=@userSettings[theme].is(light)/>
+    <ec:metaLink rel="stylesheet" href="/index-css-dark" if=@userSettings[theme].is(dark)/>
+
+    <ec:loop data=@dt_metaTags>
+        <ec:case if=@rs[name].contains(og:)>
+            <meta property="@rs[name]" content="@rs[content]"/>
+        </ec:case>
+        <ec:case if=@else>
+            <meta name="@rs[name]" content="@rs[content]"/>
+        </ec:case>
+    </ec:loop>
+
+    <ec:loop data=@dt_metaLinks>
+        <ec:case if=@rs[rel].contains(icon)>
+            <link rel="@rs[rel]" href="@rs[href]" type="image/x-icon"/>
+        </ec:case>
+        <ec:case if=@else>
+            <link rel="@rs[rel]" href="@rs[href]"/>
+        </ec:case>
+    </ec:loop>
+
+    <ec:loop data=@dt_headerScripts>
+        <script src="@rs[src]"></script>
+    </ec:loop>
+
+    <ec:function allowFrame>
+        <ec:var allow = 0/>
+        <ec:set allow=1 if=@all(@app.is(API)|@opt.is(widget))/>
+
+        @return(@allow.alt(0))
+    </ec:function>
+
+    <ec:case if=@not(@allowFrame) rem="only allow external iFrame under certain circumstances">
+        @response_customHeader(X-Frame-Options|SAMEORIGIN)
+        @response_customHeader(Content-Security-Policy|frame-ancestors 'self')
+    </ec:case>
+
+
+    @chr(60)style@chr(62)
+        <ec:loop data=@dt_include>
+            <ec:case if=@rs.attribute(use).alt(false)>
+               @record.absolute.setReference(@rs.getRecord(group|style))
+               @if(@iv(@record)|@record)
+            </ec:case>
+        </ec:loop>
+    @chr(60)/style@chr(62)
+
+
+    @chr(60)script language="javascript" defer@chr(62)
+        document.addEventListener("DOMContentLoaded", function(event){
+            <ec:loop data=@dt_include>
+                <ec:case if=@rs.attribute(use).alt(false)>
+                   @record.absolute.setReference(@rs.getRecord(group|script))
+                   @if(@iv(@record)|@record)
+                </ec:case>
+            </ec:loop>
+        });
+    @chr(60)/script@chr(62)
+
+
+    <ec:loop data=@dt_include>
+        <ec:case if=@rs.attribute(use).alt(false)>
+            @record.absolute.setReference(@rs.getRecord(group|headerInclude))
+            @if(@iv(@record)|@record)
+        </ec:case>
+    </ec:loop>
+</ec:function>

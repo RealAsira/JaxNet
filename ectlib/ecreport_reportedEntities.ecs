@@ -1,0 +1,256 @@
+@share
+@pageTitle.setValue(Reported Content or Entities)
+
+<ec:var fdate_start = @svr[param/fdate_start].asdate.nullifblank/>
+<ec:var fdate_end = @svr[param/fdate_end].asdate.nullifblank/>
+<ec:var fResolved = @svr[param/fResolved].alt(false)/>
+<ec:var fLTID = @svr[param/fLTID].nullifblank/>
+<ec:var fXID = @svr[param/fXID].nullifblank/>
+
+<ec:object dt_reportedEntities page=@page limit=@min(999|@svr[param/perpage].alt(50)) type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>reportedID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@recordID)>
+            SELECT DISTINCT reportedLEID, entityName, MIN(reportedOn) AS reportedOn, MAX(reportsCount) AS reportsCount FROM (
+                SELECT reportedLEID, dbo.fn_entityName(dbo.fn_linkedEntity_getLTID(reportedLEID), dbo.fn_linkedEntity_getXID(reportedLEID)) AS entityName, reportedOn, ROW_NUMBER() OVER (PARTITION BY reportedLEID ORDER BY reportedLEID) AS reportsCount
+                FROM linkedEntities_reported t1
+                WHERE 1=1
+                @if(@fResolved.isnull|AND t1.resolved = 0 OR t1.resolved = 1)
+                @if(@fResolved.is(true)|AND t1.resolved = 1)
+                @if(@fResolved.is(false)|AND t1.resolved = 0)
+                
+                @if(@iv(@fReason)|AND reasonID = @fReason)
+                @if(@iv(@fdate_start)|AND CAST(reportedOn AS DATE) @chr(62)= '@fdate_start.formatdate(yyyy-mm-dd)')
+                @if(@iv(@fdate_end)|AND CAST(reportedOn AS DATE) @chr(60)= '@fdate_end.formatdate(yyyy-mm-dd)')
+                @fLTID.with(AND dbo.fn_linkedEntity_getLTID(reportedLEID) = |)
+                @fXID.with(AND dbo.fn_linkedEntity_getXID(reportedLEID) = |)
+                @fuserID.with(AND reportedByUserID = |)
+            ) t2
+            GROUP BY t2.reportedLEID, t2.entityName
+        </ec:case>
+
+        <ec:case if=@iv(@recordID)>
+            SELECT t1.reportedID, t1.reasonID, t2.description AS reason, t2.memo AS reasonMemo, t1.reportedByUserID, dbo.fn_entityName(1, t1.reportedByUserID) AS userName, t1.reportedOn, t1.details, t1.resolved, t1.resolvedOn, t1.resolvedByEmployeeID, dbo.fn_entityName(2,t1.resolvedByEmployeeID) AS employeeName,
+            dbo.fn_linkedEntity_getLTID(reportedLEID) AS reportedLTID, dbo.fn_linkedEntity_getXID(reportedLEID) AS reportedXID
+            FROM linkedEntities_reported t1
+            LEFT JOIN linkedEntities_reportReasons t2 ON t1.reasonID = t2.reportReasonID
+            WHERE 1=1 AND reportedLEID = @recordID.alt(0)
+        </ec:case>
+    </sqlSelect>
+    <sort by="@if(@fResolved.is(true|@null|)|DESC|ASC)">reportedLEID</sort>
+    <order>@if(@iv(@recordID)|CASE WHEN resolved = 0 THEN 1 ELSE 2 END,) reportedOn @if(@fResolved.is(true|@null|)|DESC|ASC) @if(@nv(@recordID)|, reportsCount DESC)</order>
+</ec:object>
+<ec:object obj_reportedEntities_pageNavigator dataObj=@dt_reportedEntities type="tPageNavigator"/>
+
+
+
+
+
+
+
+<ec:object obj_reportedEntities dataObj=@dt_reportedEntities type="tComponent">
+    <ec:titlebox title="Reported Content & Entities">
+        <table class="tbl">
+            <tr>
+                <th>Content</th>
+                <th># Reports</th>
+                <th style="text-align:left;">First Report Date</th>
+            </tr>
+        <ec:loop data=@dataObj.dataDef[data]>
+            <tr class="anchorify" href="/console?ltid=@LTID&xid=@XID&recordID=@rs[reportedLEID]">
+                <td>@rs[entityName]</td>
+                <td>@rs[reportsCount]</td>
+                <td style="text-align:left;">@rs[reportedOn].formatDate(dd mmm yyyy)</td>
+            </tr>
+        </ec:loop>
+        </table>
+        
+        @obj_reportedEntities_pageNavigator
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+
+
+<ec:object obj_reportedEntity dataObj=@dt_reportedEntities type="tComponent">
+    <ec:titlebox title="Reported Content or Entity" options=@defaultRecordOptions()>
+        <ec:var reportedEntity = @dataObj.dataDef[data/1]/>
+
+        <ec:case rem="what type of entity is this (LTID)?">
+            <ec:case if=@reportedEntity[reportedLTID].is(255) rem="messages">
+                <ec:displayField title="Content Type" content="Message"/>
+                <ec:var entityLink/><ec:entityLink><a href="/console?LTID=@reportedEntity[reportedLTID]&XID=@reportedEntity[reportedXID]">@reportedEntity[reportedLTID] / @reportedEntity[reportedXID]</a></ec:entityLink>
+                <ec:displayField title="LTID / XID" content=@entityLink/>
+                <ec:displayField title="# Reports" content="@dataObj.dataDef[data].count()"/>
+
+                <br/><br/><hr/>
+
+                <ec:data dt_message connection=@connection>
+                    SELECT dbo.fn_voteScore_quick(msgLEID) AS voteScore, displayName, message, sendDate FROM (
+                        SELECT dbo.fn_linkedEntity_getID(255, messageID) AS msgLEID, ISNULL(dbo.fn_entityName_public(fromLTID, fromXID), dbo.fn_entityName(fromLTID, fromXID)) AS displayName, message, sendDate
+                        FROM messages
+                        LEFT JOIN linkedEntities LE ON LE.toLTID = 255 AND LE.toXID = messageID
+                        WHERE LE.websiteID = @websiteID AND messageID = @reportedEntity[reportedXID]
+                    ) t1
+                </ec:data>
+                <ec:var msg=@dt_message[1]/>
+
+                <style>
+                    #aReportedComment {
+                        font-family:arial; font-size:.8rem;
+                        & table tr {padding:2px 0px;}
+                    }
+
+                    <ec:case if=@userSettings[theme].is(light)>
+                        #aReportedComment {background-color:#fff;}
+                    </ec:case>
+
+                    <ec:case if=@userSettings[theme].is(dark)>
+                        #aReportedComment {background-color:rgb(35,35,35);}
+                    </ec:case>()
+                </style>
+
+                <br/>
+                <div id="aReportedComment" style="width:100%; border:1px solid var(--box-border-color); border-radius:5px; padding:7px;)">
+                    <table>
+                        <tr>
+                            <td>@msg[displayName]&nbsp;</td>
+                            <td style="color:#cfcfcf;">@timePassed(@msg[sendDate].alt(@today))</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">@msg[message]</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2">
+                                <span style="display:inline-block;"><ec:icon title="" icon="arrow-up" color="grey" size="sml" direction="left" style="display:inline-block;"/><span style="display:inline-block;">@msg[voteScore]&nbsp;</span><ec:icon title="" icon="arrow-down" color="grey" size="sml" direction="right" style="display:inline-block;"/></span>
+                                <span style="display:inline-block; transform:translateY(3px);"><ec:icon title="" icon="comment" color="grey" size="sml" direction="left"/><ec:icon title="" icon="share" color="grey" size="sml" direction="left"/><ec:icon title="" icon="option-horizontal" color="grey" size="sml" direction="left"/></span>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </ec:case>
+
+            <ec:case if=@else rem="if not programmed">
+                <br/><p class="notice">Displaying report content for this type of entity has not been programmed yet. Please contact a system administrator.</p><br/>
+            </ec:case>
+        </ec:case>
+    </ec:titlebox>
+
+
+    <ec:titlebox title="Report Instances">
+        <style>
+            <ec:case if=@userSettings[theme].is(light)>
+                .aReportInstance {background-color:#fff;}
+            </ec:case>
+            
+            <ec:case if=@userSettings[theme].is(dark)>
+                .aReportInstance {background-color:rgb(35,35,35);}
+            </ec:case>()
+        </style>
+        <ec:loop data=@dataObj.dataDef[data]>
+            <ec:titlebox class="aReportInstance">
+                <table style="width:100%; border-collapse:collapse;">
+                    <tr style="border-bottom:1px solid #cfcfcf; margin-bottom:1px;">
+                        <td style="border:inherit; padding:7px; font-family:arial; font-size:.9rem;"><strong><ec:icon if=@rs[resolved].is(true|1) title="Report is resolved." icon="check-sign" size="sml" color="#45E868" direction="left"/><ec:icon if=@rs[resolved].is(false|0) title="Report is not resolved." icon="remove-sign" size="sml" color="#D83030" direction="left"/>@if(@rs[resolved].is(false|0)|Not@chr(32))Resolved <ec:case if=@iv(@rs[resolvedByEmployeeID])>by <a style="font-size:.85rem;" href="/console?ltid=2&xid=@rs[resolvedByEmployeeID]">@rs[employeeName]</a></strong> <span style="color:#cfcfcf; font-size:.85rem;">on @rs[resolvedOn].formatDate(dd MMM yyyy)</span></ec:case></td>
+                        <td style="border:inherit; padding:7px; text-align:right;">
+                            <ec:case if=@rs[resolved].is(true|1)><a href="javascript:void(0)" class="ajaxClick" ecid="obj_reportInstance_edit" act="view" reportedID="@rs[reportedID]"><ec:icon title="View resolution" icon="eye-open" size="med" direction="right"/></a></ec:case>
+                            <ec:case if=@rs[resolved].is(false|0)><a href="javascript:void(0)" class="ajaxClick" ecid="obj_reportInstance_edit" act="resolve" reportedID="@rs[reportedID]"><ec:icon title="Resolve report" icon="checkmark" size="med" direction="right"/></a></ec:case>
+                        </td>
+                    </tr>
+                    <tr style="margin-top:3px;">
+                        <td colspan="2" style="padding:7px; font-family:arial; font-size:.8rem;">Reported @rs[reportedOn].formatDate(dd MMM yyyy) by <a href="/console?ltid=1&xid=@rs[reportedByUserID]&xltid=@LTID&xxid=@XID">@rs[userName]</a> for @rs[reason] @hint(@rs[reasonMemo])</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="padding:7px; padding-top:0px;"><strong style="font-family:arial; font-size:.85rem;">User Provided Details: </strong>@rs[details].alt(None provided.)</td>
+                    </tr>
+                </table>
+            </ec:titlebox>
+        </ec:loop>
+    </ec:titlebox>
+</ec:object> 
+
+
+
+
+
+
+
+<ec:object obj_reportInstance_edit type="tDialogForm">
+    @if(@act.isnot(resolve|view)|@self.title.set(Report Instance))
+    @if(@act.is(resolve)|@self.title.set(Resolve Report))
+    @if(@act.is(view)|@self.title.set(Report Resolution) @self.buttonCaption.set(Close))
+
+    <ec:var reportedID = @svr[param/reportedID].nullifblank/>
+    <ec:var resolutionDetails = @svr[param/resolutionDetails].nullifblank/>
+
+    <ec:case if=@not(@closed)>
+        <input type="hidden" id="act" name="act" value="@act"/>
+        <input type="hidden" id="reportedID" name="reportedID" value="@reportedID"/>
+
+        <ec:case if=@act.is(view)>
+            <ec:data dt_resolution connection=@connection>
+                SELECT t1.resolved, t1.resolvedOn, t1.resolvedByEmployeeID, dbo.fn_entityName(2, t1.resolvedByEmployeeID) AS employeeName, t1.resolutionDetails
+                FROM linkedEntities_reported t1
+                WHERE 1=1 AND reportedID = @reportedID.alt(0)
+            </ec:data>
+            <ec:var res=@dt_resolution[1]/>
+
+            <br/><span><strong><ec:icon if=@res[resolved].is(true|1) title="Report is resolved." icon="check-sign" size="sml" color="#45E868" direction="left"/><ec:icon if=@res[resolved].is(false|0) title="Report is not resolved." icon="remove-sign" size="sml" color="#D83030" direction="left"/>@if(@res[resolved].is(false|0)|Not@chr(32))Resolved <ec:case if=@res[resolved].is(true|1)>by <a href="/console?ltid=2&xid=@res[resolvedByEmployeeID]">@res[employeeName]</a> on @res[resolvedOn].formatDate(dd MMM yyyy)</ec:case></strong></span>
+            <br/><br/><hr/>
+            <ec:input_textArea title="Resolution Details" id="resolutionDetails" name="resolutionDetails" fieldValue=@res[resolutionDetails].nullifblank placeholder="Employee did not provide additional resolution details." readOnly/>
+        </ec:case>
+        
+        <ec:case if=@act.is(resolve)>
+            <ec:case if=@state.is(respond)>
+                <ec:data xx procedure="pr_linkedEntity_report_resolve" connection=@connection>
+                    <reportedID>@reportedID.asInt</reportedID>
+                    <resolvedByEmployeeID>@user.employeeID.asInt</resolvedByEmployeeID>
+                    <resolutionDetails>@resolutionDetails</resolutionDetails>
+                </ec:data>
+
+                @dt_reportedEntities.refresh()
+                @obj_reportedEntity.refresh()
+                @close()
+            </ec:case>
+
+            <br/><p class="notice">Please note that this explanation may be <strong>publicly visible</strong>.</p>
+            <br/><ec:input_textArea title="Resolution Details" id="resolutionDetails" name="resolutionDetails" fieldValue=@resolutionDetails.nullifblank placeholder="Please provide a brief but detailed explanation about how the report was resolved, why it did or did not require action, etc..."/>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@recordID)>
+        <ec:consoleSearchBox>
+            <ec:input_dateRange title="Date Range" id="fdate" name="fdate" fieldValue1=@fdate_start fieldValue2=@fdate_end allowNull/>
+            <ec:input_trueFalse title="Resolved?" id="fResolved" name="fResolved" fieldValue=@fResolved.alt(false) allowNull/>
+            
+            <div style="display:block; width:100%;">
+                <ec:input_number title="LTID" id="fLTID" name="fLTID" fieldValue=@fLTID/>
+                <ec:input_number title="XID" id="fXID" name="fXID" fieldValue=@fXID/>
+            </div>
+        </ec:consoleSearchBox>
+
+        @obj_reportedEntities()
+    </ec:case>
+    
+    <ec:case if=@iv(@recordID)>
+        @obj_reportedEntity()
+    </ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

@@ -1,0 +1,214 @@
+@share
+<ec:module comp_widgets/>
+
+<ec:var fdescription = @svr[param/fdescription].nullifblank/>
+<ec:var ftag = @svr[param/ftag].nullifblank/>
+<ec:var fwidgetID = @svr[param/fwidgetID].nullifblank/> 
+
+<ec:object dt_widgets page=@page limit=@perpage type="tDataObj">
+    <connection>@connection</connection>
+    <primaryKey>widgetID</primaryKey>
+    <sqlSelect>
+        <ec:case if=@nv(@XID)>
+            SELECT widgetID, description, tag
+            FROM vw_widgets
+            WHERE websiteID = @websiteID.asInt
+
+            @if(@iv(@fdescription)|AND description LIKE @sqlstr(%@fdescription%))
+            @if(@iv(@ftag)|AND tag LIKE @sqlstr(%@ftag%))
+            @if(@iv(@fwidgetID)|AND widgetID = @fwidgetID.asInt)
+        </ec:case>
+
+        <ec:case if=@iv(@XID)>
+            SELECT description, tag, sourceCode, isPublic, iconURL, iconDescription
+            FROM vw_widget
+            WHERE websiteID = @websiteID.asInt AND widgetID = @XID.asInt
+        </ec:case>
+    </sqlSelect>
+    <sort by="desc">widgetID</sort>
+</ec:object>
+<ec:object obj_widgets_pageNavigator dataObj=@dt_widgets type="tPageNavigator"/>
+
+
+
+
+
+<ec:object obj_widgets dataObj=@dt_widgets type="tComponent">
+    <ec:titlebox title="Widgets"  options=@defaultListOptions()>
+        <table class="tbl">
+            <tr>
+                <th>Tag</th>
+                <th>Description</th>
+                <th>&nbsp;</th>
+            </tr>
+            <ec:loop data=@dataObj.dataDef[data]>
+                <tr class="anchorify" href="/console?ltid=@LTID&xid=@rs[widgetID]">
+                    <td>@rs[tag]</td>
+                    <td>@rs[description]</td>
+                    <td>&nbsp;</td>
+                </tr>
+            </ec:loop>
+        </table>
+        @obj_widgets_pageNavigator
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_widget dataObj=@dt_widgets type="tComponent">
+    <ec:var wdgt=@dataObj.dataDef[data/1]/>
+    <ec:titlebox title="Widget" options=@defaultRecordOptions()>
+        <img id="recordIcon" src="@wdgt[iconURL]" alt="@wdgt[iconDescription]-img"/>
+        <div id="recordFields">
+            <div class="displayFields">
+                <ec:displayField title="ID" content="@XID"/>
+                <ec:displayField title="Description" content="@wdgt[description]"/>
+                <ec:displayField title="Tag" content="@wdgt[tag]"/>
+                <ec:displayField title="Allow iFrame? @hint(If true then developers can embed using the ifiFramerame embed code. Note: the refesh link cannot be used in iFrame widgets)" content="@wdgt[isPublic]" style="@if(@wdgt[isPublic].is(true)|color:#f0b624;)"/>
+                <ec:var refreshCode/><ec:refreshCode>@chr(60)a @chr(64)ajaxWidget@chr(62)refresh@chr(60)/a@chr(62)</ec:refreshCode>
+                <ec:displayField title="Refresh Link @hint(This code can be included in the widget script to refresh the widget)" content="@refreshCode.encode"/>
+            </div>
+        </div>
+        <br/><br/>
+        <div class="displayFields">
+            <ec:var embedEC/><ec:embedEC>@chr(60)ec:widget widgetID=@chr(34)@XID@chr(34) tag=@chr(34)@wdgt[tag]@chr(34)/@chr(62)</ec:embedEC>
+            <ec:var embedIframe/><ec:embedIframe>@chr(60)iframe src=@chr(34)@protocol()@host()/api?opt=widget&tag=@wdgt[tag]@chr(34)@chr(62)@chr(60)/iframe@chr(62)</ec:embedIframe>
+            <ec:displayField title="EC Embed @hint(Embed this widget into EC code using the widgetID and/or tag)" content="@embedEC.encode"/>
+            <ec:displayField title="iFrame Embed @hint(Embed this widget into HTML using an iFrame)" content="@embedIframe.encode"/>
+        </div>
+        
+        <br/><hr/><br/>
+
+        <ec:widget widgetID=@XID/>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_new title="New Widget" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var tag = @svr[param/tag].nullifblank/>
+    <ec:var code = @svr[param/code].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@description)|@iv(@tag))>
+            <ec:data xx procedure="pr_widget_new" connection=@connection>
+                <description>@description</description>
+                <tag>@tag</tag>
+                <sourceCode>@code</sourceCode>
+                <websiteID>@websiteID.asInt</websiteID>
+            </ec:data>
+            <ec:var newWidgetID = @xx[newWidgetID].nullifblank/>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+            <ec:case if=@iv(@errMsg)>
+                @logError(error|@errMsg|101)
+            </ec:case>
+
+            <ec:case if=@iv(@newWidgetID)>
+                @logAction(2|@LTID|@newWidgetID)
+                @notification(Widget WGT-@newWidgetID() created successfully||1)
+                @redirect(/console?ltid=@LTID&xid=@newWidgetID)
+                @close()
+            </ec:case>
+            <ec:case if=@else>
+                <ec:set if=@nv(@errMsg) errMsg="An error occurred. Please contact a system administrator."/>
+                @logError(error|obj_newWidget_dialog unknown SQL error|101)
+            </ec:case>
+        </ec:case>
+        
+        <ec:case if=@not(@all(@iv(@description)|@iv(@tag)))>
+            <ec:set errMsg="Description and tag are required to create a widget..."/>
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Description" id="description" name="description" fieldValue=@description require/>
+        <ec:input_text title="Tag" id="tag" name="tag" fieldValue=@tag require/><br/><br/>
+        <ec:input_ace title="Source Code" id="code" name="code" fieldValue=@code/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_record_edit title="Edit Widget" type="tDialogRecordForm">
+    <ec:var description = @svr[param/description].nullifblank/>
+    <ec:var tag = @svr[param/tag].nullifblank/>
+    <ec:var code = @svr[param/code].nullifblank/>
+    <ec:var isPublic = @svr[param/isPublic].nullifblank/>
+
+
+    <ec:case if=@state.is(respond)>
+        <ec:case if=@all(@iv(@description)|@iv(@tag))>
+            <ec:data xx procedure="pr_widget_edit" connection=@connection>
+                <widgetID>@XID.asInt</widgetID>
+                <description>@description</description>
+                <tag>@tag</tag>
+                <sourceCode>@code</sourceCode>
+                <isPublic>@isPublic.asBool</isPublic>
+            </ec:data>
+            <ec:set errMsg = @xx[errorMessage].nullifblank/>
+            <ec:case if=@iv(@errMsg)>
+                @logError(error|@errMsg|101)
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ec:set errMsg="Description and tag are both required for a widget..."/>
+        </ec:case>
+
+        <ec:case if=@nv(@errMsg)>
+            @logAction(3|@LTID|@XID|Edited widget)
+            @dt_widgets.refresh()
+            @obj_widget.refresh()
+            @close
+        </ec:case>
+    </ec:case>
+
+
+    <ec:case if=@not(@closed)>
+        <ec:data dt_widget connection=@connection>
+            SELECT description, tag, sourceCode, isPublic
+            FROM vw_widget
+            WHERE websiteID = @websiteID.asInt AND widgetID = @XID.asInt
+        </ec:data>
+        <ec:var wdgt = @dt_widget[1]/>
+        
+        @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+        <ec:input_text title="Description" id="description" name="description" fieldValue=@description.alt(@wdgt[description]) require/>
+        <ec:input_text title="Tag" id="tag" name="tag" fieldValue=@tag.alt(@wdgt[tag]) require/>
+        <ec:input_checkbox title="Allow iFrame?" id="isPublic" name="isPublic" fieldValue=@if(@isPublic.is(true)|1).alt(@if(@wdgt[isPublic].is(true)|1))/><br/><br/>
+        <ec:input_ace title="Source Code" id="code" name="code" fieldValue=@code.alt(@wdgt[sourceCode])/>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:function contents>
+    <!-- page contents go here -->
+    <ec:case if=@nv(@XID)>
+        <ec:consoleSearchBox>
+            <ec:input_text title="Tag" id="ftag" name="ftag" fieldValue=@ftag/>
+            <ec:input_text title="Description" id="fdescription" name="fdescription" fieldValue=@fdescription/>
+            <ec:input_number title="Widget ID" id="fwidgetID" name="fwidgetID" fieldValue=@fwidgetID/>
+        </ec:consoleSearchBox>
+        @obj_widgets
+    </ec:case>
+
+    <ec:case if=@iv(@XID)>@obj_widget</ec:case>
+</ec:function>
+
+
+<ec:function related>
+    <!-- related menu items go here -->
+</ec:function>

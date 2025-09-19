@@ -1,0 +1,143 @@
+@share
+@pageFound.set(1)
+
+<ec:function index_styles>
+    <style>
+        :root {--ec_topbar_height: 54px;}
+        
+        * {
+            margin:0;
+            padding:0;
+            zoom:1;
+            box-sizing: border-box;
+            -webkit-box-sizing: border-box;
+        }
+        
+        html {scroll-behavior:smooth; scroll-padding-top:calc(var(--ec_topbar_height) + 2vh);}
+        html body {background: lightslategrey; color:white;}
+        
+        [mobile] {display:block;}
+        [desktop] {display:none;}
+        
+        @media screen and (min-width: 982px){
+            [mobile] {display:none;}
+            [desktop] {display:block;}
+        }
+        
+        img {vertical-align: middle;}
+
+        #ect_topbar {
+            width:100%;
+            height:var(--ec_topbar_height);
+            box-shadow:0px 3px 3px rgba(0,0,0,.15);
+            background-color:#2d2d2d;
+            color:white;
+            position:fixed;
+            z-index:997;
+
+            & #ect_nav_table {
+                table-layout:fixed;
+                width:100%;
+                height:var(--ec_topbar_height);
+            
+                & tr td {
+                    height:var(--ec_topbar_height);
+                    line-height:var(--ec_topbar_height);
+                    text-align:center; vertical-align:middle;
+                    min-width:content;
+                    & a {border-radius:9px;}
+                }
+            
+                & #ect_nav_table_logo {
+                    height:58px; transform:translateY(-2px); filter:drop-shadow(3px 3px 3px #000);
+                    &:hover {cursor:pointer;}
+                }
+            }
+        }
+
+        #ect_nav_logo {height:58px; transform:translateY(4px); &:hover{cursor:pointer;}}
+        #blueBar {position:fixed; height:26px; background-color:lightslategrey; width:100vw; width:100dvw; margin-top:calc(var(--ec_topbar_height) - 9px); z-index:995;}
+
+        .invert {background:white; color:black;}
+
+        .sloped {
+            display:none;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            position:absolute;
+            width:100%;
+            height:clamp(200px, 50vh, 400px);
+            transform:skewY(8deg);
+            transform-origin:100%;
+            z-index:-1;
+        }
+
+        #desktopDivider {display:none;}
+
+        @media screen and (min-width: 982px){
+            .sloped {display:flex;}
+            #desktopDivider {display:block; height:450px;}
+        }
+
+        #primaryContent {width:95%; margin:auto;}
+        #primaryContent a:not(.whiteLink){color:orange;}
+        #primaryContent a:not(.whiteLink):hover {color:darkorange;}
+    </style>
+</ec:function>
+
+
+
+
+
+<ec:function index_pageBody>
+    <nav id="ect_topbar">
+        <table id="ect_nav_table">
+            <tr>
+                <td style="width:3%;">&nbsp;</td>
+                <td style="width:7%;" id="ect_nav_logo"><img class="shadowOnHover" id="ect_nav_table_logo" src="/imgs-default/defaultBannerLogo.png" onclick="window.location.href='home';" alt="ECPages" title="Return to page home"/></td>
+                <td style="width:90%; text-align:right;">&nbsp;</td>
+            </tr>
+        </table>
+    </nav>
+    <div id="blueBar">
+        &nbsp;
+    </div>
+    <div style="transform:translateY(71px);">
+        <div class="invert sloped">
+            <div id="primaryContent" style="transform:skewY(-8deg);">
+                <div style="display:flex; flex-wrap:wrap; justify-content:center; align-items:center; transform:translateY(120px);">
+                    <img style="margin:33px; height:280px; filter:drop-shadow(3px 3px 3px rgba(0,0,0,.3));" src="/imgs-default/defaultECPagesLogo.png" alt="ECPAGES Logo" title="EC Pages Logo"/>
+                    <h1 style="margin:33px; font-size:4.36rem;"><strong>WE'RE OFFLINE</strong></h1>
+                </div>
+            </div>
+        </div>
+        <div id="desktopDivider">&nbsp;</div>
+        <div id="primaryContent">
+            <span>Our website is currently offline for maintenance. Thank you for your patience as we work to improve the website. Please check back later when we are back online.</span>
+        </div>
+    </div>
+</ec:function>
+
+
+
+
+
+
+<ec:output>
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <title>@svr[request/host] | Offline</title>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+            <meta http-equiv="Content-Style-Type" content="text/css"/>
+            <script src="/js/jquery/jquery.js"></script>
+            <link rel="canonical" href="@canonical"/>
+        </head>
+    </html>
+    <body>
+        @index_styles()
+        @index_pageBody()
+    </body>
+    @stop()
+</ec:output>

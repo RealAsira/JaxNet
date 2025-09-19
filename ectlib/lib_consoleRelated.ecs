@@ -1,0 +1,524 @@
+@share
+<ec:case if=@nv(@lib_consoleRelatedCalled)>
+    <ec:var lib_consoleRelatedCalled = 1 global/>
+
+    <ec:var sltid = @svr[param/sltid].nullifblank rem="shortcut--id, used for the searchbox in obj_addShortcut" global/>
+    <ec:var sxid = @svr[param/sxid].nullifblank rem="shortcut--id, used for the searchbox in obj_addShortcut" global/>
+
+    <ec:var targetLTID = @svr[param/targetLTID] rem="target--id, used for editing in editShortcut.  Also used in pr_shortcut_delete." global/>
+    <ec:var targetXID = @svr[param/targetXID] rem="target--id, used for editing in editShortcut.  Also used in pr_shortcut_delete." global/>
+    <ec:var targetLEID = @svr[param/targetLEID] rem="target--id, used for editing in editShortcut. Also used in pr_shortcut_delete." global/>
+</ec:case>
+
+
+
+
+
+<ec:style>
+    #shortcuts:last-child{
+        margin-bottom:9px;
+    }
+
+    .shortcut {
+        display:block;
+        width:98%; margin:9px auto 0;
+        min-height:38px;
+        padding:5px;
+        border:1px solid var(--box-border-color);
+        border-radius:5px;
+        overflow:hidden;
+    
+        & span {vertical-align: bottom;}
+        & img {height: 28px;}
+        &.shortcut-history {width:96%;}
+
+        <ec:case if=@userSettings[theme].is(light)>
+            background-color:white;
+        </ec:case>
+
+        <ec:case if=@userSettings[theme].is(dark)>
+            background-color:#45484a;
+        </ec:case>
+    }
+
+    .shortcut-history p {
+        display:inline-block;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+        max-width:calc(100% - 34px);
+        vertical-align: bottom;
+    }
+</ec:style>
+
+
+
+
+
+<ec:object obj_relatedShortcuts type="tComponent">
+    <ec:case if=@act.is(deleteShortcut)>
+        <ec:data xx procedure="pr_shortcut_delete" connection=@connection>
+            <LEID>@LEID.asInt</LEID>
+            <targetLEID>@targetLEID.asInt</targetLEID>
+        </ec:data>
+        @logAction(22|@LTID|@XID|Deleted shortcut between LTID/XID @LTID()@XID.with(/|) and @targetLTID()@targetXID().with(/|))
+    </ec:case>
+
+    <ec:data dt_shortcuts connection=@connection>
+        SELECT dest_shortcutID, dest_ltid, dest_xid, dest_leid, dest_description, dest_iconURL, readOnly FROM (
+            SELECT dest_shortcutID, dest_ltid, dest_xid, dest_leid, dest_description, dest_iconURL, readOnly = 0 FROM dbo.tb_shortcuts(@LEID.asInt.alt(0)) ts1
+            <ec:case if=@LTID.isnot(100)>
+                UNION
+                SELECT dest_shortcutID, dest_ltid, dest_xid, dest_leid, dest_description, dest_iconURL, readOnly = 1 FROM dbo.tb_shortcuts(@getLEID(100|@LTID.asInt.alt(0)).asInt.alt(0)) ts2
+            </ec:case>
+        ) t
+
+        WHERE dbo.fn_accessLevel(@user.userID.asInt.alt(NULL), @user.employeeID.asInt.alt(NULL), dest_ltid, dest_xid) >= 1 --only show if employee has at least view access
+
+        ORDER BY (CASE
+        WHEN t.dest_ltid = 7 AND t.readOnly = 0 THEN 6
+        WHEN t.dest_ltid = 11 AND t.readOnly = 0 THEN 5
+        WHEN (t.dest_ltid != 7 OR t.dest_ltid != 11) AND t.readOnly = 0 THEN 4
+
+        WHEN t.dest_ltid = 7 AND t.readOnly = 1 THEN 3 --notes are at bottom
+        WHEN t.dest_ltid = 11 AND t.readOnly = 1 THEN 2 --external links are just above notes
+        ELSE 1 END --regular console links appear first
+        ), t.dest_ltid
+    </ec:data>
+
+    <ec:var options/>
+    <ec:options>
+        <ec:case if=@iv(@XID)><a href="javascript:void(0)" id="addShortcutButton" rel="nofollow" class="ajaxClick" ecid="obj_addShortcut"><ec:icon title="Add shortcut or note" icon="plus" size="med"/></a></ec:case>
+    </ec:options>
+    <ec:titlebox title="Shortcuts & Notes" options=@options style="width:97%;">
+        <style>
+            .shortcut-note {
+                min-height:48px; height:auto;
+            
+                & .note-header {font-family:calibri; font-weight:bold; font-size:large;}
+            
+                & .note-body {
+                    padding:7px 5px 7px 3px;
+                    word-wrap:break-word;
+                    & ul {margin-left: 20px;}
+
+                    & img {height:auto; width:auto; max-height:128px;}
+                }
+            }
+
+            .shortcut-externalURL {
+                & span:hover {color:var(--link-color-hover);}
+                & .anchorify.icndiv {background-color:#deb578 !important;}
+            }
+
+            .shortcut[act="newShortcut"] {cursor:pointer;}
+            .readOnly {opacity: .6;}
+
+            <ec:case if=@userSettings[theme].is(light)>
+                .noteType-1 {background-color:#fff9e3;}
+                .noteType-2 {background-color:#d0ecfd;}
+                .noteType-3 {background-color:#ffdecb;}
+                .noteType-4 {background-color:#ccffda;}
+                .noteType-5 {background-color:#e4dafd;}
+                .noteType-6 {background-color:#ffd8ef;}
+            </ec:case>
+            
+            <ec:case if=@userSettings[theme].is(dark)>
+                .shortcut-note{color:#dbdbdb;}
+                .noteType-1{background-color:#877c54;}
+                .noteType-2 {background-color:#435d6b;}
+                .noteType-3 {background-color:#794b2a;}
+                .noteType-4 {background-color:#314c3a;}
+                .noteType-5 {background-color:#53416e;}
+                .noteType-6 {background-color:#613c50;}
+            </ec:case>()
+        </style>
+
+        <div id="shortcuts">
+            <ec:loop data=@dt_shortcuts>
+                <ec:case>
+                    
+                    <ec:case if=@rs[dest_ltid].is(7) rem="notes">
+                        <ec:data dt_noteContent connection=@connection>
+                            SELECT notes.noteContent, notes.noteDate, notes.noteTypeID, users.firstName, users.lastName FROM notes
+                            INNER JOIN users on notes.noteAuthorID = users.userID
+                            WHERE noteID = @rs[dest_xid].asInt
+                        </ec:data>
+                        <ec:var nt = @dt_noteContent[1]/>
+                        <div class="shortcut shortcut-note @nt[noteTypeID].alt(1).with(noteType-|) shadowOnHover @if(@rs[readOnly].is(1|true)|readOnly)" id="note_@rs[dest_xid]">
+                            <ec:case if=@iv(@rs[dest_description].nullifblank)>
+                                <div class="note-header">
+                                    @rs[dest_description]
+                                    <ec:case if=@all(@rs[readOnly].is(0)|@accessLevel.isGreatAs(3)) rem="show edit and delete buttons if they are allowed">
+                                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_relatedShortcuts" act="deleteShortcut" loader="#note_@rs[dest_xid]" targetLEID="@rs[dest_leid]" confirm="Delete this note?"><ec:icon title="Delete note" icon="remove" size="xsml" direction="right"/></a>
+                                        <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_editShortcut" targetLTID="@rs[dest_ltid].asInt" targetXID="@rs[dest_xid].asInt"><ec:icon title="Edit note" icon="pencil" size="sml" direction="right"/></a>
+                                    </ec:case>
+                                    <hr style="background-color:#dbdbdb;"/>
+                                </div>
+                            </ec:case>
+                            <div class="note-body">
+                                <ec:case if=@all(@rs[readOnly].is(0)|@accessLevel.isGreatAs(3)|@nv(@rs[dest_description].nullifblank)) rem="if there is no note header, show edit and delete buttons on body">
+                                    <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_relatedShortcuts" act="deleteShortcut" loader="#note_@rs[dest_xid]" targetLEID="@rs[dest_leid]" confirm="Delete this note?"><ec:icon title="Delete note" icon="remove" size="xsml" direction="right"/></a>
+                                    <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_editShortcut" targetLTID="@rs[dest_ltid].asInt" targetXID="@rs[dest_xid].asInt"><ec:icon title="Edit note" icon="pencil" size="sml" direction="right"/></a>
+                                </ec:case>
+                                @nt[noteContent].decode
+                            </div>
+                            <div class="note-footer" style="text-align:right;"><i>@nt[firstName] @nt[lastName] on @nt[noteDate].formatDate(dd MMM yyyy)</i></div>
+                        </div>
+                    </ec:case>
+
+
+                    <ec:case if=@rs[dest_ltid].is(11) rem="external url">
+                        <ec:data dt_externalURL connection=@connection>
+                            SELECT externalLinkURL FROM externalLinks WHERE externalLinkID = @rs[dest_xid].asInt
+                        </ec:data>
+                        <div class="shortcut shortcut-externalURL shadowOnHover @if(@rs[readOnly].is(1|true)|readOnly)" id="link_@rs[dest_xid]">
+                            <ec:case if=@all(@rs[readOnly].is(0)|@accessLevel.isGreatAs(3))>
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_relatedShortcuts" act="deleteShortcut" loader="#link_@rs[dest_xid]" targetLEID="@rs[dest_leid]" confirm="Delete this external url?"><ec:icon title="Remove external link" icon="remove" size="xsml" direction="right"/></a>
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_editShortcut" targetLTID="@rs[dest_ltid].asInt" targetXID="@rs[dest_xid].asInt"><ec:icon title="Edit external link" icon="pencil" size="sml" direction="right"/></a>
+                            </ec:case>
+                            <img src="@rs[dest_iconURL]" alt="external link"/>
+                            <span class="anchorify" href="@dt_externalUrl[1/externalLinkURL].urldecode">@rs[dest_description]</span> 
+                        </div>
+                    </ec:case>
+
+
+                    <ec:case if=@rs[dest_ltid].is(12) rem="file folder">
+                        @comment(later, need to add 'open' button for localexplorer files. for now, file folders are handled by console shortcut links below - next ec:case)
+                    </ec:case>
+
+
+                    <ec:case if=@rs[dest_ltid].isnot(12|11|7) rem="console shortcut links">
+                        <div class="shortcut shadowOnHover @if(@rs[readOnly].is(1|true)|readOnly)" id="shortcut_@rs[dest_xid]">
+                            <ec:case if=@all(@rs[readOnly].is(0)|@accessLevel.isGreatAs(3))>
+                                <a href="javascript:void(0)" rel="nofollow" class="ajaxClick" ecid="obj_relatedShortcuts" act="deleteShortcut" loader="#shortcut_@rs[dest_xid]" targetLEID="@rs[dest_leid]" confirm="Remove this shortcut?"><ec:icon title="Remove shortcut" icon="remove" size="xsml" direction="right"/></a>
+                            </ec:case>
+                            <img class="anchorify" href="/console?ltid=@rs[dest_ltid]&xid=@rs[dest_xid]&xltid=@LTID&xxid=@XID" src="@rs[dest_iconURL]" alt="@rs[dest_ltid]-img"/>
+                            <span class="anchorify" href="/console?ltid=@rs[dest_ltid]&xid=@rs[dest_xid]&xltid=@LTID&xxid=@XID">@rs[dest_description]</span> 
+                        </div>
+                    </ec:case>
+
+                </ec:case>
+            </ec:loop>
+        </div>
+    </ec:titlebox>
+</ec:object>
+
+
+
+
+
+<ec:object obj_addShortcut title="Add Shortcut or Note" type="tDialogForm">
+    <ec:var shortcut_search = @svr[param/shortcut_search].nullifblank/>
+    <ec:case if=@all(@nv(@act)|@not(@closed)) rem="initial shortcut dialog">
+        <br/>
+        <style>
+            #shortcutSearchContainer{
+                /* background-color:rgba(255,0,0,.1); */
+                display:flex; flex-wrap:wrap; justify-content: flex-start;
+                height:142px;
+            }
+
+            .shortcutEntitySearchList {
+                list-style-type:none;
+                max-height:294px; min-height:188px;
+                overflow:auto;
+
+                & .shortcut {
+                    color:var(--link-color);
+                    transition: color .25s;
+                    &:hover {color:var(--link-color-hover); cursor:pointer;}
+                }
+            }
+        </style>
+        <div id="shortcutSearchContainer">
+            <div style="width:65%;" class=" col-left">
+                <ec:input_search name="shortcut_search" id="shortcut_search" placeholder="Search console records..." fieldValue=@shortcut_search/>
+                <ul class="nav navmenu">
+                    <li class="dropdown @if(@any(@iv(@sltid)|@iv(@sxid))|open)">
+                        <a href="javascript:void(0)" rel="nofollow" style="padding:0;" class="dropdown-toggle" onclick="toggleSubMenu(this);">
+                            Advanced<b class="caret"></b>
+                            <ec:hint containerStyle="transform:translateX(3px) scale(.85);">Advanced search ignores the console text search above. This only returns one record</ec:hint>
+                        </a>
+                        <ul class="dropdown-menu navmenu-nav">
+                            <li style="margin-left:30px;">
+                                <ec:input_number style="width:80px;" title="LTID" name="sltid" id="sltid" fieldValue=@sltid/>
+                            </li>
+                            <li style="margin-left:30px;">
+                                <ec:input_number style="width:80px;" title="XID" name="sxid" id="sxid" fieldValue=@sxid/>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+            <div style="text-align:right; width:30%;" class=" col-right">
+                <a href="javascript:void(0)" rel="nofollow" class="btn ajaxClick" act="newNote">New Note</a><br/>
+                <a href="javascript:void(0)" rel="nofollow" class="btn ajaxClick" act="newFolder">New Folder</a><br/>
+                <a href="javascript:void(0)" rel="nofollow" class="btn ajaxClick" act="newLink" opt="hideError">New Hyperlink</a><br/>
+            </div>
+        </div>
+
+        <hr/><br/>
+
+        <ec:data dt_recent connection=@connection>
+            SELECT TOP(25) LTID, XID, dest_leid, description, iconURL, maxDate, ROW_NUMBER() OVER (ORDER BY maxDate DESC, LTID ASC, XID ASC) AS occurNum FROM (
+                SELECT AL.LTID, AL.XID, LE.linkedEntityID AS dest_leid, dbo.fn_entityName(LTID, XID) AS description, dbo.fn_entityImage(LE.linkedEntityID, 1) AS iconURL, MAX(AL.actionDate) AS maxDate
+                FROM vw_actionLog AL WITH (NOLOCK)
+                LEFT JOIN linkedEntities LE ON AL.LTID = LE.toLTID AND AL.XID = LE.toXID
+                
+                WHERE AL.actionID IN (1,2) AND AL.actionDate > (GETDATE() - 1) AND LE.websiteID = @websiteID.asInt.alt(0) AND AL.userID = @user.userID.asInt.alt(0) AND (
+                    (NOT(AL.LTID = @LTID.asInt.alt(0) AND <ec:case if=@iv(@XID)>AL.XID = @XID.asInt.alt(0)</ec:case><ec:case if=@nv(@XID)>AL.XID IS NULL</ec:case>)) OR 
+                    (AL.LTID = @LTID.asInt.alt(0) AND (NOT(<ec:case if=@iv(@XID)>AL.XID = @XID.asInt.alt(0)</ec:case><ec:case if=@nv(@XID)>AL.XID IS NULL</ec:case>) <ec:case if=@iv(@XID)>OR AL.XID IS NULL</ec:case>))
+                )
+                GROUP BY LTID, XID, linkedEntityID
+            ) aTable WHERE dbo.fn_accessLevel(@user.userID.asInt.alt(NULL), @user.employeeID.asInt.alt(NULL), LTID, XID) >= 1
+        </ec:data>
+
+
+
+        <ec:case if=@any(@iv(@shortcut_search)|@iv(@sltid)) rem="user is searching">
+            <ec:case if=@iv(@sltid) rem="ltid and xid search; overrides text search and does not return any results from it">
+                <ec:data dt_entitySearch_byLTIDandXID connection=@connection>
+                    SELECT dest_ltid, dest_xid, dest_leid, dest_description, dest_iconURL FROM dbo.tb_entitySearch_byLTIDandXID(@sltid.asInt, @sxid.asInt.alt(NULL))
+                </ec:data>
+
+                <ul class="shortcutEntitySearchList">
+                    <ec:loop data=@dt_entitySearch_byLTIDandXID>
+                        <li>
+                            <div class="shortcut shadowOnHover ajaxClick" act="newShortcut" targetLEID="@rs[dest_leid]">
+                                <img src="@rs[dest_iconURL]" alt="@rs[dest_ltid]-img" style="height:24px;"/>
+                                <span>&nbsp;@rs[dest_description]</span>
+                            </div>
+                        </li>
+                    </ec:loop>
+                    <ec:case if=@nv(@sxid)>
+                        <p class="notice">XID is required for advanced search...</p>
+                    </ec:case>
+                </ul>
+            </ec:case>
+
+
+            <ec:case if=@all(@iv(@shortcut_search)|@nv(@sltid)) rem="text search; excludes slitd and sxid">
+                <ec:data dt_entitySearch_keywords connection=@connection>
+                    SELECT t1.LTID AS dest_ltid, t1.XID AS dest_XID, t1.LEID AS dest_leid, t1.description AS dest_description, t1.iconURL AS dest_iconURL
+                    FROM dbo.tb_searchedItems (@sqlstr(@shortcut_search), @user.userID.asInt, @user.employeeID.asInt, @websiteID.asInt) t1 
+                </ec:data>
+
+                <ul class="shortcutEntitySearchList">
+                    <ec:loop data=@dt_entitySearch_keywords>
+                        <li>
+                            <div class="shortcut shadowOnHover ajaxClick" act="newShortcut" targetLEID="@rs[dest_leid]">
+                                <img src="@rs[dest_iconURL]" alt="@rs[dest_ltid]-img" style="height:24px;"/>
+                                <span>&nbsp;@rs[dest_description]</span>
+                            </div>
+                        </li>
+                    </ec:loop>
+                </ul>
+            </ec:case>
+        </ec:case>
+
+        <ec:case if=@else>
+            <ul class="shortcutEntitySearchList">
+                <ec:loop data=@dt_recent>
+                    <li>
+                        <div class="shortcut shadowOnHover ajaxClick" act="newShortcut" targetLEID="@rs[dest_leid]">
+                            <img src="@rs[iconURL]" alt="@rs[ltid]-img" style="height:24px;"/>
+                            <span>@rs[description]</span> 
+                        </div>
+                    </li>
+                </ec:loop>
+            </ul>
+        </ec:case>
+    </ec:case>
+
+
+
+    <ec:case if=@iv(@act) rem="ui for newNote, newLink, newFolder, and newShortcut... this is where the content is created and then the shortcut linked through pr_shortcut_new">
+        <ec:case if=@act.is(newNote)>
+            <ec:var noteTitle = @svr[param/noteTitle].nullifblank/>
+            <ec:var noteContent = @svr[param/noteContent].nullifblank/>
+            <ec:var noteTypeID = @svr[param/noteTypeID].alt(1)/>
+            <ec:var submitted = @svr[param/submitted].alt(0)/>
+
+            <ec:case if=@all(@state.is(respond)|@iv(@noteContent))>
+                <ec:data xx procedure="pr_note_new" connection=@connection>
+                    <noteTypeID>@noteTypeID.asInt</noteTypeID>
+                    <userID>@user.userID.asInt</userID>
+                    <noteTitle>@noteTitle</noteTitle>
+                    <noteContent>@noteContent.encode</noteContent>
+                    <websiteID>@websiteID.asInt</websiteID>
+                </ec:data>
+                <ec:var newNoteLEID = @xx[newNoteLEID]/>
+
+                <ec:data yy if=@newNoteLEID.alt(0).isnot(0) procedure="pr_shortcut_new" connection=@connection>
+                    <LEID>@LEID.asInt</LEID>
+                    <targetLEID>@newNoteLEID.asInt</targetLEID>
+                </ec:data>
+
+                @logAction(2|@LTID|@XID|New note @noteTitle(): @noteContent.encode)
+                @close()
+                @obj_relatedShortcuts.refresh()
+            </ec:case>
+
+            <ec:case if=@all(@state.is(respond)|@nv(@noteContent)|@submitted)>
+                <ec:set errMsg = "While a note title is optional, note content is required."/>
+            </ec:case>
+
+            <ec:case if=@not(@closed)>
+                <ec:data dt_noteTypes connection=@connection>
+                    SELECT noteTypeID, description FROM noteTypes WHERE inactive = 0 ORDER BY description
+                </ec:data>
+                
+                @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+                <input type="hidden" name="act" id="act" value="@act"/>
+                <input type="hidden" name="submitted" id="submitted" value="1"/>
+                <ec:input_text title="Note Title" name="noteTitle" id="noteTitle" fieldValue="@noteTitle"/>
+                <ec:input_select title="Note Type" id="noteTypeID" name="noteTypeID" fieldValue=@noteTypeID.alt(1) options=@dt_noteTypes require/>
+                <ec:displayField title="Edited On" content="@now.formatDate(dd mmm yyyy)"/><br/><br/>
+                <ec:input_textField name="noteContent" id="noteFor_@LTID@XID" fieldValue="@noteContent"/>
+            </ec:case>
+        </ec:case>
+        
+        
+        <ec:case if=@act.is(newLink)>
+            <ec:var linkURL = @svr[param/linkURL].nullifblank/>
+            <ec:var linkDescription = @svr[param/linkDescription].nullifblank/>
+
+            <ec:case if=@all(@state.is(respond)|@iv(@linkURL)|@iv(@linkDescription))>
+                <ec:data xx procedure="pr_externalLink_new" connection=@connection>
+                    <linkURL>@linkURL.encode</linkURL>
+                    <linkDescription>@linkDescription</linkDescription>
+                    <websiteID>@websiteID.asInt</websiteID>
+                </ec:data>
+                <ec:var newLinkLEID = @xx[newLinkLEID]/>
+
+                <ec:data yy if=@newLinkLEID.alt(0).isnot(0) procedure="pr_shortcut_new" connection=@connection>
+                    <LEID>@LEID.asInt</LEID>
+                    <targetLEID>@newLinkLEID.asInt</targetLEID>
+                </ec:data>
+
+                @logAction(2|@LTID|@XID|New hyperlink @linkDescription(): @linkURL.urlencode)
+                @close()
+                @obj_relatedShortcuts.refresh()
+            </ec:case>
+            <ec:case if=@else>
+                <ec:set errMsg = "Missing description and/or URL."  if=@opt.isnot(hideError)  rem="hideError should only be applied when first calling this wizard"/>
+            </ec:case>
+
+            <ec:case if=@not(@closed)>
+                @if(@iv(@errMsg)|@notification(@errMsg))<br/>
+                <input type="hidden" name="act" id="act" value="@act"/>
+                <ec:input_text title="Description" name="linkDescription" id="linkDescription" fieldValue=@linkDescription/><br/><br/>
+                <ec:input_url title="URL" name="linkURL" id="linkURL@targetXID" fieldValue=@linkURL.urldecode style="width:calc(100% - 3px);" containerStyle="width:100%;"/>
+            </ec:case>
+        </ec:case>
+        
+        
+        <ec:case if=@act.is(newShortcut)>
+            <ec:data yy procedure="pr_shortcut_new" connection=@connection>
+                <LEID>@LEID.asInt</LEID>
+                <targetLEID>@targetLEID.asInt</targetLEID>
+            </ec:data>
+            @logAction(2|@LTID|@XID|Shortcut created between @LTID()@XID.with(/|) and @targetLTID()@targetXID.with(/|))
+            @close()
+            @obj_relatedShortcuts.refresh()
+        </ec:case>
+        
+        
+        <ec:case if=@act.is(newFolder)>
+            <ec:case if=@not(@closed)>
+                Create a new folder<br/>This feature isn't implemented yet.
+                @comment(make sure new folder inherits access rights from whence it was generated)
+            </ec:case>
+        </ec:case>
+    </ec:case>
+</ec:object>
+
+
+
+
+
+<ec:object obj_editShortcut title="Edit" type="tDialogForm">
+    <ec:case if=@not(@closed)>
+        <ec:case if=@targetLTID.is(7) rem="note dialog">
+            <ec:var noteTitle = @svr[param/noteTitle].nullifblank/>
+            <ec:var noteContent = @svr[param/noteContent].nullifblank/>
+            <ec:var noteTypeID = @svr[param/noteTypeID].alt(1)/>
+
+            <ec:case if=@all(@state.is(respond)|@iv(@noteContent))>
+                <ec:data xx procedure="pr_note_edit" connection=@connection>
+                    <noteID>@targetXID.asInt</noteID>
+                    <noteTitle>@noteTitle</noteTitle>
+                    <noteContent>@noteContent.encode</noteContent>
+                    <noteTypeID>@noteTypeID.asInt</noteTypeID>
+                </ec:data>
+                @logAction(3|@LTID|@XID|Edited note: @noteTitle().alt(unnamed))
+                @obj_relatedShortcuts.refresh()
+                @close()
+            </ec:case>
+
+            <ec:data dt_noteTypes connection=@connection>
+                SELECT noteTypeID, description FROM noteTypes WHERE inactive = 0 ORDER BY description
+            </ec:data>
+
+            <ec:data dt_note connection=@connection>
+                SELECT noteTitle, noteDate, noteContent, noteTypeID FROM notes WHERE noteID = @targetXID.asInt
+            </ec:data>
+            <ec:var note=@dt_note[1]/>
+
+            <input type="hidden" name="targetLTID" id="targetLTID" value="@targetLTID"/>
+            <input type="hidden" name="targetXID" id="targetXID" value="@targetXID"/>
+            <input type="hidden" name="targetLEID" id="targetLEID" value="@targetLEID"/>
+            <ec:input_text title="Note Title" name="noteTitle" id="noteTitle" fieldValue="@note[noteTitle]"/>
+            <ec:input_select title="Note Type" name="noteTypeID" id="noteTypeID" fieldValue="@note[noteTypeID]" options=@dt_noteTypes require/>
+            <ec:displayField title="Edited On" content="@note[noteDate].formatDate(dd mmm yyyy)"/><br/><br/>
+            <ec:input_textField name="noteContent" id="note@targetXID" fieldValue="@noteContent.alt(@note[noteContent])"/>
+        </ec:case>
+
+
+        <ec:case if=@targetLTID.is(11) rem="url dialog">
+            <ec:var linkURL = @svr[param/linkURL].nullifblank/>
+            <ec:var linkDescription = @svr[param/linkDescription].nullifblank/>
+
+            <ec:case if=@all(@state.is(respond)|@iv(@linkURL)|@iv(@linkDescription))>
+                <ec:data xx procedure="pr_externalLink_edit" connection=@connection>
+                    <externalLinkID>@targetXID.asInt</externalLinkID>
+                    <externalLinkURL>@linkURL.urlencode</externalLinkURL>
+                    <externalLinkDescription>@linkDescription</externalLinkDescription>
+                </ec:data>
+                @logAction(3|@LTID|@XID|Edited hyperlink: @linkDescription)
+                @close()
+                @obj_relatedShortcuts.refresh()
+            </ec:case>
+
+            <ec:data dt_externalLink connection=@connection>
+                SELECT externalLinkDescription, externalLinkURL FROM externalLinks WHERE externalLinkID = @targetXID.asInt
+            </ec:data>
+            <ec:var link=@dt_externalLink[1]/>
+
+            <input type="hidden" name="targetLTID" id="targetLTID" value="@targetLTID"/>
+            <input type="hidden" name="targetXID" id="targetXID" value="@targetXID"/><br/>
+            <input type="hidden" name="targetLEID" id="targetLEID" value="@targetLEID"/>
+            <ec:input_text title="Description" name="linkDescription" id="linkDescription" fieldValue=@linkDescription.alt(@link[externalLinkDescription])/><br/><br/>
+            <ec:input_url title="URL" name="linkURL" id="linkURL@targetXID" fieldValue=@linkURL.alt(@link[externalLinkURL].urldecode) style="width:calc(100% - 3px);" containerStyle="width:100%;"/>
+        </ec:case>
+
+
+        <ec:case if=@else rem="no other shortcuts should be editable">
+            @logError(Bad Shortcut Edit|Cannot edit a shortcut other than a note or hyperlink|76)
+
+            <style>* {box-sizing:border-box;}</style>
+            <br/>
+            <div style="display:block; width:100%; min-height:108px; font-size:1.3rem; text-align:center; color:white; font-weight:bold; background-color:rgb(0, 66, 110);">
+                <span>Invalid Shortcut Edit Attempt</span><br/><br/>
+                <span style="font-weight:normal; font-size:1.2rem;">You've reached this page because you attempted to edit an uneditable console shortcut.<br/>Please notify a system administrator if you believe this message is in error.</span>
+            </div>
+            <br/>
+            <h4>Please share the following with a website technician:</h4>
+            <strong>URL: </strong>@canonical
+            <br/><strong>Reference: </strong>@requestTimeStamp()
+            <br/><strong>shortcutLTID: </strong>@targetLTID
+            <br/><strong>shortcutXID: </strong>&nbsp;&nbsp;@targetXID
+        </ec:case>
+    </ec:case>
+</ec:object>
